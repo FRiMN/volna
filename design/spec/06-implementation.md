@@ -46,6 +46,8 @@ VIEWS = {
 | `#btnPresetSelect`, `#presetName`, `#presetList` | выбор пресета, текущее имя, инлайн-список |
 | `#btnPresetSave` | кнопка сохранения пресета |
 | `#presetModal`, `#presetNameInput`, `#presetExisting`, `#presetHint`, `#btnPresetCancel`, `#btnPresetConfirm` | диалог сохранения пресета |
+| `#presetDeleteModal`, `#presetDeleteText`, `#btnPresetDeleteCancel`, `#btnPresetDeleteConfirm` | диалог удаления пресета |
+| `.preset-item`, `.preset-apply`, `.preset-actions`, `.preset-act[data-preset-rename]`, `.preset-act[data-preset-delete]`, `.preset-rename-input` | строка списка пресетов, действия, инлайн-переименование |
 | `#btnLocation`, `#locationLabel`, `#popLocation` | путь и dropdown |
 | `#pathWidget`, `#pathAnchor`, `#btnPathEdit`, `#pathInput` | путь, редактирование |
 | `#btnSettings`, `#popSettings` | настройки-сбросы |
@@ -76,7 +78,7 @@ VIEWS = {
 - `renderBand()` — диспетчер: `icons` → `renderIcons()`, `columns` + `grouping=none` → `renderColumnsUngrouped()`, `columns` → grouped columns, `details` → `renderDetailsView()`.
 - `renderDetails()` — инспектор (не путать с режимом «Подробности»).
 - `renderStatus()`, `renderTabs()`, `renderPlaces()`, `applyZoom()`, `syncViewPopover()` — вспомогательные.
-- Пресеты: `allPresets()`, `applyPreset(id)`, `markPresetManual()`, `openPresetModal()`, `savePresetFromModal()`, `syncPresetLabel()`, `renderPresetList()`, `persistCustomPresets()`; `state.presetId`/`presetDirty`; localStorage-ключ `volna.presets.v1`.
+- Пресеты: `allPresets()`, `applyPreset(id)`, `markPresetManual()`, `openPresetModal()`, `savePresetFromModal()`, `syncPresetLabel()`, `renderPresetList()`, `persistCustomPresets()`; `state.presetId`/`presetDirty`; localStorage-ключ `volna.presets.v1`. Переименование/удаление: `buildPresetRow()`, `beginPresetRename()`, `commitPresetRename()`, `cancelPresetRename()`, `openPresetDeleteConfirm()`, `deletePreset()`, `restorePresetRow()`.
 - Общие хелперы: `visibleGroups()` (группы + скрытые), `sortedItems()`, `sizeBytes()` (парсинг русских единиц), `esc()` (экранирование), `ICON(name,size)`.
 - Перерисовка полосы не должна сбрасывать скролл при клике выбора (точечное обновление классов), но может сбрасывать при смене режима/данных.
 - `fit()` пересчитывает `--scale`; `applyZoom()` — `--col-w`, `--icon-size`, `--tile-icon`, значения слайдера.
@@ -100,6 +102,7 @@ design/tools/shot.sh "http://127.0.0.1:8080/variant-c.html"           design/scr
 design/tools/shot.sh "http://127.0.0.1:8080/variant-c.html#view"      design/screens/variant-c-view.png
 design/tools/shot.sh "http://127.0.0.1:8080/variant-c.html#presets"   design/screens/variant-c-presets.png
 design/tools/shot.sh "http://127.0.0.1:8080/variant-c.html#presets-save" design/screens/variant-c-preset-save.png
+# rename/delete/actions — через CDP (hover/click), см. скриншоты variant-c-preset*.png
 design/tools/shot.sh "http://127.0.0.1:8080/variant-c.html#icons"     design/screens/variant-c-icons.png
 design/tools/shot.sh "http://127.0.0.1:8080/variant-c.html#details"   design/screens/variant-c-details.png
 design/tools/shot.sh "http://127.0.0.1:8080/variant-c.html#ungrouped" design/screens/variant-c-ungrouped.png
@@ -128,6 +131,7 @@ python3 design/tools/build_compare.py
 | «Сканирование…» — таймер | эмуляция статуса; в продукте — реальные операции |
 | Свободное место/`sdc1` статичны | значение тома фиксировано для макета |
 | «Подробности» не масштабируются | сохранён JetBrains-стандарт 24px строк; зум действует на иконки/колонки |
+| Встроенные пресеты неизменяемы | переименование/удаление только для пользовательских; встроенный можно перекрыть сохранением под тем же именем |
 | Светлая тема отсутствует в C | первичная тема тёмная; light — референс B |
 | Нет сохранения состояния | при перезагрузке возвращаются дефолты; **исключение** — пользовательские пресеты сохраняются в `localStorage` |
 

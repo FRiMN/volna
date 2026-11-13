@@ -21,6 +21,8 @@
 
 **Ревизия 4 (вариант C):** в «Вид» добавлена секция **«Пресеты»** — выбор готового пресета (4 встроенных) и кнопка сохранения; по кнопке открывается диалог «Сохранить пресет» с полем имени, списком существующих пресетов, подсказкой о перезаписи и кнопками «Отмена/Сохранить». Ручные изменения показывают «Настроено вручную»; пользовательские пресеты сохраняются в `localStorage` и перекрывают встроенные по имени.
 
+**Ревизия 5 (вариант C):** в списке пресетов появились действия для пользовательских пресетов — **переименование** (inline-input, Enter/Esc) и **удаление** (диалог подтверждения, fallback на «По умолчанию» при удалении текущего). Встроенные пресеты неизменяемы; действия появляются на hover/фокусе и доступны с клавиатуры.
+
 ## Как открыть
 
 Проекты созданы в локальном OpenDesign (daemon `127.0.0.1:7457`). В превью:
@@ -61,6 +63,6 @@
 - `design/reference/dolphin-spec.md` — измеренная спека Dolphin (398 строк: геометрия, палитра, типографика, инвентарь).
 - `design/reference/jetbrains-spec.md` — спека JetBrains New UI (474 строки: панельная анатомия, палитры dark/light, метрики, do/don't, источники).
 - `design/briefs` — брифы вариантов (DESIGN.md лежит в корне каждого проекта OpenDesign).
-- `design/screens/` — финальные скриншоты (`variant-a/b/c.png`, состояния `variant-b-view.png`, `variant-c-view.png`, `variant-c-presets.png`, `variant-c-preset-save.png`, `variant-c-icons.png`, `variant-c-details.png`, `variant-c-ungrouped.png`) и сравнительный коллаж `compare.png`.
+- `design/screens/` — финальные скриншоты (`variant-a/b/c.png`, состояния `variant-b-view.png`, `variant-c-view.png`, `variant-c-presets.png`, `variant-c-presets-actions.png`, `variant-c-preset-rename.png`, `variant-c-preset-save.png`, `variant-c-preset-delete.png`, `variant-c-icons.png`, `variant-c-details.png`, `variant-c-ungrouped.png`) и сравнительный коллаж `compare.png`.
 
 > «Волна» — рабочее название; заголовок окна и строки локализации легко заменить. Данные (имена папок, размеры, даты) взяты из референса, чтобы все три варианта были сравнимы 1:1.

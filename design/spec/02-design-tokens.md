@@ -131,6 +131,8 @@
 | Поле имени | 28px высота, radius 4, фон `#1e1f22`, border `#393b40`, focus — accent border |
 | Список существующих | строки 24px, padding 0 4, hover `#393b40` |
 | Кнопки диалога | 32px, radius 4; «Отмена» — ghost с border, «Сохранить» — accent (disabled — opacity .5) |
+| Действия в списке пресетов | кнопки 22×22, иконки 14, gap 2, radius 4; появляются на hover/`:focus-within`; hover `#393b40`; delete-hover — `#db5c5c` |
+| Диалог удаления | карточка 380px, radius 8, overlay z-index 75; кнопка «Удалить» — filled `#db5c5c`, white; «Отмена» — ghost |
 
 ## 6. Иконки и графика
 

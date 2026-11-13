@@ -777,22 +777,50 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
 .preset-save:hover{background:var(--row-hover);border-color:#4d5057;color:var(--text-primary)}
 .preset-list{
   display:flex;flex-direction:column;gap:1px;margin-top:4px;padding:2px;
-  max-height:162px;overflow-y:auto;background:#1e1f22;
+  max-height:174px;overflow-y:auto;background:#1e1f22;
   border:1px solid #393b40;border-radius:6px;
   scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent;
 }
 .preset-item{
-  display:flex;align-items:center;gap:8px;width:100%;height:26px;padding:0 6px;
-  border:0;border-radius:4px;background:transparent;color:var(--text-primary);
-  font:400 13px/1 var(--ui);text-align:left;cursor:pointer;
+  flex:none;display:flex;align-items:center;width:100%;height:26px;
+  border-radius:4px;color:var(--text-primary);
   transition:background-color 120ms ease;
 }
-.preset-item:hover{background:var(--row-hover)}
+.preset-item:hover,.preset-item:focus-within{background:var(--row-hover)}
+.preset-apply{
+  flex:1 1 auto;min-width:0;height:100%;display:flex;align-items:center;gap:8px;
+  padding:0 6px;border:0;border-radius:4px;background:transparent;
+  color:var(--text-primary);font:400 13px/1 var(--ui);text-align:left;cursor:pointer;
+}
+.preset-apply:focus-visible{outline-offset:-1px}
 .preset-check{width:16px;height:16px;flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--accent)}
 .preset-check .od-icon{opacity:0}
 .preset-item.is-current .preset-check .od-icon{opacity:1}
 .preset-item-name{flex:1 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .preset-item.is-current .preset-item-name{font-weight:600}
+.preset-item .preset-actions{
+  flex:none;display:flex;align-items:center;justify-content:flex-end;gap:2px;padding-right:4px;
+  opacity:0;pointer-events:none;transition:opacity 120ms ease;
+}
+.preset-item:hover .preset-actions,
+.preset-item:focus-within .preset-actions{opacity:1;pointer-events:auto}
+.preset-act{
+  width:22px;height:22px;flex:none;display:inline-flex;align-items:center;justify-content:center;
+  padding:0;border:0;border-radius:4px;background:transparent;color:var(--text-secondary);
+  cursor:pointer;transition:background-color 120ms ease,color 120ms ease;
+}
+.preset-act:hover{background:#393b40;color:var(--text-primary)}
+.preset-act.is-danger:hover{background:#393b40;color:var(--error)}
+.preset-act:focus-visible{outline:1px solid var(--accent);outline-offset:-1px;background:#393b40;color:var(--text-primary)}
+.preset-act.is-danger:focus-visible{color:var(--error)}
+.preset-act .od-icon{pointer-events:none}
+.preset-item.is-editing .preset-actions{display:none}
+.preset-rename-input{
+  flex:1 1 auto;min-width:0;height:24px;margin:0 4px 0 0;padding:0 6px;
+  background:#1e1f22;border:1px solid #393b40;border-radius:4px;outline:none;
+  color:var(--text-primary);font:400 13px/1 var(--ui);
+}
+.preset-rename-input:focus{border-color:var(--accent)}
 
 /* ---- save-preset dialog ---- */
 .preset-modal{
@@ -843,6 +871,11 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
 .preset-btn-primary:hover{background:#4a80f2;border-color:#4a80f2}
 .preset-btn-primary[disabled]{opacity:.5;cursor:default;background:var(--accent);border-color:var(--accent)}
 .preset-btn-primary[disabled]:hover{background:var(--accent);border-color:var(--accent)}
+.preset-btn-danger{background:var(--error);border-color:var(--error);color:#fff}
+.preset-btn-danger:hover{background:#c94f4f;border-color:#c94f4f}
+.preset-confirm-modal{z-index:75}
+.preset-confirm-dialog{width:380px}
+.preset-confirm-text{margin:0 0 18px;font:400 12.5px/1.5 var(--ui);color:var(--text-secondary)}
 
 /* muted dot-items revealed by «Показывать скрытые файлы» */
 .col-item.is-hidden .ci-icon{opacity:.6}
@@ -1373,6 +1406,18 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
         <div class="preset-actions">
           <button class="preset-btn" id="btnPresetCancel" type="button">Отмена</button>
           <button class="preset-btn preset-btn-primary" id="btnPresetConfirm" type="button">Сохранить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- delete-preset confirmation dialog -->
+    <div class="preset-modal preset-confirm-modal" id="presetDeleteModal" hidden>
+      <div class="preset-dialog preset-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="presetDeleteTitle" aria-describedby="presetDeleteText">
+        <h2 class="preset-dialog-title" id="presetDeleteTitle">Удалить пресет?</h2>
+        <p class="preset-confirm-text" id="presetDeleteText"></p>
+        <div class="preset-actions">
+          <button class="preset-btn" id="btnPresetDeleteCancel" type="button">Отмена</button>
+          <button class="preset-btn preset-btn-danger" id="btnPresetDeleteConfirm" type="button">Удалить</button>
         </div>
       </div>
     </div>
@@ -2250,6 +2295,11 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
   ];
   var customPresets = loadCustomPresets();
   var presetModalOpen = false;
+  var presetEditingId = null;
+  var presetRenameWatch = null;
+  var presetDeleteId = null;
+  var presetDeleteOpen = false;
+  var presetDeleteReturnFocus = null;
 
   function normalizePresetSettings(raw) {
     var r = raw || {};
@@ -2371,30 +2421,265 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
     if (list) renderPresetList();
   }
 
+  function findCustomPreset(id) {
+    for (var i = 0; i < customPresets.length; i++) {
+      if (customPresets[i].id === id) return customPresets[i];
+    }
+    return null;
+  }
+
+  function presetRowById(id) {
+    var list = $('presetList');
+    if (!list) return null;
+    for (var i = 0; i < list.children.length; i++) {
+      if (list.children[i].getAttribute('data-preset-id') === id) return list.children[i];
+    }
+    return null;
+  }
+
+  function focusPresetRow(id) {
+    var row = presetRowById(id);
+    if (!row) return;
+    var apply = row.querySelector('.preset-apply');
+    if (apply) apply.focus();
+  }
+
+  function buildPresetRow(p) {
+    var row = document.createElement('div');
+    var editing = p.id === presetEditingId;
+    row.className = 'preset-item' + (p.id === state.presetId ? ' is-current' : '') +
+      (editing ? ' is-editing' : '');
+    row.setAttribute('role', 'option');
+    row.setAttribute('aria-selected', p.id === state.presetId ? 'true' : 'false');
+    row.setAttribute('data-preset-id', p.id);
+    if (editing) {
+      var check = document.createElement('span');
+      check.className = 'preset-check';
+      check.setAttribute('aria-hidden', 'true');
+      check.innerHTML = ICON('i-check', '14px');
+      row.appendChild(check);
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'preset-rename-input';
+      input.value = p.name;
+      input.maxLength = 64;
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+      input.setAttribute('aria-label', 'Новое имя пресета');
+      row.appendChild(input);
+      return row;
+    }
+    var apply = document.createElement('button');
+    apply.type = 'button';
+    apply.className = 'preset-apply';
+    apply.setAttribute('data-preset-apply', p.id);
+    apply.innerHTML = '<span class="preset-check" aria-hidden="true">' + ICON('i-check', '14px') + '</span>' +
+      '<span class="preset-item-name">' + esc(p.name) + '</span>';
+    row.appendChild(apply);
+    if (!p.builtin) {
+      var actions = document.createElement('span');
+      actions.className = 'preset-actions';
+      actions.setAttribute('role', 'presentation');
+      var ren = document.createElement('button');
+      ren.type = 'button';
+      ren.className = 'preset-act';
+      ren.setAttribute('data-preset-rename', p.id);
+      ren.title = 'Переименовать пресет';
+      ren.setAttribute('aria-label', 'Переименовать пресет');
+      ren.innerHTML = ICON('i-pencil', '14px');
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'preset-act is-danger';
+      del.setAttribute('data-preset-delete', p.id);
+      del.title = 'Удалить пресет';
+      del.setAttribute('aria-label', 'Удалить пресет');
+      del.innerHTML = ICON('i-trash', '14px');
+      actions.appendChild(ren);
+      actions.appendChild(del);
+      row.appendChild(actions);
+    }
+    return row;
+  }
+
+  function stopPresetRenameWatch() {
+    if (presetRenameWatch) {
+      window.clearTimeout(presetRenameWatch);
+      presetRenameWatch = null;
+    }
+  }
+
+  function watchPresetRenameFocus(input, id) {
+    stopPresetRenameWatch();
+    presetRenameWatch = window.setTimeout(function tick() {
+      presetRenameWatch = null;
+      if (presetEditingId !== id || !input.isConnected) return;
+      if (document.activeElement !== input) {
+        cancelPresetRename(id, false);
+        return;
+      }
+      presetRenameWatch = window.setTimeout(tick, 150);
+    }, 150);
+  }
+
   function renderPresetList() {
     var list = $('presetList');
     if (!list) return;
+    stopPresetRenameWatch();
     list.textContent = '';
     allPresets().forEach(function (p) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'preset-item' + (p.id === state.presetId ? ' is-current' : '');
-      b.setAttribute('role', 'option');
-      b.setAttribute('aria-selected', p.id === state.presetId ? 'true' : 'false');
-      b.setAttribute('data-preset-id', p.id);
-      b.innerHTML = '<span class="preset-check" aria-hidden="true">' + ICON('i-check', '14px') + '</span>' +
-        '<span class="preset-item-name">' + esc(p.name) + '</span>';
-      list.appendChild(b);
+      list.appendChild(buildPresetRow(p));
     });
+    if (presetEditingId) {
+      var input = list.querySelector('.preset-rename-input');
+      if (input) {
+        input.focus();
+        input.select();
+        watchPresetRenameFocus(input, presetEditingId);
+      }
+    }
   }
 
   function setPresetListOpen(open) {
     var list = $('presetList');
     var btn = $('btnPresetSelect');
     if (!list || !btn) return;
+    if (!open) presetEditingId = null;
     if (open) renderPresetList();
     list.hidden = !open;
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  function restorePresetRow(id) {
+    var row = presetRowById(id);
+    var p = findPreset(id);
+    if (!row || !p) { renderPresetList(); return; }
+    row.parentNode.replaceChild(buildPresetRow(p), row);
+  }
+
+  function beginPresetRename(id) {
+    if (!findCustomPreset(id)) return;
+    presetEditingId = id;
+    renderPresetList();
+  }
+
+  function cancelPresetRename(id, focusRow) {
+    if (!presetEditingId) return;
+    if (id && presetEditingId !== id) return;
+    stopPresetRenameWatch();
+    var editingId = presetEditingId;
+    presetEditingId = null;
+    restorePresetRow(editingId);
+    if (focusRow) focusPresetRow(editingId);
+  }
+
+  function commitPresetRename(id) {
+    if (!presetEditingId || (id && presetEditingId !== id)) return;
+    var editingId = presetEditingId;
+    var row = presetRowById(editingId);
+    var input = row ? row.querySelector('.preset-rename-input') : null;
+    var cp = findCustomPreset(editingId);
+    if (!input || !cp) {
+      stopPresetRenameWatch();
+      presetEditingId = null;
+      renderPresetList();
+      return;
+    }
+    var name = input.value.replace(/^\s+|\s+$/g, '');
+    if (!name) {
+      bandNote('Имя пресета не может быть пустым');
+      input.focus();
+      return;
+    }
+    if (name.toLowerCase() === cp.name.toLowerCase()) {
+      stopPresetRenameWatch();
+      presetEditingId = null;
+      restorePresetRow(editingId);
+      focusPresetRow(editingId);
+      return;
+    }
+    if (findPresetByName(name)) {
+      bandNote('Пресет с таким именем уже существует');
+      input.focus();
+      input.select();
+      return;
+    }
+    stopPresetRenameWatch();
+    cp.name = name;
+    presetEditingId = null;
+    persistCustomPresets();
+    if (state.presetId === editingId) syncPresetLabel();
+    else renderPresetList();
+    focusPresetRow(editingId);
+    bandNote('Пресет переименован: ' + name);
+  }
+
+  function openPresetDelete(id) {
+    var cp = findCustomPreset(id);
+    if (!cp || presetDeleteOpen) return;
+    var p = findPreset(id);
+    var name = p ? p.name : cp.name;
+    presetDeleteId = id;
+    presetDeleteOpen = true;
+    presetDeleteReturnFocus = document.activeElement;
+    var text = $('presetDeleteText');
+    if (text) text.textContent = 'Пресет «' + name + '» будет удалён. Это действие нельзя отменить.';
+    var modal = $('presetDeleteModal');
+    if (modal) modal.hidden = false;
+    var cancel = $('btnPresetDeleteCancel');
+    if (cancel) cancel.focus();
+  }
+
+  function closePresetDelete(restoreFocus) {
+    if (!presetDeleteOpen) return;
+    presetDeleteOpen = false;
+    presetDeleteId = null;
+    var modal = $('presetDeleteModal');
+    if (modal) modal.hidden = true;
+    if (restoreFocus) {
+      var back = presetDeleteReturnFocus;
+      if (back && back !== document.body && document.documentElement.contains(back) && typeof back.focus === 'function') back.focus();
+      else {
+        var sel = $('btnPresetSelect');
+        if (sel) sel.focus();
+      }
+    }
+    presetDeleteReturnFocus = null;
+  }
+
+  function confirmPresetDelete() {
+    if (!presetDeleteOpen) return;
+    var id = presetDeleteId;
+    var p = findPreset(id);
+    var cp = findCustomPreset(id);
+    var name = p ? p.name : (cp ? cp.name : '');
+    var wasCurrent = state.presetId === id;
+    presetDeleteOpen = false;
+    presetDeleteId = null;
+    presetDeleteReturnFocus = null;
+    var modal = $('presetDeleteModal');
+    if (modal) modal.hidden = true;
+    if (!cp) { renderPresetList(); return; }
+    for (var i = 0; i < customPresets.length; i++) {
+      if (customPresets[i].id === id) { customPresets.splice(i, 1); break; }
+    }
+    persistCustomPresets();
+    if (wasCurrent) {
+      var fallback = findPreset('default') || findPresetByName('По умолчанию');
+      if (fallback) {
+        applyPreset(fallback.id);
+        setPresetListOpen(true);
+      } else {
+        state.presetId = null;
+        state.presetDirty = true;
+        syncPresetLabel();
+        setPresetListOpen(true);
+      }
+    } else {
+      renderPresetList();
+    }
+    bandNote('Пресет удалён: ' + name);
+    var sel = $('btnPresetSelect');
+    if (sel) sel.focus();
   }
 
   function applyPreset(id) {
@@ -2522,15 +2807,99 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
         setPresetListOpen(list.hidden);
       });
       list.addEventListener('click', function (e) {
+        var ren = closestIn(e, '[data-preset-rename]');
+        if (ren) {
+          e.preventDefault();
+          e.stopPropagation();
+          beginPresetRename(ren.getAttribute('data-preset-rename'));
+          return;
+        }
+        var del = closestIn(e, '[data-preset-delete]');
+        if (del) {
+          e.preventDefault();
+          e.stopPropagation();
+          openPresetDelete(del.getAttribute('data-preset-delete'));
+          return;
+        }
+        if (closestIn(e, '.preset-rename-input')) {
+          e.stopPropagation();
+          return;
+        }
         var b = closestIn(e, '[data-preset-id]');
         if (!b) return;
+        if (presetEditingId) cancelPresetRename(null, false);
         applyPreset(b.getAttribute('data-preset-id'));
+      });
+      list.addEventListener('keydown', function (e) {
+        var t = e.target;
+        if (!t || !t.classList || !t.classList.contains('preset-rename-input')) return;
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+          commitPresetRename(presetEditingId);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          cancelPresetRename(presetEditingId, true);
+        }
+      });
+      list.addEventListener('focusout', function (e) {
+        var t = e.target;
+        if (!t || !t.classList || !t.classList.contains('preset-rename-input')) return;
+        if (!presetEditingId) return;
+        cancelPresetRename(presetEditingId, false);
       });
     }
     if (save) {
       save.addEventListener('click', function (e) {
         e.stopPropagation();
         openPresetModal();
+      });
+    }
+    var delModal = $('presetDeleteModal');
+    if (delModal) {
+      delModal.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (e.target === delModal) closePresetDelete(true);
+      });
+      delModal.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          closePresetDelete(true);
+        } else if (e.key === 'Enter' && e.target && e.target.id === 'btnPresetDeleteConfirm') {
+          e.preventDefault();
+          e.stopPropagation();
+          confirmPresetDelete();
+        } else if (e.key === 'Enter' && e.target && e.target.id === 'btnPresetDeleteCancel') {
+          e.preventDefault();
+          e.stopPropagation();
+          closePresetDelete(true);
+        } else if (e.key === 'Tab') {
+          var first = $('btnPresetDeleteCancel');
+          var last = $('btnPresetDeleteConfirm');
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      });
+    }
+    var delCancel = $('btnPresetDeleteCancel');
+    if (delCancel) {
+      delCancel.addEventListener('click', function (e) {
+        e.stopPropagation();
+        closePresetDelete(true);
+      });
+    }
+    var delConfirm = $('btnPresetDeleteConfirm');
+    if (delConfirm) {
+      delConfirm.addEventListener('click', function (e) {
+        e.stopPropagation();
+        confirmPresetDelete();
       });
     }
     if (!modal) return;
@@ -2596,6 +2965,7 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
   });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
+    if (presetDeleteOpen) { closePresetDelete(true); return; }
     if (presetModalOpen) return;
     var list = $('presetList');
     if (list && !list.hidden) { setPresetListOpen(false); return; }

@@ -16,7 +16,7 @@ python3 -m http.server 8080
 # http://localhost:8080/variant-c.html
 ```
 
-Состояния канонического макета: `#view`, `#icons`, `#details`, `#ungrouped`, `#icons-ungrouped`.
+Состояния канонического макета: `#view`, `#presets`, `#presets-save`, `#icons`, `#details`, `#ungrouped`, `#icons-ungrouped`.
 
 ## Происхождение
 

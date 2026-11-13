@@ -11,7 +11,7 @@
 - язык — русский; данные — демонстрационные из референса;
 - работает при открытии файла напрямую (`file://`) и через HTTP.
 
-Требования к производительности: без зависимостей, < 130 KB, без тяжёлых анимаций; перерисовка полосы — синхронная, на сотнях элементов.
+Требования к производительности: без зависимостей, < 160 KB, без тяжёлых анимаций; перерисовка полосы — синхронная, на сотнях элементов.
 
 ## 2. Стек и структура
 
@@ -33,6 +33,7 @@ VIEWS = {
 - Элемент: `n` (имя), `s` (размер, «16,6 ГиБ»/«—»), `d` (дата отображения), `t` (сортировочный ключ `YYYYMMDDhhmm`), `c` (создан), `k` (`folder`/`file`), опционально `hidden`.
 - Счётчики: «127 папок · 19 файлов (80,1 МиБ)»; свободное место «22,8 ГиБ»; устройство `sdc1`.
 - Скрытые элементы добавляются динамически: `.gitignore` (группа 0), `.cache.lock` (группа 1).
+- Пресеты: массив `{id,name,settings}`; built-in — константа `BUILTIN_PRESETS`; пользовательские — `localStorage['volna.presets.v1']` (JSON); снапшот настроек: `viewMode, grouping, sort, sortDir, showHidden, compact, zoom`. Перекрытие по имени (case-insensitive); при недоступном storage — память.
 
 ## 4. Ключевые id/классы (контракт DOM)
 
@@ -42,6 +43,9 @@ VIEWS = {
 | `#btnMenu`, `#btnBack`, `#btnFwd`, `#btnUp` | меню и навигация |
 | `#btnView`, `#popView` | триггер и поповер «Вид» |
 | `#viewZoom`, `#viewZoomValue` | слайдер масштаба и % |
+| `#btnPresetSelect`, `#presetName`, `#presetList` | выбор пресета, текущее имя, инлайн-список |
+| `#btnPresetSave` | кнопка сохранения пресета |
+| `#presetModal`, `#presetNameInput`, `#presetExisting`, `#presetHint`, `#btnPresetCancel`, `#btnPresetConfirm` | диалог сохранения пресета |
 | `#btnLocation`, `#locationLabel`, `#popLocation` | путь и dropdown |
 | `#pathWidget`, `#pathAnchor`, `#btnPathEdit`, `#pathInput` | путь, редактирование |
 | `#btnSettings`, `#popSettings` | настройки-сбросы |
@@ -61,6 +65,8 @@ VIEWS = {
 | `.details-head`, `.details-group`, `.dt-row` | «Подробности» |
 | `.p-row`, `.p-row.is-group` | строки дерева |
 | `.vp-*` | компоненты поповера «Вид» |
+| `.preset-field`, `.preset-select`, `.preset-save`, `.preset-list`, `.preset-item`, `.preset-check` | пресеты в поповере |
+| `.preset-modal`, `.preset-dialog`, `.preset-name-input`, `.preset-existing`, `.preset-hint`, `.preset-actions`, `.preset-btn` | диалог сохранения пресета |
 | `.is-active`, `.is-current`, `.is-checked`, `.is-selected`, `.is-hidden`, `.is-scanning`, `.is-compact` | состояния |
 
 Если имена классов меняются при переносе в продукт, семантика и структура компонентов должны сохраниться.
@@ -70,6 +76,7 @@ VIEWS = {
 - `renderBand()` — диспетчер: `icons` → `renderIcons()`, `columns` + `grouping=none` → `renderColumnsUngrouped()`, `columns` → grouped columns, `details` → `renderDetailsView()`.
 - `renderDetails()` — инспектор (не путать с режимом «Подробности»).
 - `renderStatus()`, `renderTabs()`, `renderPlaces()`, `applyZoom()`, `syncViewPopover()` — вспомогательные.
+- Пресеты: `allPresets()`, `applyPreset(id)`, `markPresetManual()`, `openPresetModal()`, `savePresetFromModal()`, `syncPresetLabel()`, `renderPresetList()`, `persistCustomPresets()`; `state.presetId`/`presetDirty`; localStorage-ключ `volna.presets.v1`.
 - Общие хелперы: `visibleGroups()` (группы + скрытые), `sortedItems()`, `sizeBytes()` (парсинг русских единиц), `esc()` (экранирование), `ICON(name,size)`.
 - Перерисовка полосы не должна сбрасывать скролл при клике выбора (точечное обновление классов), но может сбрасывать при смене режима/данных.
 - `fit()` пересчитывает `--scale`; `applyZoom()` — `--col-w`, `--icon-size`, `--tile-icon`, значения слайдера.
@@ -91,6 +98,8 @@ cd design/artifacts && python3 -m http.server 8080
 # 2) скриншоты рабочих состояний
 design/tools/shot.sh "http://127.0.0.1:8080/variant-c.html"           design/screens/variant-c.png 1600 1000
 design/tools/shot.sh "http://127.0.0.1:8080/variant-c.html#view"      design/screens/variant-c-view.png
+design/tools/shot.sh "http://127.0.0.1:8080/variant-c.html#presets"   design/screens/variant-c-presets.png
+design/tools/shot.sh "http://127.0.0.1:8080/variant-c.html#presets-save" design/screens/variant-c-preset-save.png
 design/tools/shot.sh "http://127.0.0.1:8080/variant-c.html#icons"     design/screens/variant-c-icons.png
 design/tools/shot.sh "http://127.0.0.1:8080/variant-c.html#details"   design/screens/variant-c-details.png
 design/tools/shot.sh "http://127.0.0.1:8080/variant-c.html#ungrouped" design/screens/variant-c-ungrouped.png
@@ -120,7 +129,7 @@ python3 design/tools/build_compare.py
 | Свободное место/`sdc1` статичны | значение тома фиксировано для макета |
 | «Подробности» не масштабируются | сохранён JetBrains-стандарт 24px строк; зум действует на иконки/колонки |
 | Светлая тема отсутствует в C | первичная тема тёмная; light — референс B |
-| Нет сохранения состояния | при перезагрузке возвращаются дефолты |
+| Нет сохранения состояния | при перезагрузке возвращаются дефолты; **исключение** — пользовательские пресеты сохраняются в `localStorage` |
 
 ## 10. Рекомендации по переносу в продукт
 

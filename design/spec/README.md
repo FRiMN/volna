@@ -2,10 +2,10 @@
 
 Implementation-grade спека для направления **C — Dolphin × JetBrains** (гибрид KDE Dolphin + JetBrains New UI), выбранного из трёх вариантов. Спека описывает финальный макет, токены, компоненты, поведение и критерии приёмки так, чтобы его можно было реализовать в реальном приложении без сверки с чатами и скриншотами.
 
-**Версия:** 1.0 · 2026-11-13
+**Версия:** 1.1 · 2026-11-13 (добавлены пресеты отображения и диалог сохранения)
 **Канонический артефакт:** [`design/artifacts/variant-c.html`](../artifacts/variant-c.html) — самодостаточный HTML-макет (inline CSS/JS/SVG), 1440×900, русская локаль.
 **Прочие варианты:** [`variant-a.html`](../artifacts/variant-a.html) — верный Dolphin (эталон референса), [`variant-b.html`](../artifacts/variant-b.html) — JetBrains Workbench (эталон панельной грамматики и светлой темы).
-**Скриншоты:** [`design/screens/`](../screens/) — основной экран, «Вид», режимы «Значки»/«Подробности», без группировки, коллаж `compare.png`.
+**Скриншоты:** [`design/screens/`](../screens/) — основной экран, «Вид», пресеты и диалог сохранения, режимы «Значки»/«Подробности», без группировки, коллаж `compare.png`.
 
 ## Как читать
 
@@ -34,7 +34,7 @@ Implementation-grade спека для направления **C — Dolphin ×
 cd design/artifacts
 python3 -m http.server 8080
 # открыть http://localhost:8080/variant-c.html
-# состояния: #view, #icons, #details, #ungrouped, #icons-ungrouped
+# состояния: #view, #presets, #presets-save, #icons, #details, #ungrouped, #icons-ungrouped
 ```
 
 Скриншоты и сравнение пересобираются скриптами [`design/tools/shot.sh`](../tools/shot.sh) и [`design/tools/build_compare.py`](../tools/build_compare.py).

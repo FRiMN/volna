@@ -756,6 +756,94 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
   font:400 11px/1.3 var(--ui);color:var(--text-muted);
 }
 
+/* ---- presets (inside the «Вид» popover) ---- */
+.preset-field{display:flex;align-items:center;gap:4px}
+.preset-select{
+  flex:1 1 auto;min-width:0;height:28px;display:flex;align-items:center;gap:6px;
+  padding:0 8px;background:#1e1f22;border:1px solid #393b40;border-radius:4px;
+  color:var(--text-primary);font:400 13px/1 var(--ui);text-align:left;cursor:pointer;
+  transition:background-color 120ms ease,border-color 120ms ease;
+}
+.preset-select:hover{background:#26282d;border-color:#4d5057}
+.preset-select[aria-expanded="true"]{border-color:var(--accent)}
+.preset-select .od-icon{color:var(--text-secondary)}
+.preset-name{flex:1 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13px}
+.preset-save{
+  width:28px;height:28px;flex:none;display:inline-flex;align-items:center;justify-content:center;
+  padding:0;background:#1e1f22;border:1px solid #393b40;border-radius:4px;
+  color:var(--text-secondary);cursor:pointer;
+  transition:background-color 120ms ease,border-color 120ms ease,color 120ms ease;
+}
+.preset-save:hover{background:var(--row-hover);border-color:#4d5057;color:var(--text-primary)}
+.preset-list{
+  display:flex;flex-direction:column;gap:1px;margin-top:4px;padding:2px;
+  max-height:162px;overflow-y:auto;background:#1e1f22;
+  border:1px solid #393b40;border-radius:6px;
+  scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent;
+}
+.preset-item{
+  display:flex;align-items:center;gap:8px;width:100%;height:26px;padding:0 6px;
+  border:0;border-radius:4px;background:transparent;color:var(--text-primary);
+  font:400 13px/1 var(--ui);text-align:left;cursor:pointer;
+  transition:background-color 120ms ease;
+}
+.preset-item:hover{background:var(--row-hover)}
+.preset-check{width:16px;height:16px;flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--accent)}
+.preset-check .od-icon{opacity:0}
+.preset-item.is-current .preset-check .od-icon{opacity:1}
+.preset-item-name{flex:1 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.preset-item.is-current .preset-item-name{font-weight:600}
+
+/* ---- save-preset dialog ---- */
+.preset-modal{
+  position:absolute;inset:0;z-index:70;
+  display:flex;align-items:center;justify-content:center;padding:16px;
+  background:rgba(0,0,0,.45);
+}
+.preset-dialog{
+  width:380px;max-width:100%;max-height:100%;overflow-y:auto;
+  padding:16px;background:#2b2d30;border:1px solid #393b40;border-radius:8px;
+  box-shadow:0 24px 70px rgba(0,0,0,.55);
+  scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent;
+}
+.preset-dialog-title{margin:0 0 14px;font:600 13px/1.3 var(--ui);color:var(--text-primary)}
+.preset-dialog-label{display:block;margin:0 0 6px;font:600 11px/1.2 var(--ui);color:var(--text-secondary);letter-spacing:.02em}
+.preset-name-input{
+  display:block;width:100%;height:28px;margin:0 0 14px;padding:0 8px;
+  background:#1e1f22;border:1px solid #393b40;border-radius:4px;
+  font:400 13px/1 var(--ui);color:var(--text-primary);outline:none;
+  transition:border-color 120ms ease;
+}
+.preset-name-input:focus{border-color:var(--accent)}
+.preset-dialog-sub{margin:0 0 6px;font:600 11px/1.2 var(--ui);color:var(--text-secondary);letter-spacing:.02em}
+.preset-existing{
+  display:flex;flex-direction:column;gap:1px;margin:0 0 10px;padding:2px;
+  max-height:144px;overflow-y:auto;background:#1e1f22;
+  border:1px solid #393b40;border-radius:6px;
+  scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent;
+}
+.preset-existing-row{
+  display:flex;align-items:center;width:100%;height:24px;padding:0 6px;
+  border:0;border-radius:4px;background:transparent;color:var(--text-primary);
+  font:400 12.5px/1 var(--ui);text-align:left;cursor:pointer;
+  transition:background-color 120ms ease;
+}
+.preset-existing-row:hover{background:var(--row-hover)}
+.preset-hint{margin:0 0 14px;font:400 11px/1.35 var(--ui);color:var(--text-muted)}
+.preset-hint.is-overwrite{color:var(--warning)}
+.preset-actions{display:flex;justify-content:flex-end;gap:8px}
+.preset-btn{
+  height:32px;padding:0 14px;border:1px solid #393b40;border-radius:4px;
+  background:transparent;color:var(--text-primary);
+  font:400 13px/1 var(--ui);cursor:pointer;
+  transition:background-color 120ms ease,border-color 120ms ease;
+}
+.preset-btn:hover{background:var(--row-hover)}
+.preset-btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.preset-btn-primary:hover{background:#4a80f2;border-color:#4a80f2}
+.preset-btn-primary[disabled]{opacity:.5;cursor:default;background:var(--accent);border-color:var(--accent)}
+.preset-btn-primary[disabled]:hover{background:var(--accent);border-color:var(--accent)}
+
 /* muted dot-items revealed by «Показывать скрытые файлы» */
 .col-item.is-hidden .ci-icon{opacity:.6}
 .col-item.is-hidden .ci-name{color:var(--text-secondary)}
@@ -840,6 +928,7 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
   <symbol id="i-min" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8h9"/></symbol>
   <symbol id="i-max" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="9" height="9" rx="1"/></symbol>
   <symbol id="i-close" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.3 4.3 11.7 11.7M11.7 4.3 4.3 11.7"/></symbol>
+  <symbol id="i-save" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.9 3.2c0-.5.4-.9.9-.9h7.1l2.5 2.5v7.9c0 .5-.4.9-.9.9H3.8c-.5 0-.9-.4-.9-.9z"/><path d="M5.4 2.3v3.4h4.6V2.3"/><path d="M5 13.3V9.4h6v3.9"/></symbol>
 </defs>
 </svg>
 
@@ -885,6 +974,20 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
         </button>
         <div class="popup view-pop" id="popView" hidden aria-label="Вид">
           <div class="vp-header">Вид</div>
+
+          <div class="vp-section">
+            <div class="vp-section-title">Пресеты</div>
+            <div class="preset-field">
+              <button class="preset-select" id="btnPresetSelect" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="presetList" aria-label="Пресет: По умолчанию" title="Пресет: По умолчанию">
+                <span class="preset-name" id="presetName">По умолчанию</span>
+                <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-down"/></svg>
+              </button>
+              <button class="preset-save" id="btnPresetSave" type="button" title="Сохранить пресет" aria-label="Сохранить пресет">
+                <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-save"/></svg>
+              </button>
+            </div>
+            <div class="preset-list" id="presetList" role="listbox" aria-label="Пресеты" hidden></div>
+          </div>
 
           <div class="vp-section">
             <div class="vp-section-title">Режим просмотра</div>
@@ -1258,6 +1361,22 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
       </div>
     </footer>
 
+    <!-- save-preset dialog -->
+    <div class="preset-modal" id="presetModal" hidden>
+      <div class="preset-dialog" role="dialog" aria-modal="true" aria-labelledby="presetDialogTitle">
+        <h2 class="preset-dialog-title" id="presetDialogTitle">Сохранить пресет</h2>
+        <label class="preset-dialog-label" for="presetNameInput">Название пресета</label>
+        <input class="preset-name-input" id="presetNameInput" type="text" autocomplete="off" spellcheck="false" maxlength="64" aria-describedby="presetHint">
+        <div class="preset-dialog-sub">Или выберите существующий</div>
+        <div class="preset-existing" id="presetExisting" role="group" aria-label="Существующие пресеты"></div>
+        <div class="preset-hint" id="presetHint">Новый пресет будет добавлен в список</div>
+        <div class="preset-actions">
+          <button class="preset-btn" id="btnPresetCancel" type="button">Отмена</button>
+          <button class="preset-btn preset-btn-primary" id="btnPresetConfirm" type="button">Сохранить</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1449,6 +1568,8 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
     compact: false,
     filter: '',
     zoom: 50,
+    presetId: 'default',
+    presetDirty: false,
     selected: 'uv',
     collapsed: {},
     leftView: 'places',
@@ -2110,6 +2231,338 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
     if (zl) zl.textContent = pct + '%';
   }
 
+  /* ============================ PRESETS ============================ */
+
+  var PRESET_STORAGE_KEY = 'volna.presets.v1';
+  var BUILTIN_PRESETS = [
+    { id: 'default', name: 'По умолчанию', settings: {
+      viewMode: 'columns', grouping: 'date', sort: 'date', sortDir: 'desc',
+      showHidden: false, compact: false, zoom: 50 } },
+    { id: 'dense-list', name: 'Плотный список', settings: {
+      viewMode: 'details', grouping: 'date', sort: 'date', sortDir: 'desc',
+      showHidden: false, compact: true, zoom: 50 } },
+    { id: 'large-icons', name: 'Крупные значки', settings: {
+      viewMode: 'icons', grouping: 'date', sort: 'name', sortDir: 'asc',
+      showHidden: false, compact: false, zoom: 85 } },
+    { id: 'no-grouping', name: 'Без группировки', settings: {
+      viewMode: 'columns', grouping: 'none', sort: 'size', sortDir: 'desc',
+      showHidden: false, compact: false, zoom: 50 } }
+  ];
+  var customPresets = loadCustomPresets();
+  var presetModalOpen = false;
+
+  function normalizePresetSettings(raw) {
+    var r = raw || {};
+    var modes = ['icons', 'columns', 'details'];
+    var groupings = ['date', 'none'];
+    var sorts = ['date', 'size', 'name'];
+    var zoom = typeof r.zoom === 'number' ? Math.round(r.zoom) : 50;
+    if (zoom < 0) zoom = 0;
+    if (zoom > 100) zoom = 100;
+    return {
+      viewMode: modes.indexOf(r.viewMode) !== -1 ? r.viewMode : 'columns',
+      grouping: groupings.indexOf(r.grouping) !== -1 ? r.grouping : 'date',
+      sort: sorts.indexOf(r.sort) !== -1 ? r.sort : 'date',
+      sortDir: r.sortDir === 'asc' ? 'asc' : 'desc',
+      showHidden: !!r.showHidden,
+      compact: !!r.compact,
+      zoom: zoom
+    };
+  }
+
+  function copySettings(s) {
+    return normalizePresetSettings(s);
+  }
+
+  function loadCustomPresets() {
+    try {
+      var raw = window.localStorage.getItem(PRESET_STORAGE_KEY);
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return [];
+      var out = [];
+      arr.forEach(function (it, i) {
+        if (!it || typeof it.name !== 'string') return;
+        var name = it.name.replace(/^\s+|\s+$/g, '');
+        if (!name) return;
+        out.push({
+          id: typeof it.id === 'string' && it.id ? it.id : 'custom-' + i,
+          name: name,
+          settings: normalizePresetSettings(it.settings)
+        });
+      });
+      return out;
+    } catch (err) {
+      return [];
+    }
+  }
+
+  function persistCustomPresets() {
+    try {
+      window.localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(customPresets));
+    } catch (err) { /* storage unavailable — keep presets in memory */ }
+  }
+
+  function allPresets() {
+    var out = BUILTIN_PRESETS.map(function (p) {
+      return { id: p.id, name: p.name, settings: p.settings, builtin: true };
+    });
+    customPresets.forEach(function (cp) {
+      var idx = -1;
+      for (var i = 0; i < out.length; i++) {
+        if (out[i].name.toLowerCase() === cp.name.toLowerCase()) { idx = i; break; }
+      }
+      var entry = { id: cp.id, name: cp.name, settings: cp.settings, builtin: false };
+      if (idx >= 0) out[idx] = entry;
+      else out.push(entry);
+    });
+    return out;
+  }
+
+  function findPreset(id) {
+    var arr = allPresets();
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i].id === id) return arr[i];
+    }
+    return null;
+  }
+
+  function findPresetByName(name) {
+    var n = String(name).replace(/^\s+|\s+$/g, '').toLowerCase();
+    if (!n) return null;
+    var arr = allPresets();
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i].name.toLowerCase() === n) return arr[i];
+    }
+    return null;
+  }
+
+  function newPresetId() {
+    var base = 'custom-' + new Date().getTime().toString(36);
+    var id = base, n = 1;
+    while (findPreset(id)) { id = base + '-' + (n++); }
+    return id;
+  }
+
+  function presetSnapshot() {
+    return {
+      viewMode: state.viewMode,
+      grouping: state.grouping,
+      sort: state.sort,
+      sortDir: state.sortDir,
+      showHidden: !!state.showHidden,
+      compact: !!state.compact,
+      zoom: state.zoom
+    };
+  }
+
+  function syncPresetLabel() {
+    var p = state.presetId ? findPreset(state.presetId) : null;
+    var name = p ? p.name : 'Настроено вручную';
+    state.presetDirty = !p;
+    var label = $('presetName');
+    var btn = $('btnPresetSelect');
+    if (label) label.textContent = name;
+    if (btn) {
+      btn.title = 'Пресет: ' + name;
+      btn.setAttribute('aria-label', 'Пресет: ' + name);
+    }
+    var list = $('presetList');
+    if (list) renderPresetList();
+  }
+
+  function renderPresetList() {
+    var list = $('presetList');
+    if (!list) return;
+    list.textContent = '';
+    allPresets().forEach(function (p) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'preset-item' + (p.id === state.presetId ? ' is-current' : '');
+      b.setAttribute('role', 'option');
+      b.setAttribute('aria-selected', p.id === state.presetId ? 'true' : 'false');
+      b.setAttribute('data-preset-id', p.id);
+      b.innerHTML = '<span class="preset-check" aria-hidden="true">' + ICON('i-check', '14px') + '</span>' +
+        '<span class="preset-item-name">' + esc(p.name) + '</span>';
+      list.appendChild(b);
+    });
+  }
+
+  function setPresetListOpen(open) {
+    var list = $('presetList');
+    var btn = $('btnPresetSelect');
+    if (!list || !btn) return;
+    if (open) renderPresetList();
+    list.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  function applyPreset(id) {
+    var p = findPreset(id);
+    if (!p) return;
+    var s = p.settings;
+    state.viewMode = s.viewMode;
+    state.grouping = s.grouping;
+    state.sort = s.sort;
+    state.sortDir = s.sortDir;
+    state.showHidden = !!s.showHidden;
+    state.compact = !!s.compact;
+    state.zoom = s.zoom;
+    state.presetId = p.id;
+    state.presetDirty = false;
+    if (!state.showHidden && state.selected.charAt(0) === '.') state.selected = currentView().defaultSel;
+    var win = $('appWindow');
+    if (win) win.classList.toggle('is-compact', state.compact);
+    setPresetListOpen(false);
+    renderBand();
+    applyZoom();
+    renderDetails();
+    syncViewPopover();
+    startScan(600);
+  }
+
+  function markPresetManual() {
+    if (state.presetId) {
+      state.presetId = null;
+      state.presetDirty = true;
+    }
+    syncPresetLabel();
+  }
+
+  function renderPresetExisting() {
+    var box = $('presetExisting');
+    if (!box) return;
+    box.textContent = '';
+    allPresets().forEach(function (p) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'preset-existing-row';
+      b.setAttribute('data-preset-name', p.name);
+      b.innerHTML = '<span class="preset-item-name">' + esc(p.name) + '</span>';
+      box.appendChild(b);
+    });
+  }
+
+  function updatePresetHint() {
+    var input = $('presetNameInput');
+    var hint = $('presetHint');
+    var confirm = $('btnPresetConfirm');
+    if (!input || !hint) return;
+    var name = input.value.replace(/^\s+|\s+$/g, '');
+    var match = name ? findPresetByName(name) : null;
+    hint.textContent = match ? 'Пресет с таким именем будет перезаписан' : 'Новый пресет будет добавлен в список';
+    hint.classList.toggle('is-overwrite', !!match);
+    if (confirm) confirm.disabled = !name;
+  }
+
+  function openPresetModal() {
+    if (presetModalOpen) return;
+    var p = state.presetId ? findPreset(state.presetId) : null;
+    presetModalOpen = true;
+    setPresetListOpen(false);
+    renderPresetExisting();
+    var input = $('presetNameInput');
+    input.value = p ? p.name + ' (копия)' : 'Мой вид';
+    updatePresetHint();
+    $('presetModal').hidden = false;
+    input.focus();
+    input.select();
+  }
+
+  function closePresetModal(restoreFocus) {
+    if (!presetModalOpen) return;
+    presetModalOpen = false;
+    $('presetModal').hidden = true;
+    if (restoreFocus) {
+      var b = $('btnPresetSave');
+      if (b) b.focus();
+    }
+  }
+
+  function savePresetFromModal() {
+    if (!presetModalOpen) return;
+    var input = $('presetNameInput');
+    var name = input.value.replace(/^\s+|\s+$/g, '');
+    if (!name) { input.focus(); return; }
+    var existing = findPresetByName(name);
+    var settings = copySettings(presetSnapshot());
+    var id;
+    if (existing && !existing.builtin) {
+      id = existing.id;
+      var found = false;
+      for (var i = 0; i < customPresets.length; i++) {
+        if (customPresets[i].id === id) {
+          customPresets[i].name = name;
+          customPresets[i].settings = settings;
+          found = true;
+          break;
+        }
+      }
+      if (!found) customPresets.push({ id: id, name: name, settings: settings });
+    } else {
+      id = newPresetId();
+      customPresets.push({ id: id, name: name, settings: settings });
+    }
+    persistCustomPresets();
+    state.presetId = id;
+    state.presetDirty = false;
+    syncPresetLabel();
+    closePresetModal(true);
+    bandNote('Пресет сохранён: ' + name);
+  }
+
+  function wirePresets() {
+    var select = $('btnPresetSelect');
+    var list = $('presetList');
+    var save = $('btnPresetSave');
+    var modal = $('presetModal');
+    if (select && list) {
+      select.addEventListener('click', function (e) {
+        e.stopPropagation();
+        setPresetListOpen(list.hidden);
+      });
+      list.addEventListener('click', function (e) {
+        var b = closestIn(e, '[data-preset-id]');
+        if (!b) return;
+        applyPreset(b.getAttribute('data-preset-id'));
+      });
+    }
+    if (save) {
+      save.addEventListener('click', function (e) {
+        e.stopPropagation();
+        openPresetModal();
+      });
+    }
+    if (!modal) return;
+    modal.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (e.target === modal) closePresetModal(true);
+    });
+    modal.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        closePresetModal(true);
+      }
+    });
+    $('btnPresetCancel').addEventListener('click', function () { closePresetModal(true); });
+    $('btnPresetConfirm').addEventListener('click', savePresetFromModal);
+    $('presetNameInput').addEventListener('input', updatePresetHint);
+    $('presetNameInput').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); savePresetFromModal(); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePresetModal(true); }
+    });
+    $('presetExisting').addEventListener('click', function (e) {
+      var b = closestIn(e, '[data-preset-name]');
+      if (!b) return;
+      var input = $('presetNameInput');
+      input.value = b.getAttribute('data-preset-name');
+      updatePresetHint();
+      input.focus();
+      input.select();
+    });
+  }
+
   /* ============================ POPUPS ============================ */
 
   var openPop = null;
@@ -2128,12 +2581,25 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
   }
   document.addEventListener('click', function (e) {
     if (!openPop) return;
+    if (!e.target || !document.documentElement.contains(e.target)) return;
     if (openPop.pop.contains(e.target)) return;
     if (openPop.trigger && openPop.trigger.contains(e.target)) return;
     closePop();
   });
+  document.addEventListener('click', function (e) {
+    var list = $('presetList');
+    if (!list || list.hidden) return;
+    if (list.contains(e.target)) return;
+    var sel = $('btnPresetSelect');
+    if (sel && sel.contains(e.target)) return;
+    setPresetListOpen(false);
+  });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') closePop();
+    if (e.key !== 'Escape') return;
+    if (presetModalOpen) return;
+    var list = $('presetList');
+    if (list && !list.hidden) { setPresetListOpen(false); return; }
+    closePop();
   });
 
   function bindPop(triggerId, popId) {
@@ -2187,6 +2653,7 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
       compactBox.classList.toggle('is-checked', state.compact);
       compactBox.setAttribute('aria-checked', state.compact ? 'true' : 'false');
     }
+    syncPresetLabel();
   }
 
   function setViewMode(mode) {
@@ -2194,6 +2661,7 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
     if (mode === state.viewMode) return;
     state.viewMode = mode;
     syncViewPopover();
+    markPresetManual();
     renderBand();
     startScan(700);
   }
@@ -2203,20 +2671,25 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
     if (grouping === state.grouping) return;
     state.grouping = grouping;
     syncViewPopover();
+    markPresetManual();
     renderBand();
     startScan(700);
   }
 
   function setSort(sort) {
+    if (sort === state.sort) return;
     state.sort = sort;
     syncViewPopover();
+    markPresetManual();
     renderBand();
     startScan(650);
   }
 
   function setSortDir(dir) {
+    if (dir === state.sortDir) return;
     state.sortDir = dir;
     syncViewPopover();
+    markPresetManual();
     renderBand();
     startScan(650);
   }
@@ -2225,6 +2698,7 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
     state.showHidden = v;
     if (!v && state.selected.charAt(0) === '.') state.selected = currentView().defaultSel;
     syncViewPopover();
+    markPresetManual();
     renderBand();
     renderDetails();
     startScan(650);
@@ -2234,12 +2708,14 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
     state.compact = v;
     $('appWindow').classList.toggle('is-compact', v);
     syncViewPopover();
+    markPresetManual();
   }
 
   function resetSort() {
     state.sort = 'date';
     state.sortDir = 'desc';
     syncViewPopover();
+    markPresetManual();
     renderBand();
     startScan(650);
   }
@@ -2320,10 +2796,14 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
   function wireToolbar() {
     bindPop('btnMenu', 'popMenu');
     bindPop('btnLocation', 'popLocation');
-    bindPop('btnView', 'popView');
     bindPop('btnSettings', 'popSettings');
     bindPop('btnPlacesMenu', 'popPlaces');
     bindPop('btnDetailsMenu', 'popDetails');
+    $('btnView').addEventListener('click', function () {
+      if (openPop && openPop.pop === $('popView')) { closePop(); return; }
+      openViewPopover();
+      setPresetListOpen(false);
+    });
 
     $('btnPathEdit').addEventListener('click', function (e) {
       e.stopPropagation();
@@ -2428,6 +2908,7 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
     var zv = $('viewZoom');
     if (zv) zv.value = '50';
     applyZoom();
+    markPresetManual();
   }
   function clearFilter() {
     state.filter = '';
@@ -2596,10 +3077,11 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
     slider.addEventListener('input', function () {
       state.zoom = parseInt(this.value, 10) || 0;
       applyZoom();
+      markPresetManual();
     });
     slider.addEventListener('keydown', function (e) {
-      if (e.key === 'Home') { e.preventDefault(); state.zoom = 0; this.value = '0'; applyZoom(); }
-      if (e.key === 'End') { e.preventDefault(); state.zoom = 100; this.value = '100'; applyZoom(); }
+      if (e.key === 'Home') { e.preventDefault(); state.zoom = 0; this.value = '0'; applyZoom(); markPresetManual(); }
+      if (e.key === 'End') { e.preventDefault(); state.zoom = 100; this.value = '100'; applyZoom(); markPresetManual(); }
     });
   }
 
@@ -2658,6 +3140,8 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
 
   function applyHash() {
     var h = (location.hash || '').replace(/^#/, '');
+    if (h === 'presets') { openViewPopover(); setPresetListOpen(true); return; }
+    if (h === 'presets-save') { openViewPopover(); openPresetModal(); return; }
     if (h === 'view') { openViewPopover(); return; }
     if (h === 'icons' || h === 'details') { closePop(); setViewMode(h); return; }
     if (h === 'ungrouped' || h === 'ungrouped-columns') {
@@ -2684,6 +3168,7 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
     wireZoom();
     wireBottom();
     wireWindow();
+    wirePresets();
     renderTabs();
     renderBand();
     renderDetails();
@@ -2692,6 +3177,8 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
     switchBottom('ops');
     applyZoom();
     syncViewPopover();
+    renderPresetList();
+    syncPresetLabel();
     fit();
     applyHash();
     startScan(900);

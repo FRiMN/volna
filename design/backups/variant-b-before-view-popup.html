@@ -1,0 +1,1692 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Волна — файловый менеджер</title>
+<style>
+/* ============================================================
+   Волна · вариант B «JetBrains Workbench»
+   JetBrains New UI chassis: 40px chrome rhythm, 24px data rows,
+   flat two-surface dark theme.  All values are tokens.
+   ============================================================ */
+
+:root{
+  color-scheme: dark;
+
+  --font-ui: Inter, "JetBrains Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* dark surfaces */
+  --bg-canvas:      #1e1f22;
+  --bg-chrome:      #2b2d30;
+  --bg-chrome-alt:  #26282d;
+  --divider-gap:    #1e1f22;
+  --divider-line:   #393b40;
+  --text-primary:   #dfe1e5;
+  --text-secondary: #9da0a8;
+  --text-disabled:  #6f737a;
+  --text-code:      #bcbec3;
+  --icon-primary:   #ced0d6;
+  --icon-secondary: #6f737a;
+  --accent:         #3574f0;
+  --accent-soft:    #25324d;
+  --accent-text-on: #ffffff;
+  --row-selected:   #43454a;
+  --row-selected-focused: #1d2432;
+  --hover:          #393b40;
+  --scrollbar:      #5b5d5f;
+  --error:          #db5c5c;
+  --warning:        #f2c55c;
+  --success:        #57965c;
+
+  /* derived */
+  --inset:       #1e1f22;
+  --field-bg:    #1e1f22;
+  --field-border:#393b40;
+  --menu-bg:     #2b2d30;
+  --menu-line:   #393b40;
+
+  /* main toolbar stays dark in both themes (JetBrains signature) */
+  --tb-bg:       #2b2d30;
+  --tb-text:     #dfe1e5;
+  --tb-icon:     #ced0d6;
+  --tb-hover:    #393b40;
+  --tb-divider:  #393b40;
+  --tb-disabled: #6f737a;
+
+  /* folder glyph */
+  --folder-back:  #3a6bd0;
+  --folder-front: #4d8ef0;
+
+  /* chrome rhythm */
+  --row-h: 24px;
+  --chrome-h: 40px;
+  --stripe-w: 40px;
+  --panel-l: 300px;
+  --panel-r: 320px;
+  --ws-h: 608px;
+  --bw-h: 180px;
+
+  --ease: cubic-bezier(.3,.7,.4,1);
+}
+
+html[data-theme="light"]{
+  color-scheme: light;
+  --bg-canvas:      #ffffff;
+  --bg-chrome:      #f7f8fa;
+  --bg-chrome-alt:  #f2f3f5;
+  --divider-gap:    #dfe1e5;
+  --divider-line:   #ebecf0;
+  --text-primary:   #000000;
+  --text-secondary: #6d707d;
+  --text-disabled:  #a8adbd;
+  --text-code:      #6d707d;
+  --icon-primary:   #6c707e;
+  --icon-secondary: #818594;
+  --accent:         #3574f0;
+  --accent-soft:    #e7effd;
+  --accent-text-on: #ffffff;
+  --row-selected:   #dfe1e5;
+  --row-selected-focused: #e9eef9;
+  --hover:          #eceff1;
+  --scrollbar:      #c4c4c4;
+  --error:          #db3b4b;
+  --warning:        #e6a817;
+  --success:        #208a3c;
+
+  --inset:       #f2f3f5;
+  --field-bg:    #ffffff;
+  --field-border:#ebecf0;
+  --menu-bg:     #ffffff;
+  --menu-line:   #ebecf0;
+
+  --tb-bg:       #27282d;
+  --tb-text:     #ffffff;
+  --tb-icon:     #d6d7db;
+  --tb-hover:    #3b3d44;
+  --tb-divider:  #3e4048;
+  --tb-disabled: #6b6f78;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  overflow:hidden;
+  background:
+    radial-gradient(58% 46% at 50% 26%, rgba(90,104,128,.28), rgba(0,0,0,0) 68%),
+    radial-gradient(140% 120% at 50% 40%, #23262c 0%, #17191d 52%, #0c0d10 100%);
+  color:var(--text-primary);
+  font-family:var(--font-ui);
+  font-size:13px;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+
+/* ---------- icon primitives ------------------------------------ */
+.ic{
+  display:block; flex:none;
+  fill:none; stroke:currentColor;
+  stroke-width:1.35; stroke-linecap:round; stroke-linejoin:round;
+}
+.fb{fill:var(--folder-back); stroke:none}
+.ff{fill:var(--folder-front); stroke:none}
+.sprite{position:absolute;width:0;height:0;overflow:hidden}
+
+/* ---------- studio stage + application window ------------------- */
+.stage{
+  position:fixed; inset:0;
+  display:grid; place-items:center;
+  overflow:hidden;
+}
+.window{
+  width:1440px; height:900px;
+  border-radius:8px;
+  overflow:hidden;
+  background:var(--bg-canvas);
+  display:grid;
+  grid-template-rows:40px 1px 40px 1px var(--ws-h) 1px var(--bw-h) 1px 28px;
+  transform:scale(var(--win-scale,1));
+  transform-origin:center center;
+  box-shadow:0 0 0 1px rgba(6,7,9,.9), 0 42px 90px -34px rgba(0,0,0,.85), 0 12px 32px -18px rgba(0,0,0,.6);
+}
+.window.no-left{--panel-l:0px}
+.window.no-right{--panel-r:0px}
+.window.no-bottom{--bw-h:0px; --ws-h:788px}
+
+.sep{background:var(--divider-gap)}
+.sep-line{background:var(--divider-gap); display:grid; grid-template-columns:40px minmax(0,1fr) 40px; overflow:hidden}
+.sep-line > i{display:block; background:var(--divider-line)}
+.sep-line > i:first-child, .sep-line > i:last-child{background:var(--bg-chrome)}
+
+/* ---------- shared controls ------------------------------------ */
+button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus{outline:none}
+:focus-visible{outline:1px solid var(--accent); outline-offset:-1px}
+
+.icon-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:28px; height:28px; border-radius:4px;
+  color:var(--icon-primary);
+  transition:background-color 90ms var(--ease), color 90ms var(--ease);
+}
+.icon-btn:hover{background:var(--hover)}
+.icon-btn:active{background:var(--row-selected)}
+.icon-btn.sm{width:24px;height:24px}
+.icon-btn.lg{width:32px;height:32px}
+.icon-btn[disabled]{color:var(--text-disabled); cursor:default; background:none}
+
+/* ---------- 1 · main toolbar ----------------------------------- */
+.toolbar{
+  background:var(--tb-bg);
+  display:flex; align-items:center;
+  padding-left:6px;
+  color:var(--tb-text);
+  user-select:none;
+}
+.tb-left,.tb-right{display:flex;align-items:center;gap:8px}
+.tb-left{flex:1 1 auto;min-width:0}
+.tb-right{flex:none}
+.tb-right .icon-btn{color:var(--tb-icon)}
+.tb-right .icon-btn:hover{background:var(--tb-hover)}
+.tb-right .icon-btn:active{background:#45474d}
+.tb-right .icon-btn[disabled]{color:var(--tb-disabled)}
+.nav-group{display:flex;align-items:center;gap:2px}
+.nav-group .icon-btn{width:24px;height:24px;color:var(--tb-icon)}
+.nav-group .icon-btn:hover{background:var(--tb-hover)}
+.nav-group .icon-btn:active{background:#45474d}
+.vdiv{width:1px;height:16px;background:var(--tb-divider);flex:none}
+
+.widget{
+  position:relative;
+  display:flex; align-items:center; gap:6px;
+  height:28px; padding:0 8px; border-radius:4px;
+  color:var(--tb-text); font-size:13px;
+  transition:background-color 90ms var(--ease);
+}
+.widget:hover{background:var(--tb-hover)}
+.widget .ic{color:var(--tb-icon)}
+.widget .w-chev{color:var(--tb-icon)}
+.loc-path{font-variant-numeric:tabular-nums}
+.winctl{display:flex;align-items:center;height:40px;margin-left:2px}
+.wbtn{
+  width:40px;height:40px;display:flex;align-items:center;justify-content:center;
+  color:var(--tb-icon);
+  transition:background-color 90ms var(--ease), color 90ms var(--ease);
+}
+.wbtn:hover{background:var(--tb-hover)}
+.wbtn:active{background:#45474d}
+.wbtn.wclose:hover{background:var(--error); color:#fff}
+
+/* dropdown menus (inside-window menus stay flat: 1px line, no shadow) */
+.menu{
+  position:absolute; top:calc(100% + 4px); left:0; z-index:40;
+  min-width:180px; padding:4px 0;
+  background:var(--menu-bg); border:1px solid var(--menu-line); border-radius:4px;
+  display:none;
+}
+.menu.open{display:block}
+.menu-item{
+  display:flex; align-items:center; gap:8px;
+  width:100%; height:26px; padding:0 10px;
+  font-size:12px; color:var(--text-primary); text-align:left;
+}
+.menu-item:hover{background:var(--hover)}
+.menu-item .ic{color:var(--text-secondary)}
+.menu-item .m-check{color:var(--accent); margin-left:auto}
+.menu-sep{height:1px;background:var(--divider-line);margin:4px 0}
+
+/* ---------- 3 · continuous header band ------------------------- */
+.band{
+  display:grid;
+  grid-template-columns:var(--stripe-w) var(--panel-l) minmax(0,1fr) var(--panel-r) var(--stripe-w);
+  background:var(--bg-chrome);
+}
+.stripe{
+  background:var(--bg-chrome);
+  display:flex; flex-direction:column; align-items:center;
+  padding-top:4px; gap:0;
+  user-select:none;
+}
+.stripe-btn{
+  width:32px; height:32px; border-radius:4px;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text-secondary);
+  transition:background-color 90ms var(--ease), color 90ms var(--ease);
+}
+.stripe-btn:hover{background:var(--hover); color:var(--icon-primary)}
+.stripe-btn:active{background:var(--row-selected)}
+.stripe-btn.on{background:var(--row-selected); color:var(--icon-primary)}
+.stripe-sep{width:20px;height:1px;background:var(--divider-line);margin:8px 0;flex:none}
+
+.tw-head{
+  background:var(--bg-chrome);
+  display:flex; align-items:center; gap:6px;
+  padding:0 8px 0 4px;
+  min-width:0; overflow:hidden;
+}
+.tw-title{
+  display:flex;align-items:center;gap:4px;
+  height:24px;padding:0 4px;border-radius:4px;
+  font-size:13px;font-weight:600;color:var(--text-primary);
+  transition:background-color 90ms var(--ease);
+}
+button.tw-title:hover{background:var(--hover)}
+.tw-title .ic{color:var(--text-secondary)}
+.tw-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+.tw-actions .icon-btn{color:var(--text-secondary)}
+.tw-actions .icon-btn:hover{background:var(--hover); color:var(--icon-primary)}
+
+.tabstrip{
+  position:relative; z-index:2;
+  background:var(--bg-canvas);
+  display:flex; align-items:stretch;
+  min-width:0;
+}
+.tab{
+  position:relative;
+  display:flex;align-items:center;gap:6px;
+  padding:0 10px;
+  font-size:13px; color:var(--text-secondary);
+  transition:background-color 90ms var(--ease), color 90ms var(--ease);
+  user-select:none;
+}
+.tab:hover{background:var(--hover); color:var(--text-primary)}
+.tab.on{color:var(--text-primary); background:var(--bg-canvas)}
+.tab.on::after{
+  content:""; position:absolute; left:0; right:0; bottom:-1px;
+  height:3px; background:var(--accent);
+}
+.tab-name{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px}
+.tab-x{
+  display:none; align-items:center; justify-content:center;
+  width:18px; height:18px; border-radius:4px; color:var(--text-secondary);
+  transition:background-color 90ms var(--ease), color 90ms var(--ease);
+}
+.tab-x .ic{stroke-width:1.5}
+.tab-x:hover{background:var(--row-selected); color:var(--text-primary)}
+.tab.on .tab-x{display:inline-flex}
+.tab:hover .tab-x{display:inline-flex}
+.tab-empty{
+  display:flex;align-items:center;padding:0 12px;
+  font-size:12px;color:var(--text-disabled);
+}
+
+/* ---------- 5 · workspace -------------------------------------- */
+.workspace{
+  display:grid;
+  grid-template-columns:var(--stripe-w) var(--panel-l) minmax(0,1fr) var(--panel-r) var(--stripe-w);
+  background:var(--bg-canvas);
+  overflow:hidden;
+}
+.panel{background:var(--bg-chrome); display:flex; flex-direction:column; min-width:0; overflow:hidden}
+.panel-toolbar{
+  height:32px; flex:none;
+  display:flex; align-items:center; gap:6px;
+  padding:0 6px 0 8px;
+  background:var(--bg-chrome);
+}
+.search-field{
+  flex:1 1 auto; min-width:0;
+  display:flex; align-items:center; gap:6px;
+  height:24px; padding:0 6px;
+  background:var(--field-bg); border:1px solid var(--field-border); border-radius:4px;
+  color:var(--text-secondary);
+  transition:border-color 90ms var(--ease);
+}
+.search-field:focus-within{border-color:var(--accent)}
+.search-field input{
+  flex:1 1 auto; min-width:0; width:100%;
+  background:none;border:0;outline:none;
+  font-size:12px; color:var(--text-primary);
+}
+.search-field input::placeholder{color:var(--text-disabled)}
+.panel-toolbar .icon-btn{color:var(--text-secondary); width:24px;height:24px}
+.panel-toolbar .icon-btn:hover{background:var(--hover); color:var(--icon-primary)}
+
+.scroll{overflow-y:auto; overflow-x:hidden; scrollbar-width:thin; scrollbar-color:var(--scrollbar) transparent}
+.scroll::-webkit-scrollbar{width:8px;height:8px}
+.scroll::-webkit-scrollbar-track{background:transparent}
+.scroll::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:4px;border:2px solid transparent;background-clip:padding-box}
+.scroll::-webkit-scrollbar-thumb:hover{background:var(--text-secondary);background-clip:padding-box}
+
+/* ---------- 3.4 left tool window «Места» ----------------------- */
+.tree{flex:1 1 auto; min-height:0; padding-bottom:8px}
+.trow{
+  position:relative;
+  display:flex; align-items:center; gap:6px;
+  height:var(--row-h); padding-right:8px;
+  font-size:13px; color:var(--text-primary);
+  cursor:default;
+  transition:background-color 90ms var(--ease);
+}
+.trow:hover{background:var(--hover)}
+.trow.sel{background:var(--row-selected)}
+.trow .texp{
+  width:12px; height:12px; flex:none;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text-secondary);
+}
+.trow .texp .ic{stroke-width:1.5}
+.trow .texp .rot{transition:transform 90ms var(--ease)}
+.trow.closed .texp .rot{transform:rotate(-90deg)}
+.trow .tico{color:var(--text-secondary)}
+.trow .tlabel{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.tgroup{font-size:12px; font-weight:600; color:var(--text-secondary); margin-top:4px}
+.tgroup .tlabel{letter-spacing:0}
+.usage{
+  position:absolute; bottom:1px; left:24px; right:12px; height:3px;
+  background:var(--divider-line); border-radius:2px; overflow:hidden;
+}
+.usage > i{display:block;height:100%;background:var(--error)}
+.usage.warn > i{background:var(--warning)}
+
+/* ---------- 3.5 editor ----------------------------------------- */
+.editor{background:var(--bg-canvas); display:flex; flex-direction:column; min-width:0; overflow:hidden}
+.crumbs{
+  height:var(--row-h); flex:none;
+  display:flex; align-items:center; gap:5px;
+  padding:0 10px;
+  font-size:12px; color:var(--text-secondary);
+}
+.crumbs .c-ico{color:var(--icon-secondary)}
+.crumbs .c-chev{color:var(--text-disabled)}
+.crumbs .c-last{color:var(--text-primary)}
+.crumbs .c-sort{margin-left:auto; color:var(--text-secondary); font-size:11.5px}
+.thead{
+  height:var(--row-h); flex:none;
+  display:grid; align-items:center;
+  grid-template-columns:var(--cols, minmax(0,1fr) 90px 140px);
+  padding:0 10px 0 8px;
+  border-bottom:1px solid var(--divider-line);
+  font-size:11.5px; color:var(--text-secondary);
+}
+.thead .h-name{text-align:left}
+.thead .h-num{text-align:right}
+.list{flex:1 1 auto; min-height:0; padding-bottom:4px}
+.lrow{
+  display:grid; align-items:center;
+  grid-template-columns:var(--cols, minmax(0,1fr) 90px 140px);
+  height:var(--row-h); padding:0 10px 0 8px;
+  font-size:13px; color:var(--text-primary);
+  cursor:default;
+  transition:background-color 90ms var(--ease);
+}
+.lrow:hover{background:var(--hover)}
+.lrow.sel{background:var(--row-selected-focused)}
+.lrow.sel:hover{background:var(--row-selected-focused)}
+.lname{display:flex;align-items:center;gap:7px;min-width:0}
+.lname .ltext{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lnum{
+  text-align:right;
+  font-family:var(--font-mono); font-size:12px; color:var(--text-secondary);
+  white-space:nowrap;
+}
+.group{
+  position:relative;
+  display:flex; align-items:center; gap:6px;
+  height:var(--row-h); padding:0 10px 0 6px;
+  font-size:12px; font-weight:600; color:var(--text-secondary);
+  cursor:default;
+}
+.group::before{
+  content:""; position:absolute; left:0; right:0; top:-1px; height:1px; background:var(--divider-line);
+}
+.group.first::before{display:none}
+.group:hover{background:var(--hover)}
+.group .gtexp{width:12px;height:12px;display:flex;align-items:center;justify-content:center;color:var(--text-secondary)}
+.group .gtexp .rot{transition:transform 90ms var(--ease)}
+.group.closed .gtexp .rot{transform:rotate(-90deg)}
+.group.closed .grot{display:none}
+.group .glabel{white-space:nowrap}
+.list-summary{
+  padding:10px 10px 0 8px;
+  text-align:right;
+  font-size:12px; color:var(--text-secondary);
+}
+.icon-grid{
+  display:flex; flex-wrap:wrap; gap:4px;
+  padding:8px 4px 0 8px;
+}
+.icon-cell{
+  width:92px; padding:6px 4px 8px;
+  display:flex; flex-direction:column; align-items:center; gap:5px;
+  border-radius:4px; cursor:default;
+  transition:background-color 90ms var(--ease);
+}
+.icon-cell:hover{background:var(--hover)}
+.icon-cell.sel{background:var(--row-selected-focused)}
+.icon-cell .cap{
+  width:100%; text-align:center; font-size:11.5px; color:var(--text-primary);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.empty-state{
+  display:flex; align-items:center; justify-content:center;
+  height:100%; padding:24px;
+  font-size:12px; color:var(--text-secondary); text-align:center;
+}
+
+/* ---------- 3.6 right tool window «Сведения» ------------------ */
+.panel-scroll{flex:1 1 auto; min-height:0; padding:12px}
+.prop-preview{
+  display:flex; align-items:center; gap:12px;
+  padding:12px; border-radius:4px;
+  background:var(--inset);
+}
+.prop-preview .pp-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.prop-name{font-size:16px;font-weight:600;color:var(--text-primary);word-break:break-word}
+.prop-type{font-size:12px;color:var(--text-secondary)}
+.prop-table{margin-top:14px}
+.prop-row{
+  display:grid; grid-template-columns:84px minmax(0,1fr);
+  align-items:start; gap:8px;
+  min-height:var(--row-h); padding:3px 0;
+  font-size:13px;
+}
+.prop-label{font-size:12px;color:var(--text-secondary);padding-top:1px}
+.prop-value{color:var(--text-primary);word-break:break-word}
+.prop-value.mono{font-family:var(--font-mono);font-size:12px}
+.prop-section{
+  margin:16px 0 6px;
+  font-size:12px; font-weight:600; color:var(--text-secondary);
+}
+.access{display:flex;flex-direction:column;gap:2px}
+.access .prop-row{grid-template-columns:84px minmax(0,1fr);min-height:22px;padding:2px 0}
+.access .a-val{display:inline-flex;align-items:center;gap:5px;font-size:12.5px}
+.access .a-val .ic{width:13px;height:13px}
+.a-yes{color:var(--success)}
+.a-no{color:var(--text-secondary)}
+.prop-actions{margin-top:18px;display:flex;flex-direction:column;gap:8px}
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  width:100%; max-width:280px; height:32px; border-radius:4px;
+  font-size:13px;
+  transition:background-color 90ms var(--ease), border-color 90ms var(--ease), color 90ms var(--ease);
+}
+.btn-primary{background:var(--accent); color:var(--accent-text-on); font-weight:500}
+.btn-primary:hover{background:#4b83f2}
+.btn-primary:active{background:#2f66da}
+.btn-secondary{border:1px solid var(--divider-line); color:var(--text-primary)}
+.btn-secondary:hover{background:var(--hover)}
+.btn-secondary:active{background:var(--row-selected)}
+.btn[disabled]{opacity:.5;cursor:default}
+
+/* ---------- 7 · bottom tool window ----------------------------- */
+.bottom-band{
+  display:grid; grid-template-columns:var(--stripe-w) minmax(0,1fr) var(--stripe-w);
+  background:var(--bg-chrome); overflow:hidden;
+}
+.bottom-win{
+  display:flex; flex-direction:column;
+  background:var(--bg-canvas);
+  min-width:0; overflow:hidden;
+}
+.bw-head{
+  position:relative;
+  height:var(--chrome-h); flex:none;
+  display:flex; align-items:center;
+  background:var(--bg-chrome);
+  padding-left:8px;
+}
+.bw-tabs{display:flex;align-items:stretch;height:100%}
+.bw-tab{
+  position:relative;
+  display:flex;align-items:center;
+  height:100%; padding:0 12px;
+  font-size:13px; color:var(--text-secondary);
+  transition:background-color 90ms var(--ease), color 90ms var(--ease);
+}
+.bw-tab:hover{background:var(--hover); color:var(--text-primary)}
+.bw-tab.on{color:var(--text-primary)}
+.bw-tab.on::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--accent)}
+.bw-head .tw-actions{padding-right:8px}
+.bw-body{flex:1 1 auto; min-height:0; background:var(--bg-canvas); overflow-y:auto}
+
+.op-row{
+  display:grid; align-items:center;
+  grid-template-columns:24px minmax(220px,1fr) 55% 56px 104px 112px;
+  gap:8px;
+  height:var(--row-h); padding:0 12px;
+  font-size:13px;
+}
+.op-ico{display:flex;align-items:center;justify-content:center;color:var(--text-secondary)}
+.op-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.op-bar{height:4px;border-radius:2px;background:var(--divider-line);overflow:hidden}
+.op-bar > i{display:block;height:100%;background:var(--accent);border-radius:2px}
+.op-bar.done > i{background:var(--success)}
+.op-bar.idle > i{background:var(--text-disabled)}
+.op-pct,.op-speed{
+  font-family:var(--font-mono); font-size:12px; color:var(--text-secondary); text-align:right; white-space:nowrap;
+}
+.op-status{font-size:12px;color:var(--text-secondary);text-align:right;white-space:nowrap}
+
+.log-line{
+  font-family:var(--font-mono); font-size:12px; color:var(--text-code);
+  padding:0 12px; line-height:18px; white-space:pre-wrap;
+}
+.log-line .t{color:var(--text-secondary)}
+.term-line{
+  font-family:var(--font-mono); font-size:12px;
+  padding:0 12px; line-height:18px; white-space:pre-wrap; word-break:break-word;
+}
+.term-line.prompt{color:var(--text-primary)}
+.term-line.prompt .cmd{color:var(--accent)}
+.term-line.out{color:var(--text-secondary)}
+.bw-empty{padding:16px;font-size:12px;color:var(--text-disabled)}
+
+/* ---------- 9 · status bar ------------------------------------- */
+.statusbar{
+  background:var(--bg-chrome);
+  display:flex; align-items:center;
+  padding:0 12px 0 8px;
+  font-size:12px; color:var(--text-secondary);
+  user-select:none;
+}
+.sb-left{display:flex;align-items:center;gap:5px}
+.sb-left .sb-chev{color:var(--text-disabled)}
+.sb-left .sb-last{color:var(--text-primary)}
+.sb-right{display:flex;align-items:center;gap:12px;margin-left:auto}
+.sb-item{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.sb-item .ic{color:var(--text-secondary)}
+
+/* ---------- accessibility helpers ------------------------------ */
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+</style>
+</head>
+<body>
+
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-menu" viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></symbol>
+    <symbol id="i-back" viewBox="0 0 16 16"><path d="M10 3.5 5.5 8 10 12.5"/></symbol>
+    <symbol id="i-fwd" viewBox="0 0 16 16"><path d="M6 3.5 10.5 8 6 12.5"/></symbol>
+    <symbol id="i-right" viewBox="0 0 16 16"><path d="M6 3.5 10.5 8 6 12.5"/></symbol>
+    <symbol id="i-up" viewBox="0 0 16 16"><path d="M8 12.6V3.4M4.2 7.2 8 3.4l3.8 3.8"/></symbol>
+    <symbol id="i-down" viewBox="0 0 16 16"><path d="M3.5 6 8 10.5 12.5 6"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 16 16"><path class="fb" fill="#3a6bd0" stroke="none" d="M1.6 4.3c0-.66.54-1.2 1.2-1.2h2.86c.35 0 .68.15.91.42l.92 1.11h4.81c.66 0 1.2.54 1.2 1.2v6.07c0 .66-.54 1.2-1.2 1.2H2.8c-.66 0-1.2-.54-1.2-1.2z"/><path class="ff" fill="#4d8ef0" stroke="none" d="M1.6 6.6h12.8v5.1c0 .66-.54 1.2-1.2 1.2H2.8c-.66 0-1.2-.54-1.2-1.2z"/></symbol>
+    <symbol id="i-file" viewBox="0 0 16 16"><path d="M4.1 2.3h5L12 5.2v8.5H4.1z"/><path d="M9.1 2.3v3h2.9"/></symbol>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7.1" cy="7.1" r="4.3"/><path d="m10.3 10.3 3.2 3.2"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.9"/><path d="M8 1.3v1.5M8 13.2v1.5M1.3 8h1.5M13.2 8h1.5M3.35 3.35l1.06 1.06M11.59 11.59l1.06 1.06M12.65 3.35l-1.06 1.06M4.41 11.59l-1.06 1.06"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 16 16"><path d="M13.2 9.7A5.7 5.7 0 0 1 6.3 2.8a5.7 5.7 0 1 0 6.9 6.9z"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" stroke-width="1.9"/><path stroke-width="1.9" d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+    <symbol id="i-min" viewBox="0 0 16 16"><path d="M3.2 8h9.6"/></symbol>
+    <symbol id="i-max" viewBox="0 0 16 16"><rect x="3.2" y="3.6" width="9.6" height="8.8" rx="1"/></symbol>
+    <symbol id="i-close" viewBox="0 0 16 16"><path d="m4.2 4.2 7.6 7.6M11.8 4.2l-7.6 7.6"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13.3 8a5.3 5.3 0 1 1-1.7-3.9"/><path d="M13.5 2.9v2.9h-2.9"/></symbol>
+    <symbol id="i-more" viewBox="0 0 16 16"><circle cx="3.4" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="12.6" cy="8" r=".9" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-columns" viewBox="0 0 16 16"><rect x="2.4" y="2.8" width="4.6" height="10.4" rx="1"/><rect x="9" y="2.8" width="4.6" height="10.4" rx="1"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 16 16"><rect x="2.6" y="2.6" width="4.8" height="4.8" rx=".9"/><rect x="8.6" y="2.6" width="4.8" height="4.8" rx=".9"/><rect x="2.6" y="8.6" width="4.8" height="4.8" rx=".9"/><rect x="8.6" y="8.6" width="4.8" height="4.8" rx=".9"/></symbol>
+    <symbol id="i-home" viewBox="0 0 16 16"><path d="M2.4 7.3 8 2.6l5.6 4.7v5.5c0 .5-.4.9-.9.9H3.3c-.5 0-.9-.4-.9-.9z"/><path d="M6.3 13.7V9.2h3.4v4.5"/></symbol>
+    <symbol id="i-bookmark" viewBox="0 0 16 16"><path d="M4.2 2.8h7.6v10.4L8 10.5l-3.8 2.7z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 4.7V8l2.4 1.5"/></symbol>
+    <symbol id="i-drive" viewBox="0 0 16 16"><rect x="2.2" y="3.4" width="11.6" height="9.2" rx="1.2"/><path d="M2.2 9.7h11.6"/><circle cx="10.9" cy="11.4" r=".85" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-network" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11M8 2.5c1.5 1.6 2.3 3.5 2.3 5.5S9.5 11.9 8 13.5C6.5 11.9 5.7 10 5.7 8S6.5 4.1 8 2.5z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 16 16"><path d="M3.4 4.7h9.2M6.3 4.7V3.3h3.4v1.4M4.5 4.7l.6 8h5.8l.6-8"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 16 16"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.2"/><path d="m5.2 6.4 1.9 1.8-1.9 1.8M8.8 10.2h2.6"/></symbol>
+    <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 7.4v3.9M8 4.9v.1"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1.9 8S4.3 4.2 8 4.2 14.1 8 14.1 8 11.7 11.8 8 11.8 1.9 8 1.9 8z"/><circle cx="8" cy="8" r="1.9"/></symbol>
+    <symbol id="i-list" viewBox="0 0 16 16"><path d="M6.2 4.3h7M6.2 8h7M6.2 11.7h7M3.3 4.3h.1M3.3 8h.1M3.3 11.7h.1"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.4" y="5.4" width="8" height="8" rx="1.1"/><path d="M10.6 5.4V4.2c0-.6-.5-1.1-1.1-1.1H4.2c-.6 0-1.1.5-1.1 1.1v5.3c0 .6.5 1.1 1.1 1.1h1.2"/></symbol>
+    <symbol id="i-move" viewBox="0 0 16 16"><path d="M2.6 4.5h4.2l1.2 1.5h5.4"/><path d="M8 8.9v4.3M5.9 11.1 8 13.2l2.1-2.1"/></symbol>
+    <symbol id="i-delete" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="m5.9 5.9 4.2 4.2M10.1 5.9l-4.2 4.2"/></symbol>
+    <symbol id="i-checksum" viewBox="0 0 16 16"><path d="M8 2.2 12.9 4v4.1c0 3-2.1 5-4.9 5.7-2.8-.7-4.9-2.7-4.9-5.7V4z"/><path d="m5.9 7.9 1.5 1.5 2.9-3.1"/></symbol>
+    <symbol id="i-disk" viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="8" rx="1.2"/><path d="M2 9.3h12"/><circle cx="10.9" cy="10.7" r=".8" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-sort" viewBox="0 0 16 16"><path d="M3 4.4h10M4.8 8h6.4M6.8 11.6h2.4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="m3.4 8.3 3 3 6.2-6.8"/></symbol>
+    <symbol id="i-x" viewBox="0 0 16 16"><path d="m4.6 4.6 6.8 6.8M11.4 4.6l-6.8 6.8"/></symbol>
+    <symbol id="i-zoom" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.4"/><path d="m10.3 10.3 3 3M5.1 7h3.8M7 5.1v3.8"/></symbol>
+  </defs>
+</svg>
+
+<div class="stage">
+  <div class="window" id="window">
+
+    <!-- ============ 1 · main toolbar ============ -->
+    <header class="toolbar">
+      <div class="tb-left">
+        <button class="icon-btn lg" id="btn-menu" title="Главное меню" aria-label="Главное меню">
+          <svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-menu"></use></svg>
+        </button>
+        <div class="nav-group">
+          <button class="icon-btn" id="nav-back" title="Назад" aria-label="Назад" disabled>
+            <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-back"></use></svg>
+          </button>
+          <button class="icon-btn" id="nav-fwd" title="Вперёд" aria-label="Вперёд">
+            <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-fwd"></use></svg>
+          </button>
+          <button class="icon-btn" id="nav-up" title="Вверх" aria-label="Вверх">
+            <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-up"></use></svg>
+          </button>
+        </div>
+        <div class="widget" id="loc-widget">
+          <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-folder"></use></svg>
+          <span class="loc-path" id="loc-path">/home/frimm/.cache</span>
+          <svg class="ic w-chev" width="16" height="16" aria-hidden="true"><use href="#i-down"></use></svg>
+          <div class="menu" id="loc-menu" role="menu">
+            <button class="menu-item" role="menuitem" data-loc="cache">
+              <svg class="ic" width="14" height="14" aria-hidden="true"><use href="#i-folder"></use></svg>
+              <span>/home/frimm/.cache</span>
+              <svg class="ic m-check" width="14" height="14" data-check="cache" aria-hidden="true"><use href="#i-check"></use></svg>
+            </button>
+            <button class="menu-item" role="menuitem" data-loc="home">
+              <svg class="ic" width="14" height="14" aria-hidden="true"><use href="#i-home"></use></svg>
+              <span>/home/frimm</span>
+              <svg class="ic m-check" width="14" height="14" data-check="home" aria-hidden="true"><use href="#i-check"></use></svg>
+            </button>
+            <button class="menu-item" role="menuitem" data-loc="downloads">
+              <svg class="ic" width="14" height="14" aria-hidden="true"><use href="#i-folder"></use></svg>
+              <span>/home/frimm/Загрузки</span>
+              <svg class="ic m-check" width="14" height="14" data-check="downloads" aria-hidden="true"><use href="#i-check"></use></svg>
+            </button>
+          </div>
+        </div>
+        <span class="vdiv" aria-hidden="true"></span>
+        <div class="widget" id="view-widget">
+          <svg class="ic" id="view-icon" width="16" height="16" aria-hidden="true"><use href="#i-columns"></use></svg>
+          <span id="view-label">Столбцы</span>
+          <svg class="ic w-chev" width="16" height="16" aria-hidden="true"><use href="#i-down"></use></svg>
+          <div class="menu" id="view-menu" role="menu">
+            <button class="menu-item" role="menuitem" data-view="columns">
+              <svg class="ic" width="14" height="14" aria-hidden="true"><use href="#i-columns"></use></svg>
+              <span>Столбцы</span>
+              <svg class="ic m-check" width="14" height="14" data-vcheck="columns" aria-hidden="true"><use href="#i-check"></use></svg>
+            </button>
+            <button class="menu-item" role="menuitem" data-view="details">
+              <svg class="ic" width="14" height="14" aria-hidden="true"><use href="#i-list"></use></svg>
+              <span>Подробно</span>
+              <svg class="ic m-check" width="14" height="14" data-vcheck="details" aria-hidden="true"><use href="#i-check"></use></svg>
+            </button>
+            <button class="menu-item" role="menuitem" data-view="icons">
+              <svg class="ic" width="14" height="14" aria-hidden="true"><use href="#i-grid"></use></svg>
+              <span>Значки</span>
+              <svg class="ic m-check" width="14" height="14" data-vcheck="icons" aria-hidden="true"><use href="#i-check"></use></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="tb-right">
+        <button class="icon-btn" id="btn-search" title="Поиск" aria-label="Поиск">
+          <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-search"></use></svg>
+        </button>
+        <button class="icon-btn" id="btn-theme" title="Сменить тему на светлую" aria-label="Сменить тему">
+          <svg class="ic" id="theme-icon" width="16" height="16" aria-hidden="true"><use href="#i-sun"></use></svg>
+        </button>
+        <button class="icon-btn" id="btn-settings" title="Настройки" aria-label="Настройки">
+          <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-gear"></use></svg>
+        </button>
+        <span class="vdiv" aria-hidden="true"></span>
+        <div class="winctl">
+          <button class="wbtn" title="Свернуть" aria-label="Свернуть">
+            <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-min"></use></svg>
+          </button>
+          <button class="wbtn" title="Развернуть" aria-label="Развернуть">
+            <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-max"></use></svg>
+          </button>
+          <button class="wbtn wclose" title="Закрыть" aria-label="Закрыть">
+            <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-close"></use></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ============ separator ============ -->
+    <div class="sep" aria-hidden="true"></div>
+
+    <!-- ============ 3 · continuous header band ============ -->
+    <div class="band">
+      <div class="stripe" aria-hidden="true"></div>
+
+      <div class="tw-head">
+        <button class="tw-title" id="tw-left-title" title="Свернуть панель «Места»">
+          <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-down"></use></svg>
+          <span>Места</span>
+        </button>
+        <div class="tw-actions">
+          <button class="icon-btn sm" id="tw-left-refresh" title="Обновить" aria-label="Обновить">
+            <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-refresh"></use></svg>
+          </button>
+          <button class="icon-btn sm" title="Ещё" aria-label="Ещё">
+            <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-more"></use></svg>
+          </button>
+          <button class="icon-btn sm" id="tw-left-hide" title="Скрыть панель" aria-label="Скрыть панель">
+            <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-min"></use></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="tabstrip" id="tabstrip" role="tablist" aria-label="Открытые папки"></div>
+
+      <div class="tw-head">
+        <button class="tw-title" id="tw-right-title" title="Свернуть панель «Сведения»">
+          <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-down"></use></svg>
+          <span id="tw-right-label">Сведения</span>
+        </button>
+        <div class="tw-actions">
+          <button class="icon-btn sm" title="Ещё" aria-label="Ещё">
+            <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-more"></use></svg>
+          </button>
+          <button class="icon-btn sm" id="tw-right-hide" title="Скрыть панель" aria-label="Скрыть панель">
+            <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-min"></use></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="stripe" aria-hidden="true"></div>
+    </div>
+
+    <!-- ============ separator under header band ============ -->
+    <div class="sep-line" aria-hidden="true"><i></i><i></i><i></i></div>
+
+    <!-- ============ 5 · workspace ============ -->
+    <div class="workspace">
+      <div class="stripe" id="stripe-left">
+        <button class="stripe-btn on" data-tool="places" title="Места">
+          <svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-home"></use></svg>
+        </button>
+        <button class="stripe-btn" data-tool="files" title="Файлы">
+          <svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-file"></use></svg>
+        </button>
+        <button class="stripe-btn" data-tool="bookmarks" title="Закладки">
+          <svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-bookmark"></use></svg>
+        </button>
+        <button class="stripe-btn" data-tool="recent" title="Недавние">
+          <svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-clock"></use></svg>
+        </button>
+        <button class="stripe-btn" data-tool="devices" title="Устройства">
+          <svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-drive"></use></svg>
+        </button>
+        <button class="stripe-btn" data-tool="network" title="Сеть">
+          <svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-network"></use></svg>
+        </button>
+        <span class="stripe-sep" aria-hidden="true"></span>
+        <button class="stripe-btn" data-tool="trash" title="Корзина">
+          <svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-trash"></use></svg>
+        </button>
+        <button class="stripe-btn" data-tool="terminal" title="Терминал">
+          <svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-terminal"></use></svg>
+        </button>
+        <button class="stripe-btn" data-tool="settings" title="Настройки">
+          <svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-gear"></use></svg>
+        </button>
+      </div>
+
+      <!-- left tool window -->
+      <aside class="panel" id="panel-left">
+        <div class="panel-toolbar">
+          <label class="search-field">
+            <svg class="ic" width="14" height="14" aria-hidden="true"><use href="#i-search"></use></svg>
+            <input id="tree-search" type="text" placeholder="Поиск…" aria-label="Поиск по местам" />
+          </label>
+          <button class="icon-btn" title="Сортировка" aria-label="Сортировка">
+            <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-sort"></use></svg>
+          </button>
+          <button class="icon-btn" title="Фильтр" aria-label="Фильтр">
+            <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-list"></use></svg>
+          </button>
+        </div>
+        <div class="tree scroll" id="tree" role="tree" aria-label="Места"></div>
+      </aside>
+
+      <!-- editor -->
+      <main class="editor" id="editor">
+        <div class="crumbs" id="crumbs"></div>
+        <div class="thead" id="file-head"></div>
+        <div class="list scroll" id="file-list" role="listbox" aria-label="Содержимое папки"></div>
+      </main>
+
+      <!-- right tool window -->
+      <aside class="panel" id="panel-right">
+        <div class="panel-scroll scroll" id="details"></div>
+      </aside>
+
+      <div class="stripe" id="stripe-right">
+        <button class="stripe-btn on" data-rtool="details" title="Сведения">
+          <svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-info"></use></svg>
+        </button>
+        <button class="stripe-btn" data-rtool="preview" title="Предпросмотр">
+          <svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-eye"></use></svg>
+        </button>
+        <button class="stripe-btn" data-rtool="log" title="Журнал">
+          <svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-list"></use></svg>
+        </button>
+        <span class="stripe-sep" aria-hidden="true"></span>
+        <button class="stripe-btn" data-rtool="terminal" title="Терминал">
+          <svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-terminal"></use></svg>
+        </button>
+        <button class="stripe-btn" data-rtool="settings" title="Настройки">
+          <svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-gear"></use></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ============ separator above bottom window ============ -->
+    <div class="sep-line" aria-hidden="true"><i></i><i></i><i></i></div>
+
+    <!-- ============ 7 · bottom tool window ============ -->
+    <div class="bottom-band">
+      <div class="stripe" aria-hidden="true"></div>
+      <section class="bottom-win" id="bottom-win">
+        <div class="bw-head">
+          <div class="bw-tabs" role="tablist" aria-label="Нижнее окно">
+            <button class="bw-tab on" data-btab="ops" role="tab" aria-selected="true">Операции</button>
+            <button class="bw-tab" data-btab="log" role="tab" aria-selected="false">Журнал</button>
+            <button class="bw-tab" data-btab="term" role="tab" aria-selected="false">Терминал</button>
+          </div>
+          <div class="tw-actions">
+            <button class="icon-btn sm" id="bw-collapse" title="Свернуть окно" aria-label="Свернуть окно">
+              <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-min"></use></svg>
+            </button>
+            <button class="icon-btn sm" id="bw-more" title="Ещё" aria-label="Ещё">
+              <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-more"></use></svg>
+            </button>
+          </div>
+          <div class="menu" id="bw-menu" role="menu" style="right:8px;left:auto">
+            <button class="menu-item" role="menuitem" id="bw-clear-log">
+              <svg class="ic" width="14" height="14" aria-hidden="true"><use href="#i-delete"></use></svg>
+              <span>Очистить журнал</span>
+            </button>
+          </div>
+        </div>
+        <div class="bw-body scroll" id="bw-body"></div>
+      </section>
+      <div class="stripe" aria-hidden="true"></div>
+    </div>
+
+    <!-- ============ separator above status bar ============ -->
+    <div class="sep" aria-hidden="true"></div>
+
+    <!-- ============ 9 · status bar ============ -->
+    <footer class="statusbar">
+      <div class="sb-left" id="sb-left"></div>
+      <div class="sb-right">
+        <span class="sb-item" id="sb-counts">127 папок · 19 файлов (80,1 МиБ)</span>
+        <span class="sb-item">
+          <svg class="ic" width="14" height="14" aria-hidden="true"><use href="#i-disk"></use></svg>
+          <span>свободно 22,8 ГиБ</span>
+        </span>
+        <span class="sb-item">
+          <svg class="ic" width="14" height="14" aria-hidden="true"><use href="#i-columns"></use></svg>
+          <span id="sb-view">Столбцы</span>
+        </span>
+        <span class="sb-item">
+          <svg class="ic" width="14" height="14" aria-hidden="true"><use href="#i-zoom"></use></svg>
+          <span>Масштаб 100%</span>
+        </span>
+      </div>
+    </footer>
+
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ================= data ================= */
+
+  const TREE = [
+    {k:'item', id:'home',   icon:'home',    label:'Домашняя папка', lvl:1, open:true, tab:'home'},
+    {k:'item', id:'video',  icon:'folder',  label:'Видео',        lvl:2, parent:'home'},
+    {k:'item', id:'docs',   icon:'folder',  label:'Документы',    lvl:2, parent:'home'},
+    {k:'item', id:'dls',    icon:'folder',  label:'Загрузки',     lvl:2, parent:'home', tab:'downloads'},
+    {k:'item', id:'images', icon:'folder',  label:'Изображения',  lvl:2, parent:'home'},
+    {k:'item', id:'music',  icon:'folder',  label:'Музыка',       lvl:2, parent:'home'},
+    {k:'item', id:'shared', icon:'folder',  label:'Общедоступные',lvl:2, parent:'home'},
+    {k:'item', id:'desk',   icon:'folder',  label:'Рабочий стол', lvl:2, parent:'home'},
+    {k:'item', id:'tpl',    icon:'folder',  label:'Шаблоны',      lvl:2, parent:'home'},
+    {k:'item', id:'anylimb',icon:'folder',  label:'any-limb',     lvl:2, parent:'home'},
+    {k:'item', id:'audacity',icon:'folder', label:'audacity4',    lvl:2, parent:'home'},
+    {k:'item', id:'backup', icon:'folder',  label:'backup',       lvl:2, parent:'home'},
+    {k:'item', id:'barbaros',icon:'folder', label:'barbaros',     lvl:2, parent:'home'},
+
+    {k:'group', id:'g-entries', label:'Точки входа', open:true},
+    {k:'item', id:'e-home',  icon:'folder', label:'Домашняя папка',       lvl:2, parent:'g-entries', tab:'home'},
+    {k:'item', id:'e-desk',  icon:'folder', label:'Рабочий стол',        lvl:2, parent:'g-entries'},
+    {k:'item', id:'e-docs',  icon:'folder', label:'Документы',           lvl:2, parent:'g-entries'},
+    {k:'item', id:'e-dls',   icon:'folder', label:'Загрузки',            lvl:2, parent:'g-entries', tab:'downloads'},
+    {k:'item', id:'e-music', icon:'folder', label:'Музыка',              lvl:2, parent:'g-entries'},
+    {k:'item', id:'e-images',icon:'folder', label:'Изображения',         lvl:2, parent:'g-entries'},
+    {k:'item', id:'e-video', icon:'folder', label:'Видеофайлы',          lvl:2, parent:'g-entries'},
+    {k:'item', id:'e-trash', icon:'trash',  label:'Корзина',             lvl:2, parent:'g-entries'},
+
+    {k:'group', id:'g-net', label:'В сети', open:true},
+    {k:'item', id:'n-net', icon:'network', label:'Сеть', lvl:2, parent:'g-net'},
+
+    {k:'group', id:'g-recent', label:'Недавно изменённые', open:true},
+    {k:'item', id:'r-files', icon:'clock',  label:'Последние файлы',      lvl:2, parent:'g-recent'},
+    {k:'item', id:'r-locs',  icon:'folder', label:'Последние расположения',lvl:2, parent:'g-recent'},
+
+    {k:'group', id:'g-dev', label:'Устройства', open:true},
+    {k:'item', id:'d-archive6', icon:'drive', label:'archive6', lvl:2, parent:'g-dev', usage:90},
+    {k:'item', id:'d-models',   icon:'drive', label:'Models',   lvl:2, parent:'g-dev', usage:85}
+  ];
+
+  const LOCATIONS = {
+    cache:{
+      id:'cache', label:'.cache', path:'/home/frimm/.cache',
+      crumbs:['frimm','.cache'], sort:'Отсортировано по дате изменения',
+      summary:'127 папок · 19 файлов (80,1 МиБ)',
+      groups:[
+        {id:'g1', label:'Сегодня', rows:[
+          {n:'starshp', size:'0 Б',       date:'Сегодня в 15:21', type:'folder', created:'09.11.2026 в 21:04'},
+          {n:'uv',      size:'16,6 ГиБ',  date:'Сегодня в 03:11', type:'folder', created:'02.11.2026 в 01:22'},
+          {n:'gh',      size:'5,9 КиБ',   date:'Сегодня в 02:56', type:'folder', created:'08.11.2026 в 18:40'}
+        ]},
+        {id:'g2', label:'Вчера', rows:[
+          {n:'mc',             size:'35 Б',      date:'Вчера в 15:06', type:'folder', created:'05.11.2026 в 12:30'},
+          {n:'bookmarkrunner', size:'0 Б',       date:'Вчера в 14:52', type:'folder', created:'06.11.2026 в 09:12'},
+          {n:'appstream',      size:'66,2 МиБ',  date:'Вчера в 13:21', type:'folder', created:'01.11.2026 в 08:45'},
+          {n:'kio_http',       size:'50,8 МиБ',  date:'Вчера в 08:19', type:'folder', created:'31.10.2026 в 17:02'},
+          {n:'mpv',            size:'1,3 МиБ',   date:'Вчера в 07:03', type:'folder', created:'28.10.2026 в 10:11'},
+          {n:'gstreamer-1.0',  size:'1,7 МиБ',   date:'Вчера в 07:01', type:'folder', created:'28.10.2026 в 10:10'}
+        ]},
+        {id:'g3', label:'Среда', rows:[
+          {n:'electron', size:'212,9 МиБ', date:'11.11.2026 в 09:40', type:'folder', created:'14.09.2026 в 11:20'},
+          {n:'pnpm',     size:'12,8 МиБ',  date:'11.11.2026 в 07:49', type:'folder', created:'03.10.2026 в 15:04'}
+        ]},
+        {id:'g4', label:'Вторник', rows:[
+          {n:'gnome-calculator', size:'1,9 КиБ', date:'10.11.2026 в 20:00', type:'folder', created:'10.11.2026 в 19:58'}
+        ]},
+        {id:'g5', label:'Неделю назад', rows:[
+          {n:'llmfit',              size:'0 Б',       date:'03.11.2026 в 17:01', type:'folder', created:'03.11.2026 в 16:55'},
+          {n:'qtshadercache-x86…',  size:'746,2 КиБ', date:'02.11.2026 в 01:22', type:'folder', created:'02.11.2026 в 01:20'}
+        ]}
+      ]
+    },
+    home:{
+      id:'home', label:'Домашняя папка', path:'/home/frimm',
+      crumbs:['frimm'], sort:'Отсортировано по имени',
+      summary:'12 папок · 0 файлов',
+      rows:[
+        {n:'Видео',         size:'—', date:'12.10.2026', type:'folder', created:'04.09.2026 в 12:18'},
+        {n:'Документы',     size:'—', date:'11.10.2026', type:'folder', created:'21.06.2026 в 10:04'},
+        {n:'Загрузки',      size:'—', date:'12.10.2026', type:'folder', created:'17.08.2026 в 14:51'},
+        {n:'Изображения',   size:'—', date:'04.10.2026', type:'folder', created:'02.07.2026 в 09:12'},
+        {n:'Музыка',        size:'—', date:'28.09.2026', type:'folder', created:'11.05.2026 в 19:26'},
+        {n:'Общедоступные', size:'—', date:'19.09.2026', type:'folder', created:'14.04.2026 в 16:33'},
+        {n:'Рабочий стол',  size:'—', date:'12.10.2026', type:'folder', created:'22.10.2026 в 08:47'},
+        {n:'Шаблоны',       size:'—', date:'30.08.2026', type:'folder', created:'09.03.2026 в 13:15'},
+        {n:'any-limb',      size:'—', date:'07.11.2026', type:'folder', created:'24.10.2026 в 11:09'},
+        {n:'audacity4',     size:'—', date:'09.10.2026', type:'folder', created:'09.10.2026 в 09:31'},
+        {n:'backup',        size:'—', date:'31.10.2026', type:'folder', created:'31.10.2026 в 22:14'},
+        {n:'barbaros',      size:'—', date:'05.10.2026', type:'folder', created:'05.10.2026 в 18:02'}
+      ]
+    },
+    downloads:{
+      id:'downloads', label:'Загрузки', path:'/home/frimm/Загрузки',
+      crumbs:['frimm','Загрузки'], sort:'Отсортировано по дате изменения',
+      summary:'0 папок · 4 файла (1,5 ГиБ)',
+      rows:[
+        {n:'installer.AppImage', size:'92,4 МиБ', date:'12.11.2026 в 18:42', type:'file', created:'12.11.2026 в 18:40', contents:'AppImage'},
+        {n:'logo-final.svg',     size:'12,8 КиБ', date:'12.11.2026 в 16:05', type:'file', created:'09.11.2026 в 21:18', contents:'SVG'},
+        {n:'dataset.tar.zst',    size:'1,4 ГиБ',  date:'11.11.2026 в 22:30', type:'file', created:'10.11.2026 в 23:55', contents:'Zstandard'},
+        {n:'notes.txt',          size:'1,1 КиБ',  date:'10.11.2026 в 09:14', type:'file', created:'10.11.2026 в 09:12', contents:'Текст'}
+      ]
+    }
+  };
+
+  const OPERATIONS = [
+    {ico:'copy',      name:'Копирование large_dataset.zip',   pct:68,  bar:'act',  val:'12,4 МБ/с', status:'В работе',  st:''},
+    {ico:'move',      name:'Перемещение projector-cache',      pct:100, bar:'done', val:'3,4 ГиБ',    status:'Готово',    st:'done'},
+    {ico:'delete',    name:'Удаление old-backups',             pct:0,   bar:'idle', val:'—',         status:'В очереди', st:''},
+    {ico:'checksum',  name:'Проверка контрольных сумм',       pct:42,  bar:'act',  val:'5,9 МБ/с',  status:'В работе',  st:''}
+  ];
+
+  const TERM_OUT = [
+    'drwxr-xr-x  12 frimm frimm 4096 ноя 13 15:21 uv',
+    'drwxr-xr-x   6 frimm frimm 4096 ноя 13 03:11 gh',
+    '-rw-r--r--   1 frimm frimm 5892 ноя 13 02:56 gh/config.toml',
+    'drwxr-xr-x   3 frimm frimm 4096 ноя 12 15:06 mc'
+  ];
+
+  /* ================= state ================= */
+
+  const state = {
+    theme:'dark',
+    tabs:['cache','home','downloads'],
+    active:'cache',
+    history:['cache'],
+    hIndex:0,
+    sel:{cache:'uv', home:'Видео', downloads:'installer.AppImage'},
+    collapsed:[],
+    view:'columns',
+    treeSel:'docs',
+    treeQuery:'',
+    bottomTab:'ops',
+    rightMode:'details',
+    log:[
+      '[15:21:07] .cache — 127 папок, 19 файлов (80,1 МиБ)',
+      '[15:19:44] операции — 4 задачи, 1 в очереди',
+      '[15:12:02] устройство archive6 — свободно 22,8 ГиБ',
+      '[15:03:18] сеть — подключено'
+    ]
+  };
+
+  /* ================= helpers ================= */
+
+  const $  = (s,r)=> (r||document).querySelector(s);
+  const $$ = (s,r)=> Array.prototype.slice.call((r||document).querySelectorAll(s));
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const ic = (n,size,cls) => '<svg class="ic '+(cls||'')+'" width="'+size+'" height="'+size+'" aria-hidden="true"><use href="#i-'+n+'"></use></svg>';
+
+  function clock(){
+    const d = new Date();
+    const p = n => (n<10?'0':'')+n;
+    return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+  }
+  function logLine(text){
+    state.log.push('['+clock()+'] '+text);
+    if(state.bottomTab==='log') renderBottom();
+  }
+
+  /* ================= toolbar ================= */
+
+  const win = $('#window');
+
+  function fit(){
+    const s = Math.min((window.innerWidth-32)/1440, (window.innerHeight-32)/900, 1);
+    document.documentElement.style.setProperty('--win-scale', s > 0 ? s : 0.2);
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  function setTheme(next){
+    state.theme = next;
+    document.documentElement.setAttribute('data-theme', next);
+    const btn = $('#btn-theme');
+    $('#theme-icon').innerHTML = '<use href="#'+(next==='dark'?'i-sun':'i-moon')+'"></use>';
+    btn.setAttribute('title', next==='dark' ? 'Сменить тему на светлую' : 'Сменить тему на тёмную');
+  }
+  $('#btn-theme').addEventListener('click', function(){ setTheme(state.theme==='dark'?'light':'dark'); });
+
+  /* dropdown menus */
+  function closeMenus(except){
+    $$('.menu.open').forEach(function(m){ if(m!==except) m.classList.remove('open'); });
+  }
+  function toggleMenu(menu){
+    var open = menu.classList.contains('open');
+    closeMenus(null);
+    if(!open) menu.classList.add('open');
+  }
+  document.addEventListener('click', function(e){
+    var m = e.target.closest ? e.target.closest('.menu') : null;
+    var w = e.target.closest ? e.target.closest('.widget') : null;
+    if(!m && !w) closeMenus(null);
+  });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeMenus(null); });
+
+  $('#loc-widget').addEventListener('click', function(e){
+    if(e.target.closest('.menu')) return;
+    e.stopPropagation(); toggleMenu($('#loc-menu'));
+  });
+  $('#view-widget').addEventListener('click', function(e){
+    if(e.target.closest('.menu')) return;
+    e.stopPropagation(); toggleMenu($('#view-menu'));
+  });
+  $('#bw-more').addEventListener('click', function(e){
+    if(e.target.closest('.menu')) return;
+    e.stopPropagation(); toggleMenu($('#bw-menu'));
+  });
+
+  $('#loc-menu').addEventListener('click', function(e){
+    var item = e.target.closest('[data-loc]');
+    if(!item) return;
+    closeMenus(null);
+    navigate(item.getAttribute('data-loc'));
+  });
+  $('#view-menu').addEventListener('click', function(e){
+    var item = e.target.closest('[data-view]');
+    if(!item) return;
+    closeMenus(null);
+    setView(item.getAttribute('data-view'));
+  });
+  $('#bw-clear-log').addEventListener('click', function(){
+    closeMenus(null);
+    state.log = [];
+    renderBottom();
+  });
+
+  function setView(v){
+    state.view = v;
+    $('#view-label').textContent = v==='columns' ? 'Столбцы' : (v==='details' ? 'Подробно' : 'Значки');
+    $('#sb-view').textContent = $('#view-label').textContent;
+    $('#view-icon').innerHTML = '<use href="#'+(v==='icons'?'i-grid':(v==='details'?'i-list':'i-columns'))+'"></use>';
+    $$('[data-vcheck]').forEach(function(c){ c.style.display = (c.getAttribute('data-vcheck')===v) ? 'block' : 'none'; });
+    renderList();
+  }
+
+  /* window controls: the mockup must not destroy itself, they only acknowledge the press */
+  $$('.wbtn').forEach(function(b){ b.addEventListener('click', function(){ b.blur(); }); });
+
+  $('#btn-menu').addEventListener('click', function(){ this.blur(); });
+  $('#btn-search').addEventListener('click', function(){
+    var f = $('#tree-search');
+    f.focus(); f.select();
+  });
+  $('#btn-settings').addEventListener('click', function(){
+    openBottom('log');
+    logLine('настройки — открыт журнал сессии');
+  });
+  $('#tw-left-refresh').addEventListener('click', function(){
+    logLine('.cache — список обновлён');
+    renderTree();
+  });
+
+  /* ================= navigation ================= */
+
+  function navigate(tab, fromHistory){
+    if(state.tabs.indexOf(tab)===-1){
+      state.tabs.push(tab);
+    }
+    state.active = tab;
+    if(!fromHistory){
+      state.history = state.history.slice(0, state.hIndex+1);
+      state.history.push(tab);
+      state.hIndex = state.history.length-1;
+    }
+    renderTabs();
+    renderList();
+    renderDetails();
+    renderStatus();
+    renderBottom();
+    syncLocation();
+  }
+  function syncLocation(){
+    var loc = LOCATIONS[state.active];
+    $('#loc-path').textContent = loc ? loc.path : '—';
+    $$('[data-check]').forEach(function(c){ c.style.display = (c.getAttribute('data-check')===state.active)?'block':'none'; });
+  }
+
+  $('#nav-back').addEventListener('click', function(){
+    if(state.hIndex<=0) return;
+    state.hIndex--; navigate(state.history[state.hIndex], true); updateNav();
+  });
+  $('#nav-fwd').addEventListener('click', function(){
+    if(state.hIndex>=state.history.length-1) return;
+    state.hIndex++; navigate(state.history[state.hIndex], true); updateNav();
+  });
+  $('#nav-up').addEventListener('click', function(){
+    var parent = {cache:'home', downloads:'home', home:null}[state.active];
+    if(parent) navigate(parent);
+  });
+  function updateNav(){
+    $('#nav-back').disabled = state.hIndex<=0;
+    $('#nav-fwd').disabled = state.hIndex>=state.history.length-1;
+    $('#nav-up').disabled = state.active==='home';
+  }
+
+  /* ================= editor tabs ================= */
+
+  function renderTabs(){
+    var strip = $('#tabstrip');
+    if(!state.tabs.length){
+      strip.innerHTML = '<div class="tab-empty">Нет открытых вкладок</div>';
+      return;
+    }
+    strip.innerHTML = state.tabs.map(function(id){
+      var loc = LOCATIONS[id];
+      var on = id===state.active;
+      return '<div class="tab'+(on?' on':'')+'" role="tab" tabindex="0" aria-selected="'+(on?'true':'false')+'" data-tab="'+id+'">'
+        + ic('folder',16)
+        + '<span class="tab-name">'+esc(loc.label)+'</span>'
+        + '<button class="tab-x" data-close="'+id+'" aria-label="Закрыть вкладку '+esc(loc.label)+'">'+ic('close',12)+'</button>'
+        + '</div>';
+    }).join('');
+    updateNav();
+  }
+  $('#tabstrip').addEventListener('click', function(e){
+    var x = e.target.closest('[data-close]');
+    if(x){
+      e.stopPropagation();
+      closeTab(x.getAttribute('data-close'));
+      return;
+    }
+    var tab = e.target.closest('[data-tab]');
+    if(tab) navigate(tab.getAttribute('data-tab'));
+  });
+  $('#tabstrip').addEventListener('keydown', function(e){
+    if(e.key!=='Enter' && e.key!==' ') return;
+    if(e.target.closest('[data-close]')) return;
+    var tab = e.target.closest('[data-tab]');
+    if(!tab) return;
+    e.preventDefault();
+    navigate(tab.getAttribute('data-tab'));
+  });
+  function closeTab(id){
+    var idx = state.tabs.indexOf(id);
+    if(idx===-1) return;
+    state.tabs.splice(idx,1);
+    if(state.active===id){
+      state.active = state.tabs.length ? state.tabs[Math.min(idx, state.tabs.length-1)] : null;
+      state.history = state.history.filter(function(h){ return h!==id; });
+      state.hIndex = Math.max(0, state.history.length-1);
+    }
+    renderTabs(); renderList(); renderDetails(); renderStatus(); renderBottom(); syncLocation();
+  }
+
+  /* ================= file list ================= */
+
+  function colsDef(){
+    if(state.view==='details') return 'minmax(0,1fr) 90px 140px 84px';
+    return 'minmax(0,1fr) 90px 140px';
+  }
+  function allRows(loc){
+    var out = [];
+    if(loc.groups){ loc.groups.forEach(function(g){ g.rows.forEach(function(r){ out.push(r); }); }); }
+    else if(loc.rows){ loc.rows.forEach(function(r){ out.push(r); }); }
+    return out;
+  }
+  function groupOf(loc, name){
+    if(!loc.groups) return null;
+    for(var i=0;i<loc.groups.length;i++){ if(loc.groups[i].rows.some(function(r){ return r.n===name; })) return loc.groups[i].id; }
+    return null;
+  }
+
+  function rowHtml(row, loc, isSel){
+    var glyph = row.type==='folder' ? ic('folder',16) : ic('file',16);
+    var typeCell = '';
+    if(state.view==='details'){
+      typeCell = '<span class="lnum">'+esc(row.type==='folder'?'Папка':'Файл')+'</span>';
+    }
+    return '<div class="lrow'+(isSel?' sel':'')+'" role="option" aria-selected="'+(isSel?'true':'false')+'" data-name="'+esc(row.n)+'" data-loc="'+loc.id+'" tabindex="0">'
+      + '<span class="lname">'+glyph+'<span class="ltext">'+esc(row.n)+'</span></span>'
+      + '<span class="lnum">'+esc(row.size)+'</span>'
+      + '<span class="lnum">'+esc(row.date)+'</span>'
+      + typeCell
+      + '</div>';
+  }
+
+  function renderList(){
+    var head = $('#file-head');
+    var list = $('#file-list');
+    var loc = LOCATIONS[state.active];
+    if(!loc){
+      head.style.display='none';
+      $('#crumbs').innerHTML = '';
+      list.innerHTML = '<div class="empty-state">Откройте папку во вкладке, чтобы увидеть её содержимое.</div>';
+      return;
+    }
+    head.style.display='';
+    if(state.view==='icons'){
+      head.style.display='none';
+      var rows = allRows(loc);
+      list.innerHTML = '<div class="icon-grid">' + rows.map(function(r){
+        var on = state.sel[loc.id]===r.n;
+        return '<div class="icon-cell'+(on?' sel':'')+'" role="option" aria-selected="'+(on?'true':'false')+'" data-name="'+esc(r.n)+'" data-loc="'+loc.id+'" tabindex="0">'
+          + ic(r.type==='folder'?'folder':'file',40)
+          + '<span class="cap">'+esc(r.n)+'</span></div>';
+      }).join('') + '</div>';
+      renderCrumbs(loc);
+      return;
+    }
+    head.style.gridTemplateColumns = colsDef();
+    head.innerHTML = '<span class="h-name">Имя</span><span class="h-num">Размер</span><span class="h-num">Изменён</span>'
+      + (state.view==='details' ? '<span class="h-num">Тип</span>' : '');
+    list.style.setProperty('--cols', colsDef());
+    $('#editor').style.setProperty('--cols', colsDef());
+
+    var html = '';
+    if(loc.groups){
+      loc.groups.forEach(function(g,i){
+        var closed = state.collapsed.indexOf(g.id)!==-1;
+        html += '<div class="group'+(i===0?' first':'')+(closed?' closed':'')+'" data-group="'+g.id+'" role="button" tabindex="0">'
+          + '<span class="gtexp">'+ic('down',12,'rot')+'</span><span class="glabel">'+esc(g.label)+'</span></div>';
+        if(!closed){
+          g.rows.forEach(function(r){ html += rowHtml(r, loc, state.sel[loc.id]===r.n); });
+        }
+      });
+    } else {
+      loc.rows.forEach(function(r){ html += rowHtml(r, loc, state.sel[loc.id]===r.n); });
+    }
+    html += '<div class="list-summary">'+esc(loc.summary)+'</div>';
+    list.innerHTML = html;
+    renderCrumbs(loc);
+  }
+
+  function renderCrumbs(loc){
+    var c = $('#crumbs');
+    var html = ic(loc.id==='home'?'home':'folder',12,'c-ico');
+    html += '<span>'+esc(loc.crumbs[0])+'</span>';
+    for(var i=1;i<loc.crumbs.length;i++){
+      html += '<svg class="ic c-chev" width="10" height="10" aria-hidden="true"><use href="#i-right"></use></svg>';
+      html += '<span class="'+(i===loc.crumbs.length-1?'c-last':'')+'">'+esc(loc.crumbs[i])+'</span>';
+    }
+    html += '<span class="c-sort">'+esc(loc.sort)+'</span>';
+    c.innerHTML = html;
+  }
+
+  $('#file-list').addEventListener('click', function(e){
+    var row = e.target.closest('[data-name]');
+    if(!row) return;
+    selectRow(row.getAttribute('data-loc'), row.getAttribute('data-name'));
+  });
+  $('#file-list').addEventListener('keydown', function(e){
+    if(e.key!=='Enter' && e.key!==' ') return;
+    var row = e.target.closest('[data-name]');
+    if(!row) return;
+    e.preventDefault();
+    selectRow(row.getAttribute('data-loc'), row.getAttribute('data-name'));
+  });
+  $('#file-list').addEventListener('click', function(e){
+    var grp = e.target.closest('[data-group]');
+    if(!grp) return;
+    var id = grp.getAttribute('data-group');
+    var i = state.collapsed.indexOf(id);
+    if(i===-1) state.collapsed.push(id); else state.collapsed.splice(i,1);
+    renderList();
+  });
+  $('#file-list').addEventListener('keydown', function(e){
+    if(e.key!=='Enter' && e.key!==' ') return;
+    var grp = e.target.closest('[data-group]');
+    if(!grp) return;
+    e.preventDefault();
+    grp.click();
+  });
+
+  function selectRow(locId, name){
+    var loc = LOCATIONS[locId];
+    if(!loc) return;
+    var row = null;
+    allRows(loc).forEach(function(r){ if(r.n===name) row=r; });
+    if(!row) return;
+    state.sel[locId] = name;
+    renderList();
+    renderDetails();
+  }
+
+  /* ================= right panel ================= */
+
+  function findRow(locId, name){
+    var loc = LOCATIONS[locId]; var row=null;
+    if(!loc) return null;
+    allRows(loc).forEach(function(r){ if(r.n===name) row=r; });
+    return row;
+  }
+  function locCounts(loc){
+    var f = /(\d+)\s+(?:папок|папк[аи])/.exec(loc.summary||'');
+    var fl = /(\d+)\s+(?:файлов|файл[аов])/.exec(loc.summary||'');
+    return {folders: f ? f[1] : '—', files: fl ? fl[1] : '—'};
+  }
+
+  function renderDetails(){
+    var box = $('#details');
+    var loc = LOCATIONS[state.active];
+    var name = state.sel[state.active];
+    var row = findRow(state.active, name);
+    $('#tw-right-label').textContent = state.rightMode==='preview' ? 'Предпросмотр' : 'Сведения';
+    if(!loc || !row){
+      box.innerHTML = '<div class="empty-state">Ничего не выбрано</div>';
+      return;
+    }
+    var isFolder = row.type==='folder';
+    var path = loc.path + '/' + row.n;
+    var html = '';
+    html += '<div class="prop-preview">'
+      + ic(isFolder?'folder':'file',64)
+      + '<div class="pp-text"><div class="prop-name">'+esc(row.n)+'</div><div class="prop-type">'+esc(isFolder?'Папка':'Файл')+'</div></div>'
+      + '</div>';
+
+    if(state.rightMode==='preview'){
+      html += '<div class="prop-table">'
+        + '<div class="prop-row"><span class="prop-label">Размер</span><span class="prop-value mono">'+esc(row.size)+'</span></div>'
+        + '<div class="prop-row"><span class="prop-label">Изменён</span><span class="prop-value mono">'+esc(row.date)+'</span></div>'
+        + '<div class="prop-row"><span class="prop-label">Путь</span><span class="prop-value mono">'+esc(path)+'</span></div>'
+        + '</div>';
+      box.innerHTML = html;
+      return;
+    }
+
+    html += '<div class="prop-table">'
+      + '<div class="prop-row"><span class="prop-label">Тип</span><span class="prop-value">'+esc(isFolder?'Папка':'Файл')+'</span></div>'
+      + '<div class="prop-row"><span class="prop-label">Размер</span><span class="prop-value mono">'+esc(row.size)+'</span></div>'
+      + '<div class="prop-row"><span class="prop-label">Изменён</span><span class="prop-value mono">'+esc(row.date)+'</span></div>'
+      + '<div class="prop-row"><span class="prop-label">Создан</span><span class="prop-value mono">'+esc(row.created)+'</span></div>'
+      + '<div class="prop-row"><span class="prop-label">Владелец</span><span class="prop-value">frimm</span></div>'
+      + '<div class="prop-row"><span class="prop-label">Группа</span><span class="prop-value">frimm</span></div>'
+      + '<div class="prop-row"><span class="prop-label">Права</span><span class="prop-value mono">'+esc(isFolder?'drwxr-xr-x':'-rw-r--r--')+'</span></div>'
+      + '<div class="prop-row"><span class="prop-label">Путь</span><span class="prop-value mono">'+esc(path)+'</span></div>'
+      + '</div>';
+
+    html += '<div class="prop-section">Доступ</div><div class="access">'
+      + '<div class="prop-row"><span class="prop-label">Чтение</span><span class="prop-value a-val">'+ic('check',13,'a-yes')+'Разрешено</span></div>'
+      + '<div class="prop-row"><span class="prop-label">Запись</span><span class="prop-value a-val">'+ic('check',13,'a-yes')+'Разрешено</span></div>'
+      + '<div class="prop-row"><span class="prop-label">'+(isFolder?'Вход':'Исполнение')+'</span><span class="prop-value a-val">'+ic(isFolder?'check':'x',13,isFolder?'a-yes':'a-no')+(isFolder?'Разрешено':'Запрещено')+'</span></div>'
+      + '</div>';
+
+    html += '<div class="prop-section">Содержимое</div><div class="access">';
+    if(isFolder){
+      var cnt = locCounts(loc);
+      html += '<div class="prop-row"><span class="prop-label">Папок</span><span class="prop-value mono">'+esc(cnt.folders)+'</span></div>'
+           + '<div class="prop-row"><span class="prop-label">Файлов</span><span class="prop-value mono">'+esc(cnt.files)+'</span></div>';
+    } else {
+      html += '<div class="prop-row"><span class="prop-label">Формат</span><span class="prop-value">'+esc(row.contents)+'</span></div>';
+    }
+    html += '</div>';
+
+    html += '<div class="prop-actions">'
+      + '<button class="btn btn-primary" id="btn-open">Открыть</button>'
+      + '<button class="btn btn-secondary" id="btn-reveal">Показать в папке</button>'
+      + '</div>';
+    box.innerHTML = html;
+
+    $('#btn-open').addEventListener('click', function(){
+      logLine('открыто — '+loc.path+'/'+row.n);
+    });
+    $('#btn-reveal').addEventListener('click', function(){
+      logLine('показать в папке — '+row.n);
+    });
+  }
+
+  /* ================= left tree ================= */
+
+  function treeMatches(node, q){
+    if(node.k==='group') return node.label.toLowerCase().indexOf(q)>=0;
+    return node.label.toLowerCase().indexOf(q)>=0;
+  }
+  function renderTree(){
+    var tree = $('#tree');
+    var q = state.treeQuery.trim().toLowerCase();
+    var html = '';
+    TREE.forEach(function(node){
+      if(node.k==='group'){
+        var visible = !q;
+        if(!visible){
+          var kids = TREE.filter(function(c){ return c.parent===node.id; });
+          visible = treeMatches(node,q) || kids.some(function(c){ return treeMatches(c,q); });
+        }
+        if(!visible) return;
+        html += '<div class="trow tgroup'+(node.open?'':' closed')+'" role="treeitem" tabindex="0" aria-expanded="'+(node.open?'true':'false')+'" data-tnode="'+node.id+'" data-kind="group">'
+          + '<span class="texp">'+ic('down',12,'rot')+'</span>'
+          + '<span class="tlabel">'+esc(node.label)+'</span></div>';
+        if(node.open){
+          TREE.forEach(function(child){
+            if(child.parent!==node.id) return;
+            if(q && !treeMatches(child,q) && !treeMatches(node,q)) return;
+            html += treeItemHtml(child);
+          });
+        }
+      } else {
+        if(node.parent){
+          var parent = TREE.filter(function(p){ return p.id===node.parent; })[0];
+          if(parent){
+            if(q){
+              if(!treeMatches(node,q) && !treeMatches(parent,q)) return;
+              if(!parent.open) return;
+            } else {
+              if(!parent.open) return;
+            }
+          }
+        }
+        html += treeItemHtml(node);
+      }
+    });
+    tree.innerHTML = html;
+  }
+  function treeItemHtml(node){
+    var usage = '';
+    if(node.usage){
+      usage = '<span class="usage'+(node.usage>=90?'':' warn')+'"><i style="width:'+node.usage+'%"></i></span>';
+    }
+    return '<div class="trow'+(state.treeSel===node.id?' sel':'')+(node.open===false?' closed':'')+'" role="treeitem" tabindex="0" aria-selected="'+(state.treeSel===node.id?'true':'false')+'" data-tnode="'+node.id+'" data-kind="item"'
+      + (node.tab ? ' data-tab="'+node.tab+'"' : '')
+      + ' style="padding-left:'+(node.lvl===1?6:22)+'px">'
+      + '<span class="texp">'+(node.open!==undefined?ic('down',12,'rot'):'')+'</span>'
+      + ic(node.icon,16,'tico')
+      + '<span class="tlabel">'+esc(node.label)+'</span>'
+      + usage
+      + '</div>';
+  }
+
+  $('#tree').addEventListener('click', function(e){
+    var row = e.target.closest('[data-tnode]');
+    if(!row) return;
+    var id = row.getAttribute('data-tnode');
+    var node = TREE.filter(function(n){ return n.id===id; })[0];
+    if(!node) return;
+    if(node.k==='group'){
+      node.open = !node.open;
+      renderTree();
+      return;
+    }
+    if(node.open!==undefined && e.target.closest('.texp')){
+      node.open = !node.open;
+      renderTree();
+      return;
+    }
+    state.treeSel = id;
+    renderTree();
+    var tab = row.getAttribute('data-tab');
+    if(tab && tab!==state.active) navigate(tab);
+  });
+  $('#tree').addEventListener('keydown', function(e){
+    if(e.key!=='Enter' && e.key!==' ') return;
+    var row = e.target.closest('[data-tnode]');
+    if(!row) return;
+    e.preventDefault();
+    row.click();
+  });
+  $('#tree-search').addEventListener('input', function(){
+    state.treeQuery = this.value;
+    renderTree();
+    $('#tree').scrollTop = 0;
+  });
+
+  /* ================= bottom tool window ================= */
+
+  function openBottom(tab){
+    state.bottomTab = tab;
+    win.classList.remove('no-bottom');
+    $$('.bw-tab').forEach(function(t){
+      var on = t.getAttribute('data-btab')===tab;
+      t.classList.toggle('on',on);
+      t.setAttribute('aria-selected', on?'true':'false');
+    });
+    renderBottom();
+  }
+  $$('.bw-tab').forEach(function(t){
+    t.addEventListener('click', function(){ openBottom(t.getAttribute('data-btab')); });
+  });
+  $('#bw-collapse').addEventListener('click', function(){
+    var hidden = win.classList.toggle('no-bottom');
+    this.setAttribute('title', hidden ? 'Развернуть окно' : 'Свернуть окно');
+  });
+
+  function renderBottom(){
+    var body = $('#bw-body');
+    if(state.bottomTab==='ops'){
+      body.innerHTML = OPERATIONS.map(function(op){
+        var cls = op.bar==='done'?'done':(op.bar==='idle'?'idle':'');
+        return '<div class="op-row">'
+          + '<span class="op-ico">'+ic(op.ico,16)+'</span>'
+          + '<span class="op-name">'+esc(op.name)+'</span>'
+          + '<span class="op-bar '+cls+'"><i style="width:'+op.pct+'%"></i></span>'
+          + '<span class="op-pct">'+op.pct+' %</span>'
+          + '<span class="op-speed">'+esc(op.val)+'</span>'
+          + '<span class="op-status '+op.st+'">'+esc(op.status)+'</span>'
+          + '</div>';
+      }).join('');
+      return;
+    }
+    if(state.bottomTab==='log'){
+      body.innerHTML = state.log.length
+        ? state.log.map(function(l){
+            var m = /^(\[[^\]]+\])/.exec(l);
+            return '<div class="log-line">'+(m?'<span class="t">'+esc(m[1])+'</span> ':'')+esc(l.slice(m?m[1].length:0))+'</div>';
+          }).join('')
+        : '<div class="bw-empty">Журнал пуст</div>';
+      return;
+    }
+    var loc = LOCATIONS[state.active];
+    var home = loc ? loc.path.replace(/^\/home\/frimm/,'~') : '~';
+    body.innerHTML = '<div class="term-line prompt">frimm@volna:'+esc(home)+'$ <span class="cmd">ls -la | head</span></div>'
+      + TERM_OUT.map(function(l){ return '<div class="term-line out">'+esc(l)+'</div>'; }).join('');
+  }
+
+  /* ================= stripes ================= */
+
+  $('#stripe-left').addEventListener('click', function(e){
+    var b = e.target.closest('[data-tool]');
+    if(!b) return;
+    var tool = b.getAttribute('data-tool');
+    $$('#stripe-left .stripe-btn').forEach(function(x){ x.classList.toggle('on', x===b); });
+    if(tool==='places'){ win.classList.toggle('no-left'); return; }
+    if(tool==='terminal'){ openBottom('term'); return; }
+    if(tool==='settings'){ openBottom('log'); logLine('настройки — открыт журнал сессии'); return; }
+    logLine(tool+' — раздел открыт');
+  });
+  $('#stripe-right').addEventListener('click', function(e){
+    var b = e.target.closest('[data-rtool]');
+    if(!b) return;
+    var tool = b.getAttribute('data-rtool');
+    if(tool==='details' || tool==='preview'){
+      state.rightMode = tool;
+      win.classList.remove('no-right');
+      renderDetails();
+      $$('#stripe-right .stripe-btn').forEach(function(x){ x.classList.toggle('on', x===b); });
+      return;
+    }
+    if(tool==='log'){ openBottom('log'); return; }
+    if(tool==='terminal'){ openBottom('term'); return; }
+    if(tool==='settings'){ openBottom('log'); logLine('настройки — открыт журнал сессии'); }
+  });
+  $('#tw-left-hide').addEventListener('click', function(){ win.classList.add('no-left'); });
+  $('#tw-right-hide').addEventListener('click', function(){ win.classList.add('no-right'); });
+  $('#tw-left-title').addEventListener('click', function(){ win.classList.toggle('no-left'); });
+  $('#tw-right-title').addEventListener('click', function(){ win.classList.toggle('no-right'); });
+
+  /* ================= status bar ================= */
+
+  function renderStatus(){
+    var loc = LOCATIONS[state.active];
+    if(!loc){
+      $('#sb-left').innerHTML = '';
+      $('#sb-counts').textContent = '—';
+      return;
+    }
+    var html = ic(loc.id==='home'?'home':'folder',12);
+    html += '<span>'+esc(loc.crumbs[0])+'</span>';
+    for(var i=1;i<loc.crumbs.length;i++){
+      html += '<svg class="ic sb-chev" width="10" height="10" aria-hidden="true"><use href="#i-right"></use></svg>';
+      html += '<span class="'+(i===loc.crumbs.length-1?'sb-last':'')+'">'+esc(loc.crumbs[i])+'</span>';
+    }
+    $('#sb-left').innerHTML = html;
+    $('#sb-counts').textContent = loc.summary;
+  }
+
+  /* ================= boot ================= */
+
+  setTheme('dark');
+  renderTabs();
+  renderTree();
+  renderList();
+  renderDetails();
+  renderStatus();
+  renderBottom();
+  syncLocation();
+  setView('columns');
+  updateNav();
+})();
+</script>
+</body>
+</html>

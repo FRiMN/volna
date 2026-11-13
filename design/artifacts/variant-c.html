@@ -1,0 +1,2709 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Волна — файловый менеджер</title>
+<style>
+/* OD-LAYOUT-PRIMITIVES v1 — structure only: display, flex/grid, overflow, wrapping, ratio, geometry.
+   Put this @layer first; product CSS outside the layer wins ordinary layout rules.
+   Native hidden and closed-dialog states take precedence over component display rules. */
+@layer od-layout {
+  [hidden]:not([hidden="until-found" i]) { display: none !important; }
+  dialog:not([open]) { display: none !important; }
+
+  :where(.od-stack,.od-row,.od-row-top,.od-cluster,.od-grid,.od-field,.od-stat,.od-cell,.od-tile) > :where(*) { min-width: 0; }
+
+  /* containers */
+  .od-stack   { display: flex; flex-direction: column; gap: var(--od-gap, 8px); }
+  .od-row     { display: flex; align-items: center; gap: var(--od-gap, 8px); }
+  .od-row-top { display: flex; align-items: flex-start; gap: var(--od-gap, 8px); }
+  .od-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--od-gap, 8px); }
+  .od-fill    { flex: 1 1 0; min-width: 0; }
+  .od-fixed   { flex: none; }
+  .od-grid    { display: grid; gap: var(--od-gap, 12px); grid-template-columns: repeat(var(--od-cols, 3), minmax(0, 1fr)); }
+
+  /* stacked information: each piece is its own line — never sibling inline spans */
+  .od-stat, .od-field, .od-cell { display: grid; gap: var(--od-gap, 2px); }
+  :where(.od-stat,.od-field,.od-cell) > :where(*) { display: block; }
+  .od-tile { display: grid; grid-template-rows: auto 1fr; }
+  :where(.od-tile) > :where(*) { display: block; }
+
+  /* media keeps its intrinsic ratio by default; never a distorted or cropped
+     cover by accident. height:auto lets the ratio win over an <img height="…">
+     attribute. Cropping to a uniform box is an explicit opt-in: set --od-ratio
+     AND add .od-media-cover together (per the core rule, only where a crop is
+     deliberate — tile thumbs, decorative fills — never on full-frame content). */
+  .od-media { display: block; width: 100%; height: auto; aspect-ratio: var(--od-ratio, auto); }
+  .od-media-cover { object-fit: cover; }
+
+  /* functional inline SVG icons opt into bounded geometry; content SVGs keep their own */
+  .od-icon { display: inline-block; inline-size: var(--od-icon-size, 1em); block-size: var(--od-icon-size, 1em); flex: none; }
+
+  /* data text only — authored copy is rewritten to its budget instead */
+  .od-truncate { display: block; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .od-clamp-2, .od-clamp-3 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  .od-clamp-2 { -webkit-line-clamp: 2; }
+  .od-clamp-3 { -webkit-line-clamp: 3; }
+  .od-lines-2 { min-height: calc(2 * 1.4em); }   /* block-level reservation for a shared baseline */
+  .od-nowrap  { white-space: nowrap; }           /* 数字+单位 · 价格+起 · 日期+星期 */
+  .od-keep    { word-break: keep-all; overflow-wrap: anywhere; } /* CJK labels break at spaces / <wbr> first */
+
+  /* screen skeleton (optional): bars take their own space, the middle scrolls — no padding guessed for chrome */
+  .od-screen { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; }
+  .od-scroll { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+
+  /* horizontal rail: the next item peeks at the edge; trailing room survives overflow */
+  .od-rail { display: flex; gap: var(--od-gap, 8px); overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none;
+             padding-inline: var(--od-rail-pad, 16px); scroll-padding-inline: var(--od-rail-pad, 16px); }
+  .od-rail::-webkit-scrollbar { display: none; }
+  :where(.od-rail) > :where(*) { flex: none; scroll-snap-align: start; }
+  :where(.od-rail) > :where(:last-child) { margin-inline-end: var(--od-rail-pad, 16px); }
+
+  .od-spacer { flex: none; visibility: hidden; pointer-events: none; }
+  .od-touch  { min-width: 44px; min-height: 44px; }
+}
+:root [hidden]:where(:not([hidden="until-found" i])) { display: none; }
+/* /OD-LAYOUT-PRIMITIVES v1 */
+
+/* functional icon contract: one outline family, geometry owned by the icon */
+.od-icon{
+  fill:none;stroke:currentColor;stroke-width:1.5;
+  stroke-linecap:round;stroke-linejoin:round;
+}
+
+/* ============================================================
+   Волна — Dolphin × JetBrains New UI
+   Two flat dark surfaces, 1px hairlines, 40px chrome rhythm.
+   ============================================================ */
+:root{
+  --bg-canvas:#1e1f22;
+  --bg-chrome:#2b2d30;
+  --bg-chrome-alt:#26282d;
+  --divider-gap:#1e1f22;
+  --divider-line:#393b40;
+  --text-primary:#dfe1e5;
+  --text-secondary:#9da0a8;
+  --text-muted:#6f737a;
+  --icon-primary:#ced0d6;
+  --icon-secondary:#6f737a;
+  --accent:#3574f0;
+  --accent-soft:#25324d;
+  --row-hover:#393b40;
+  --row-selected:#43454a;
+  --row-selected-focused:#1d2432;
+  --scrollbar:#5b5d5f;
+  --error:#db5c5c;
+  --warning:#f2c55c;
+  --success:#57965c;
+  --folder-blue:#4a88d8;
+  --folder-blue-light:#7fb2ec;
+
+  --ui:'Inter','JetBrains Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+
+  --left-w:280px;
+  --right-w:300px;
+  --col-w:236px;
+  --icon-size:48px;
+  --tile-icon:60px;
+  --app-h:900px;
+  --scale:1;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%;margin:0;padding:0}
+body{
+  overflow:hidden;
+  background:radial-gradient(130% 100% at 50% -10%, #35383f 0%, #1e2025 46%, #111215 100%);
+  font-family:var(--ui);
+  font-size:13px;
+  color:var(--text-primary);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+body::after{
+  content:'';position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(120% 90% at 50% 44%, rgba(0,0,0,0) 38%, rgba(0,0,0,.5) 100%);
+}
+button{font-family:inherit;color:inherit}
+:focus{outline:none}
+:focus-visible{outline:1px solid var(--accent);outline-offset:1px}
+.mono{font-family:var(--mono)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+/* ---- stage & window ---- */
+.stage{
+  position:fixed;left:50%;top:50%;
+  width:1440px;height:var(--app-h);
+  transform:translate(-50%,-50%) scale(var(--scale));
+  transform-origin:center center;
+}
+.app-window{
+  position:relative;
+  width:1440px;height:100%;
+  border-radius:8px;overflow:hidden;
+  background:var(--bg-canvas);
+  box-shadow:inset 0 0 0 1px #3b3e43, 0 30px 90px rgba(0,0,0,.62), 0 6px 18px rgba(0,0,0,.45);
+  display:flex;flex-direction:column;
+}
+.hairline{height:1px;flex:none;background:var(--divider-gap)}
+.hairline.strong{background:var(--divider-line)}
+
+/* ---- generic controls ---- */
+.ic-btn{
+  width:24px;height:24px;flex:none;
+  display:inline-flex;align-items:center;justify-content:center;
+  border:0;padding:0;border-radius:4px;background:transparent;
+  color:var(--icon-primary);cursor:pointer;
+  transition:background-color 120ms ease,color 120ms ease;
+}
+.ic-btn:hover{background:var(--row-hover);color:var(--text-primary)}
+.ic-btn:active{background:#4a4d52}
+.ic-btn.lg{width:32px;height:32px}
+.ic-btn.sm{width:24px;height:24px}
+.ic-btn.is-active{background:var(--row-selected);color:var(--text-primary)}
+.ic-btn.is-active:hover{background:#4c4f54;color:#fff}
+.ic-btn[disabled],.ic-btn.is-disabled{color:var(--icon-secondary);cursor:default;background:transparent}
+.ic-btn[disabled]:hover{background:transparent;color:var(--icon-secondary)}
+.ic-btn .od-icon{pointer-events:none}
+.tool-btn{color:var(--icon-primary)}
+.tool-btn:hover{color:var(--text-primary)}
+.tb-group{display:flex;align-items:center;gap:2px;flex:none}
+.tb-sep{width:1px;height:20px;flex:none;background:var(--divider-line);margin:0 6px}
+.tb-sep.tight{height:16px;margin:0 2px}
+.tb-spacer{flex:1 1 auto;min-width:8px}
+.toolbar .tb-spacer{flex:0 0 8px;min-width:8px}
+.path-widget{
+  flex:1 1 auto;min-width:0;height:28px;
+  display:flex;align-items:center;gap:2px;padding:0 2px;
+  background:var(--bg-chrome-alt);
+  border:1px solid var(--divider-line);border-radius:4px;
+  transition:border-color 120ms ease;
+}
+.path-widget:focus-within{border-color:var(--accent)}
+.path-anchor{flex:1 1 auto;min-width:0;display:flex}
+.path-btn{flex:1 1 auto;min-width:0;height:24px;padding:0 6px}
+.path-btn .w-label{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+.path-edit{width:24px;height:24px;flex:none;color:var(--text-secondary)}
+.path-edit:hover{color:var(--text-primary)}
+.path-input{
+  flex:1 1 auto;min-width:0;height:24px;margin:0;padding:0 6px;
+  background:var(--bg-canvas);border:1px solid var(--accent);border-radius:3px;
+  font:400 13px/1 var(--mono);color:var(--text-primary);outline:none;
+}
+.path-input[hidden]{display:none}
+.widget{
+  height:28px;display:inline-flex;align-items:center;gap:6px;
+  padding:0 8px;border:0;border-radius:4px;background:transparent;
+  font:400 13px/1 var(--ui);color:var(--text-primary);cursor:pointer;
+  transition:background-color 120ms ease;
+}
+.widget:hover{background:var(--row-hover)}
+.widget:active{background:#4a4d52}
+.widget .w-chev{color:var(--text-secondary)}
+.widget .od-icon{color:var(--icon-primary)}
+.pop-anchor{position:relative;display:inline-flex}
+.pop-anchor.right{justify-content:center}
+
+/* ---- band 1: main toolbar ---- */
+.toolbar{
+  height:40px;flex:none;background:var(--bg-chrome);
+  display:flex;align-items:center;gap:8px;padding:0 4px;
+}
+.win-controls{display:flex;align-items:center;gap:0}
+.win-btn{
+  width:40px;height:40px;flex:none;border:0;background:transparent;
+  color:var(--icon-primary);cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
+  transition:background-color 120ms ease,color 120ms ease;
+}
+.win-btn:hover{background:var(--row-hover)}
+.win-btn:active{background:#4a4d52}
+.win-btn.win-close:hover{background:var(--error);color:#fff}
+
+/* ---- bands 3–7 body: rails + center ---- */
+.app-body{flex:1 1 auto;min-height:0;display:flex}
+.rail{
+  width:40px;flex:none;background:var(--bg-chrome);
+  display:flex;flex-direction:column;align-items:center;
+  padding:4px 0;gap:0;
+}
+.rail-btn{
+  width:32px;height:32px;flex:none;border:0;background:transparent;border-radius:4px;
+  color:var(--icon-primary);cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
+  transition:background-color 120ms ease,color 120ms ease;
+}
+.rail-btn:hover{background:var(--row-hover);color:var(--text-primary)}
+.rail-btn.is-active{background:var(--row-selected);color:var(--text-primary)}
+.rail-sep{width:20px;height:1px;flex:none;background:var(--divider-line);margin:4px 0}
+.app-center{width:1360px;flex:none;display:flex;flex-direction:column;min-height:0}
+
+/* ---- band 3: continuous header band ---- */
+.header-band{height:40px;flex:none;display:flex;align-items:stretch}
+.tw-header{
+  height:40px;flex:none;display:flex;align-items:center;gap:8px;padding:0 8px;
+  background:var(--bg-chrome);overflow:hidden;
+}
+.tw-header.left{width:var(--left-w);transition:width 120ms ease}
+.tw-header.right{width:var(--right-w);transition:width 120ms ease}
+.tw-title{
+  display:inline-flex;align-items:center;gap:6px;min-width:0;
+  border:0;background:transparent;padding:0 2px;height:28px;border-radius:4px;
+  font:600 13px/1 var(--ui);color:var(--text-primary);cursor:pointer;
+  transition:background-color 120ms ease;
+}
+.tw-title:hover{background:var(--row-hover)}
+.tw-title .od-icon{color:var(--text-secondary)}
+.tw-title-static{font:600 13px/1 var(--ui);color:var(--text-primary);padding:0 2px}
+.tw-actions{margin-left:auto;display:flex;align-items:center;gap:8px;flex:none}
+
+.tab-strip{
+  flex:1 1 auto;min-width:0;background:var(--bg-canvas);
+  display:flex;align-items:stretch;overflow:hidden;
+}
+.tab{
+  height:40px;max-width:220px;flex:none;
+  display:inline-flex;align-items:center;gap:6px;padding:0 10px;
+  border:0;background:transparent;cursor:pointer;position:relative;
+  color:var(--text-secondary);
+  font:400 13px/1 var(--ui);
+  transition:background-color 120ms ease,color 120ms ease;
+}
+.tab:hover{background:#232529;color:var(--text-primary)}
+.tab.is-active{color:var(--text-primary);background:var(--bg-canvas)}
+.tab.is-active::after{
+  content:'';position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--accent);
+}
+.tab .tab-icon{color:var(--icon-primary);display:inline-flex}
+.tab.is-active .tab-icon{color:var(--text-primary)}
+.tab-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tab-close{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:16px;height:16px;border-radius:3px;color:var(--text-secondary);opacity:0;
+  transition:opacity 120ms ease,background-color 120ms ease;
+}
+.tab:hover .tab-close,.tab.is-active .tab-close{opacity:1}
+.tab-close:hover{background:#4a4d52;color:var(--text-primary)}
+
+/* ---- band 5: workspace ---- */
+.workspace{height:608px;flex:none;display:flex;min-height:0}
+.panel{background:var(--bg-chrome);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.panel-left{width:var(--left-w);flex:none;transition:width 120ms ease}
+.panel-right{width:var(--right-w);flex:none;transition:width 120ms ease}
+.editor{
+  position:relative;
+  flex:1 1 auto;min-width:0;background:var(--bg-canvas);
+  display:flex;flex-direction:column;min-height:0;
+}
+
+/* ---- left tool window «Места» ---- */
+.panel-toolbar{
+  height:32px;flex:none;display:flex;align-items:center;gap:4px;padding:0 6px;
+  border-bottom:1px solid var(--divider-line);
+}
+.mini-search{
+  flex:1 1 auto;min-width:0;height:24px;display:flex;align-items:center;gap:4px;
+  padding:0 6px;background:var(--bg-canvas);
+  border:1px solid var(--divider-line);border-radius:4px;
+  transition:border-color 120ms ease;
+}
+.mini-search:focus-within{border-color:var(--accent)}
+.mini-search .od-icon{color:var(--text-muted)}
+.mini-search input{
+  flex:1 1 auto;min-width:0;border:0;background:transparent;outline:none;
+  font:400 12px/1 var(--ui);color:var(--text-primary);
+}
+.mini-search input::placeholder{color:var(--text-muted)}
+.panel-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;padding:2px 0 10px}
+.p-row{
+  display:flex;align-items:center;gap:6px;height:24px;
+  margin:0 4px;padding:0 4px;border-radius:4px;cursor:pointer;
+  color:var(--text-primary);font:400 13px/1 var(--ui);
+  transition:background-color 120ms ease;
+}
+.p-row:hover{background:var(--row-hover)}
+.p-row.is-selected{background:var(--row-selected)}
+.p-row.is-group{font-size:12px;font-weight:600;color:var(--text-secondary)}
+.p-row:focus-visible{outline:1px solid var(--accent);outline-offset:-1px}
+.p-twisty{
+  width:16px;height:16px;flex:none;display:inline-flex;align-items:center;justify-content:center;
+  color:var(--text-secondary);border-radius:3px;
+}
+.p-twisty:hover{background:#4a4d52;color:var(--text-primary)}
+.p-indent{width:16px;flex:none}
+.p-icon{flex:none;display:inline-flex;align-items:center}
+.p-label{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-sub{font:400 11px/1 var(--mono);color:var(--text-muted);flex:none}
+.usage{height:3px;margin:0 10px 5px 0;background:#3c3f44;border-radius:2px;overflow:hidden}
+.usage>span{display:block;height:100%;background:var(--error);border-radius:2px}
+.p-empty{padding:14px 12px;color:var(--text-secondary);font:400 12px/1.5 var(--ui)}
+.p-empty strong{display:block;color:var(--text-primary);font-size:13px;margin-bottom:4px}
+
+/* ---- editor toolbar ---- */
+.editor-toolbar{
+  height:32px;flex:none;display:flex;align-items:center;gap:8px;padding:0 8px;
+  background:var(--bg-canvas);border-bottom:1px solid var(--divider-line);
+}
+.filter-field{
+  width:200px;height:24px;flex:none;display:flex;align-items:center;gap:6px;
+  padding:0 6px 0 8px;background:var(--bg-chrome-alt);
+  border:1px solid var(--divider-line);border-radius:4px;
+  transition:border-color 120ms ease;
+}
+.filter-field:focus-within{border-color:var(--accent)}
+.filter-field .od-icon{color:var(--text-secondary)}
+.filter-field input{
+  flex:1 1 auto;min-width:0;border:0;background:transparent;outline:none;
+  font:400 12px/1 var(--ui);color:var(--text-primary);
+}
+.filter-field input::placeholder{color:var(--text-muted)}
+.filter-clear{
+  width:16px;height:16px;flex:none;border:0;border-radius:3px;background:transparent;
+  color:var(--text-secondary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+  transition:background-color 120ms ease,color 120ms ease;
+}
+.filter-clear:hover{background:#4a4d52;color:var(--text-primary)}
+.mini-btn{
+  height:24px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;
+  border:0;border-radius:4px;background:transparent;color:var(--text-primary);
+  font:400 12px/1 var(--ui);cursor:pointer;
+  transition:background-color 120ms ease;
+}
+.mini-btn:hover{background:var(--row-hover)}
+.mini-btn .od-icon{color:var(--icon-primary)}
+.mini-btn .w-chev{color:var(--text-secondary)}
+.mini-btn .w-label{color:var(--text-secondary)}
+.editor-counts{font:400 11px/1 var(--ui);color:var(--text-muted);white-space:nowrap}
+
+/* ---- the signature view: date-grouped columns ---- */
+.band{
+  height:576px;flex:1 1 auto;min-height:0;position:relative;
+  overflow-x:auto;overflow-y:hidden;
+  scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent;
+}
+.band::-webkit-scrollbar{height:8px;width:8px}
+.band::-webkit-scrollbar-track{background:transparent}
+.band::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:4px}
+.band::-webkit-scrollbar-thumb:hover{background:#76787b}
+.band::-webkit-scrollbar-corner{background:transparent}
+.band-inner{display:flex;align-items:stretch;height:100%;width:max-content}
+.column{
+  flex:0 0 var(--col-w);width:var(--col-w);
+  display:flex;flex-direction:column;min-width:0;
+  border-right:1px solid var(--divider-line);
+}
+.col-head{
+  height:28px;flex:none;width:100%;
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:0 8px;border:0;border-bottom:1px solid var(--divider-line);
+  background:var(--bg-canvas);cursor:pointer;
+  color:var(--text-secondary);font:600 12px/1 var(--ui);
+  transition:background-color 120ms ease,color 120ms ease;
+}
+.col-head:hover{background:var(--row-hover);color:var(--text-primary)}
+.col-head:focus-visible{outline:1px solid var(--accent);outline-offset:-1px}
+.col-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.col-count{font:400 11px/1 var(--mono);color:var(--text-muted);flex:none}
+.col-items{
+  flex:1 1 auto;min-height:0;overflow-y:auto;padding:4px;
+  scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent;
+}
+.col-items::-webkit-scrollbar{width:8px}
+.col-items::-webkit-scrollbar-track{background:transparent}
+.col-items::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:4px}
+.col-items::-webkit-scrollbar-thumb:hover{background:#76787b}
+.col-collapsed{
+  display:block;padding:10px 8px;font:400 12px/1.4 var(--ui);color:var(--text-muted);
+}
+.col-item{
+  display:flex;align-items:center;gap:10px;width:100%;
+  height:62px;padding:6px 8px;margin:0 0 2px;
+  border:0;border-radius:4px;background:transparent;cursor:pointer;text-align:left;
+  transition:background-color 120ms ease;
+}
+.col-item:hover{background:var(--row-hover)}
+.col-item.is-selected{background:var(--row-selected-focused)}
+.col-item:focus-visible{outline:1px solid var(--accent);outline-offset:-1px}
+.ci-icon{flex:none;display:inline-flex;align-items:center;justify-content:center}
+.ci-text{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px}
+.ci-name{display:block;font:400 13px/1.3 var(--ui);color:var(--text-primary)}
+.ci-size{display:block;font:400 12px/1.3 var(--mono);color:var(--text-secondary)}
+.ci-date{display:block;font:400 12px/1.3 var(--mono);color:var(--text-muted)}
+.band-empty{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:4px;pointer-events:none;
+}
+.band-empty b{font:400 13px/1.4 var(--ui);color:var(--text-secondary);font-weight:400}
+.band-empty span{font:400 12px/1.4 var(--ui);color:var(--text-muted)}
+.band-note{
+  position:absolute;left:50%;bottom:16px;transform:translateX(-50%);
+  max-width:520px;padding:6px 10px;border-radius:4px;
+  background:var(--bg-chrome-alt);border:1px solid var(--divider-line);
+  color:var(--text-secondary);font:400 12px/1.4 var(--ui);
+  pointer-events:none;opacity:0;transition:opacity 120ms ease;
+}
+.band-note.is-visible{opacity:1}
+
+/* ---- alternate view modes: icons / details / ungrouped columns ---- */
+.band.is-icons,.band.is-details{
+  overflow-x:hidden;overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent;
+}
+.band.is-icons::-webkit-scrollbar,.band.is-details::-webkit-scrollbar{width:8px;height:8px}
+.band.is-icons::-webkit-scrollbar-thumb,.band.is-details::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:4px}
+.band.is-icons .band-inner{
+  display:block;width:100%;height:auto;min-height:100%;
+  padding:4px 12px 20px;
+}
+.band.is-details .band-inner{
+  display:block;width:100%;height:auto;min-height:100%;
+  padding:0 0 14px;
+}
+.band.is-ungrouped{overflow-x:auto;overflow-y:hidden}
+.band.is-ungrouped .band-inner{height:100%;align-items:flex-start}
+
+/* icons */
+.icon-section + .icon-section{margin-top:10px}
+.icon-section-head{
+  height:28px;display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:0 4px;border-bottom:1px solid var(--divider-line);margin:0 0 8px;
+  font:600 12px/1 var(--ui);color:var(--text-secondary);
+}
+.is-count{font:400 11px/1 var(--mono);color:var(--text-muted);flex:none}
+.icon-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,178px));
+  justify-content:space-between;gap:6px;align-items:stretch;padding:0 0 6px;
+}
+.icon-tile{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  min-width:0;min-height:150px;padding:10px 8px 8px;
+  border:0;border-radius:6px;background:transparent;cursor:pointer;text-align:center;
+  color:var(--text-primary);
+  transition:background-color 120ms ease;
+}
+.icon-tile:hover{background:var(--row-hover)}
+.icon-tile.is-selected{background:var(--row-selected-focused)}
+.icon-tile:focus-visible{outline:1px solid var(--accent);outline-offset:-1px}
+.it-icon{display:inline-flex;align-items:center;justify-content:center;flex:none;height:calc(var(--tile-icon) + 8px);margin-bottom:2px}
+.it-icon .od-icon{inline-size:var(--tile-icon);block-size:var(--tile-icon)}
+.it-name{
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;
+  min-width:0;max-width:100%;min-height:2.6em;
+  font:400 12.5px/1.3 var(--ui);color:var(--text-primary);
+  overflow-wrap:anywhere;word-break:break-word;
+}
+.it-size,.it-date{
+  display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font:400 11px/1.3 var(--mono);color:var(--text-muted);
+}
+.icon-tile.is-hidden .it-icon{opacity:.6}
+.icon-tile.is-hidden .it-name{color:var(--text-secondary)}
+.icon-tile.is-hidden .it-size,.icon-tile.is-hidden .it-date{color:#5d6067}
+
+/* details table */
+.details-head,.dt-row{
+  display:grid;grid-template-columns:minmax(0,1fr) 96px 168px 76px;
+  align-items:center;gap:12px;padding:0 14px;
+}
+.details-head{
+  position:sticky;top:0;z-index:2;height:28px;
+  background:var(--bg-canvas);border-bottom:1px solid var(--divider-line);
+  font:600 11px/1 var(--ui);color:var(--text-secondary);
+}
+.details-head .dt-h{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.details-head .dt-h.size,.details-head .dt-h.date{text-align:right}
+.details-group{
+  display:flex;align-items:center;gap:8px;height:28px;
+  padding:0 14px;margin-top:2px;
+  background:var(--bg-chrome-alt);border-top:1px solid var(--divider-line);
+  border-bottom:1px solid var(--divider-line);
+  font:600 12px/1 var(--ui);color:var(--text-secondary);
+}
+.dg-label{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dg-count{font:400 11px/1 var(--mono);color:var(--text-muted);flex:none}
+.dt-row{
+  width:100%;height:24px;border:0;border-radius:0;background:transparent;
+  text-align:left;cursor:pointer;color:var(--text-primary);
+  font:400 12.5px/1 var(--ui);
+  transition:background-color 100ms ease;
+}
+.dt-row:hover{background:var(--row-hover)}
+.dt-row.is-selected{background:var(--row-selected-focused)}
+.dt-row:focus-visible{outline:1px solid var(--accent);outline-offset:-1px}
+.dt-name{display:flex;align-items:center;gap:8px;min-width:0}
+.dt-icon{flex:none;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px}
+.dt-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dt-size,.dt-date{
+  font:400 12px/1 var(--mono);color:var(--text-secondary);
+  text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.dt-type{font:400 12px/1 var(--ui);color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dt-row.is-hidden .dt-icon{opacity:.6}
+.dt-row.is-hidden .dt-label,.dt-row.is-hidden .dt-type{color:var(--text-secondary)}
+.dt-row.is-hidden .dt-size,.dt-row.is-hidden .dt-date{color:var(--text-muted)}
+
+/* ungrouped columns: content-sized blocks, no headers */
+.band.is-ungrouped .column.is-flat{
+  flex:0 0 auto;width:max-content;min-width:190px;max-width:300px;
+  border-right:1px solid var(--divider-line);
+}
+.band.is-ungrouped .column.is-flat:last-child{border-right:0}
+.band.is-ungrouped .col-items{padding-top:6px}
+
+/* ---- right tool window «Сведения» ---- */
+.detail-body{
+  flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  padding:10px 12px 0;display:block;
+}
+.detail-card{
+  background:var(--bg-chrome-alt);border-radius:4px;padding:12px;
+  display:flex;flex-direction:column;align-items:flex-start;gap:4px;
+}
+.dc-icon{display:inline-flex;align-items:center;justify-content:center;margin-bottom:2px}
+.dc-name{display:block;font:600 16px/1.3 var(--ui);color:var(--text-primary);word-break:break-word}
+.dc-type{display:block;font:400 12px/1.3 var(--ui);color:var(--text-secondary)}
+.meta-list{display:block;margin-top:8px}
+.meta-row{
+  display:grid;grid-template-columns:96px minmax(0,1fr);align-items:center;gap:12px;
+  height:24px;
+}
+.meta-label{
+  min-width:0;font:400 12px/1.5 var(--ui);color:var(--text-secondary);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.meta-value{
+  min-width:0;font:400 13px/1.5 var(--ui);color:var(--text-primary);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.meta-value.mono{font-family:var(--mono);font-size:12px}
+.meta-row.path{height:auto;align-items:start;padding-top:3px}
+.meta-row.path .meta-value{white-space:normal;overflow-wrap:anywhere;overflow:visible}
+.sub-title{
+  display:block;margin:12px 0 2px;padding-top:8px;
+  border-top:1px solid var(--divider-line);
+  font:600 12px/1.4 var(--ui);color:var(--text-secondary);
+}
+.detail-actions{
+  flex:none;display:flex;gap:8px;padding:12px;
+  border-top:1px solid var(--divider-line);
+}
+.btn{
+  height:32px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:0 12px;border-radius:4px;border:1px solid transparent;cursor:pointer;
+  font:500 13px/1 var(--ui);
+  transition:background-color 120ms ease,border-color 120ms ease,color 120ms ease;
+}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:#4a80f2;border-color:#4a80f2}
+.btn-primary:active{background:#2f66d8;border-color:#2f66d8}
+.btn-ghost{background:transparent;border-color:var(--divider-line);color:var(--text-primary)}
+.btn-ghost:hover{background:var(--row-hover);border-color:#4a4d52}
+.btn-ghost:active{background:#4a4d52}
+
+/* ---- band 7: bottom tool window ---- */
+.bottom-window{
+  height:var(--bottom-h,180px);flex:none;background:var(--bg-canvas);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.bw-header{
+  height:40px;flex:none;background:var(--bg-chrome);
+  display:flex;align-items:stretch;justify-content:space-between;
+}
+.bw-tabs{display:flex;align-items:stretch}
+.bw-tab{
+  height:40px;display:inline-flex;align-items:center;padding:0 12px;
+  border:0;background:transparent;cursor:pointer;position:relative;
+  color:var(--text-secondary);font:400 13px/1 var(--ui);
+  transition:background-color 120ms ease,color 120ms ease;
+}
+.bw-tab:hover{background:#34363a;color:var(--text-primary)}
+.bw-tab.is-active{color:var(--text-primary)}
+.bw-tab.is-active::after{content:'';position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--accent)}
+.bw-actions{display:flex;align-items:center;gap:8px;padding-right:6px}
+.bw-content{height:140px;flex:none;padding:10px 12px;overflow:hidden}
+.op-row{
+  display:grid;grid-template-columns:20px 280px minmax(160px,420px) 52px 84px 92px;
+  align-items:center;gap:8px;height:24px;margin-bottom:6px;
+}
+.op-icon{display:inline-flex;color:var(--text-secondary)}
+.op-name{font:400 13px/1 var(--ui);color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.op-bar{display:block;height:4px;border-radius:2px;background:var(--divider-line);overflow:hidden}
+.op-bar>span{display:block;height:100%;border-radius:2px;background:var(--accent)}
+.op-bar.done>span{background:var(--success)}
+.op-bar.queued>span{background:var(--text-muted)}
+.op-pct{font:400 12px/1 var(--mono);color:var(--text-secondary);text-align:right}
+.op-speed{font:400 12px/1 var(--mono);color:var(--text-muted);text-align:right}
+.op-status{font:400 12px/1 var(--ui);color:var(--text-secondary);white-space:nowrap}
+.op-status.done{color:var(--success)}
+.op-status.queued{color:var(--text-muted)}
+.log-line{
+  display:block;font:400 12px/1.7 var(--mono);color:var(--text-secondary);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.log-line b{font-weight:400;color:var(--text-muted)}
+
+/* ---- band 9: status bar ---- */
+.statusbar{
+  height:28px;flex:none;background:var(--bg-chrome);
+  display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 8px;
+}
+.sb-left{display:flex;align-items:center;gap:8px;min-width:0}
+.sb-status{
+  font:400 12px/1 var(--ui);color:var(--text-secondary);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.sb-status.is-scanning{color:var(--text-muted)}
+.sb-right{display:flex;align-items:center;gap:8px;flex:none}
+.sb-item{display:inline-flex;align-items:center;gap:6px;font:400 12px/1 var(--ui);color:var(--text-secondary);white-space:nowrap}
+.sb-item .od-icon{color:var(--text-secondary)}
+.sb-item.mono{font-family:var(--mono);font-size:12px}
+.sb-sep{color:var(--text-muted);font:400 12px/1 var(--ui)}
+input[type=range].zoom-slider{
+  -webkit-appearance:none;appearance:none;
+  width:96px;height:14px;background:transparent;cursor:pointer;margin:0;
+}
+input[type=range].zoom-slider:focus-visible{outline:1px solid var(--accent);outline-offset:1px;border-radius:4px}
+input[type=range].zoom-slider::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--divider-line)}
+input[type=range].zoom-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:10px;height:10px;border-radius:50%;
+  background:var(--accent);border:0;margin-top:-3px;
+}
+input[type=range].zoom-slider:hover::-webkit-slider-thumb{background:#4a80f2}
+input[type=range].zoom-slider::-moz-range-track{height:4px;border-radius:2px;background:var(--divider-line)}
+input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;border-radius:50%;background:var(--accent)}
+
+/* ---- popup menus ---- */
+.popup{
+  position:absolute;top:calc(100% + 4px);left:0;z-index:40;min-width:190px;
+  padding:4px;border-radius:8px;
+  background:var(--bg-chrome);border:1px solid var(--divider-line);
+  box-shadow:0 8px 24px rgba(0,0,0,.45);
+}
+.popup.up{top:auto;bottom:calc(100% + 4px)}
+.popup.to-right{top:0;left:calc(100% + 6px)}
+.pop-item{
+  display:flex;align-items:center;gap:8px;width:100%;height:24px;padding:0 8px;
+  border:0;border-radius:4px;background:transparent;cursor:pointer;text-align:left;
+  color:var(--text-primary);font:400 13px/1 var(--ui);
+  transition:background-color 120ms ease;
+}
+.pop-item:hover{background:var(--row-hover)}
+.pop-item:disabled{color:var(--text-muted);cursor:default;background:transparent}
+.pop-item:disabled:hover{background:transparent}
+.pop-item .pop-check{width:16px;flex:none;display:inline-flex;color:var(--text-primary)}
+.pop-item .pop-label{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pop-item.is-current .pop-label{font-weight:600}
+.pop-sep{height:1px;margin:4px 6px;background:var(--divider-line)}
+
+/* ---- «Вид» display-settings popover ---- */
+.view-pop{
+  width:320px;min-width:0;padding:12px;z-index:60;
+  max-height:820px;overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent;
+  background:#2b2d30;border:1px solid #393b40;border-radius:8px;
+  box-shadow:0 12px 32px rgba(0,0,0,.5);
+}
+.view-pop::-webkit-scrollbar{width:8px}
+.view-pop::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:4px}
+.vp-header{font:600 13px/1.2 var(--ui);color:var(--text-primary);margin:0 0 6px}
+.vp-section{padding:8px 0}
+.vp-section + .vp-section{border-top:1px solid var(--divider-line)}
+.vp-section-title{font:600 11px/1.2 var(--ui);color:var(--text-secondary);margin:0 0 4px;letter-spacing:.02em}
+.vp-group{display:flex;flex-direction:column;gap:1px}
+.vp-row{
+  display:flex;align-items:center;gap:8px;width:100%;height:26px;padding:0 4px;
+  border:0;border-radius:4px;background:transparent;color:var(--text-primary);
+  font:400 13px/1 var(--ui);text-align:left;cursor:pointer;
+  transition:background-color 120ms ease;
+}
+.vp-row:hover{background:var(--row-hover)}
+.vp-label{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vp-radio{
+  width:14px;height:14px;flex:none;box-sizing:border-box;border-radius:50%;
+  border:1.5px solid #6f737a;position:relative;transition:border-color 120ms ease;
+}
+.vp-row.is-current .vp-radio{border-color:var(--accent)}
+.vp-row.is-current .vp-radio::after{content:'';position:absolute;inset:2.5px;border-radius:50%;background:var(--accent)}
+.vp-box{
+  width:14px;height:14px;flex:none;box-sizing:border-box;
+  display:inline-flex;align-items:center;justify-content:center;
+  border:1.5px solid #6f737a;border-radius:3px;color:#fff;
+  transition:background-color 120ms ease,border-color 120ms ease;
+}
+.vp-box .od-icon{opacity:0}
+.vp-row.is-checked .vp-box{background:var(--accent);border-color:var(--accent)}
+.vp-row.is-checked .vp-box .od-icon{opacity:1}
+.vp-seg{
+  display:flex;gap:2px;margin-top:6px;padding:2px;
+  background:#1e1f22;border:1px solid var(--divider-line);border-radius:6px;
+}
+.vp-seg-btn{
+  flex:1 1 0;min-width:0;height:24px;border:0;border-radius:4px;background:transparent;
+  color:var(--text-secondary);font:400 12px/1 var(--ui);cursor:pointer;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  transition:background-color 120ms ease,color 120ms ease;
+}
+.vp-seg-btn:hover{color:var(--text-primary)}
+.vp-seg-btn.is-active{background:#393b40;color:var(--text-primary)}
+.vp-zoom{display:flex;align-items:center;gap:10px;padding:2px 4px}
+.vp-zoom .zoom-slider{flex:1 1 auto;width:auto;min-width:0}
+.vp-pct{font:400 12px/1 var(--mono);color:var(--text-primary);min-width:38px;text-align:right;flex:none}
+.vp-foot{
+  margin-top:6px;padding-top:8px;border-top:1px solid var(--divider-line);
+  font:400 11px/1.3 var(--ui);color:var(--text-muted);
+}
+
+/* muted dot-items revealed by «Показывать скрытые файлы» */
+.col-item.is-hidden .ci-icon{opacity:.6}
+.col-item.is-hidden .ci-name{color:var(--text-secondary)}
+.col-item.is-hidden .ci-size{color:var(--text-muted)}
+
+/* compact layout from «Плотная раскладка» */
+.app-window.is-compact .col-item{height:54px;padding:2px 8px;gap:8px}
+.app-window.is-compact .ci-text{gap:0}
+.app-window.is-compact .ci-name{font-size:12.5px;line-height:1.22}
+.app-window.is-compact .ci-size{font-size:11.5px;line-height:1.22}
+.app-window.is-compact .ci-date{font-size:11.5px;line-height:1.22}
+.app-window.is-compact .ci-icon .od-icon{inline-size:40px;block-size:40px}
+.app-window.is-compact .icon-tile{min-height:132px;padding:6px 6px 5px;gap:1px}
+.app-window.is-compact .it-name{font-size:12px;min-height:2.4em}
+.app-window.is-compact .it-size,.app-window.is-compact .it-date{font-size:10.5px}
+.app-window.is-compact .details-group{height:24px}
+.app-window.is-compact .dt-row{font-size:12px}
+
+/* ---- closed state (outside the window) ---- */
+.closed-state{
+  position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  z-index:80;
+}
+.closed-card{
+  width:320px;padding:24px;border-radius:8px;text-align:center;
+  background:var(--bg-chrome);border:1px solid var(--divider-line);
+  box-shadow:0 24px 70px rgba(0,0,0,.55);
+}
+.closed-card h1{margin:0 0 6px;font:600 18px/1.3 var(--ui);color:var(--text-primary)}
+.closed-card p{margin:0 0 18px;font:400 13px/1.5 var(--ui);color:var(--text-secondary)}
+.closed-card .btn{width:100%}
+
+@media (prefers-reduced-motion: reduce){
+  *{transition-duration:0ms !important;animation-duration:0ms !important}
+}
+</style>
+</head>
+<body>
+
+<!-- icon library (inline, offline) -->
+<svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute;overflow:hidden">
+<defs>
+  <symbol id="i-menu" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5h15M2.5 10h15M2.5 15h15"/></symbol>
+  <symbol id="i-back" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.8 3.6 4.9 8l4.9 4.4"/></symbol>
+  <symbol id="i-fwd" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 3.6 11.1 8l-4.9 4.4"/></symbol>
+  <symbol id="i-up" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12.6v-9.2M4.3 7.3 8 3.6l3.7 3.7"/></symbol>
+  <symbol id="i-down" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 6.2 8 10.6l4.4-4.4"/></symbol>
+  <symbol id="i-right" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.1 4.2 9.9 8l-3.8 3.8"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.9 4.4c0-.7.6-1.3 1.3-1.3h2.5l1.4 1.7h5.6c.7 0 1.3.6 1.3 1.3v5.5c0 .7-.6 1.3-1.3 1.3H3.2c-.7 0-1.3-.6-1.3-1.3V4.4z"/></symbol>
+  <symbol id="i-folder-fill" viewBox="0 0 48 48" fill="none" stroke="none">
+    <path fill="#7fb2ec" stroke="none" d="M5 9h13.2c1.2 0 2.3.5 3.1 1.4l3.3 3.6H43a3 3 0 0 1 3 3v17a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V12a3 3 0 0 1 3-3z"/>
+    <path fill="#4a88d8" stroke="none" d="M2 21.5h44V34a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V21.5z"/>
+  </symbol>
+  <symbol id="i-file-fill" viewBox="0 0 48 48" fill="none" stroke="none">
+    <path fill="#4a88d8" stroke="none" d="M11 5h16.5L38 15.5V40a3 3 0 0 1-3 3H11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z"/>
+    <path fill="#7fb2ec" stroke="none" d="M27.5 5 38 15.5h-10.5z"/>
+  </symbol>
+  <symbol id="i-columns" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3" width="3.3" height="10" rx="1"/><rect x="6.35" y="3" width="3.3" height="10" rx="1"/><rect x="10.5" y="3" width="3.3" height="10" rx="1"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.4" y="2.9" width="4.6" height="4.6" rx="1"/><rect x="9" y="2.9" width="4.6" height="4.6" rx="1"/><rect x="2.4" y="8.5" width="4.6" height="4.6" rx="1"/><rect x="9" y="8.5" width="4.6" height="4.6" rx="1"/></symbol>
+  <symbol id="i-details" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.2h7.6M6 8h7.6M6 11.8h7.6"/><circle cx="3" cy="4.2" r=".9" fill="currentColor" stroke="none"/><circle cx="3" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="3" cy="11.8" r=".9" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-sort" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.4 4h5.2M2.4 8h3.6M2.4 12h2.2"/><path d="M11 3.2v9.4M8.6 10.4 11 12.8l2.4-2.4"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="4.3"/><path d="M10.2 10.2 13.6 13.6"/></symbol>
+  <symbol id="i-funnel" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.2 3.3h11.6L9.4 8.5v4.3l-2.8 1.3V8.5z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.7v1.9M8 12.4v1.9M14.3 8h-1.9M3.6 8H1.7M12.5 3.5l-1.4 1.4M4.9 11.1l-1.4 1.4M12.5 12.5l-1.4-1.4M4.9 4.9 3.5 3.5"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.1 8a5.1 5.1 0 1 1-1.5-3.7"/><path d="M13.3 2.6v3.3H10"/></symbol>
+  <symbol id="i-more" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="3.6" cy="8" r="1.15" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r="1.15" fill="currentColor" stroke="none"/><circle cx="12.4" cy="8" r="1.15" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 8.4 6.3 11.5 12.8 4.8"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.9 2.9a1.7 1.7 0 0 1 2.4 2.4L6 12.6l-3.1.7.7-3.1z"/><path d="M9.6 4.2l2.4 2.4"/></symbol>
+  <symbol id="i-home" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.4 7.6 8 2.6l5.6 5"/><path d="M4.1 7v6.4h7.8V7"/></symbol>
+  <symbol id="i-star" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.3 9.7 5.7l3.7.5-2.7 2.6.6 3.7L8 10.6l-3.3 1.9.6-3.7L2.6 6.2l3.7-.5z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.4"/><path d="M8 4.8V8l2.3 1.6"/></symbol>
+  <symbol id="i-drive" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3.4" width="12" height="9.2" rx="1.8"/><path d="M2 9.4h12"/><circle cx="11.5" cy="11.3" r=".85" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-network" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.4"/><path d="M2.6 8h10.8M8 2.6c1.7 2 1.7 8.8 0 10.8M8 2.6c-1.7 2-1.7 8.8 0 10.8"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 4.5h9.2M6.4 4.5V3h3.2v1.5M4.4 4.5l.7 8.2h5.8l.7-8.2"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v4"/><circle cx="8" cy="4.9" r=".85" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.7 8s2.4-4.3 6.3-4.3S14.3 8 14.3 8s-2.4 4.3-6.3 4.3S1.7 8 1.7 8z"/><circle cx="8" cy="8" r="1.9"/></symbol>
+  <symbol id="i-journal" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 3.8h9.2M3.4 8h9.2M3.4 12.2h6"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.4" y="5.4" width="7.3" height="7.3" rx="1.4"/><path d="M3.4 10.6V4.2a.8.8 0 0 1 .8-.8h6.4"/></symbol>
+  <symbol id="i-move" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 8h9.2M9 5.2 11.8 8 9 10.8"/><path d="M2.6 4.4v7.2"/></symbol>
+  <symbol id="i-checksum" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.4 6.3 11.6 13 4.6"/></symbol>
+  <symbol id="i-disk" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.6"/><path d="M2 8.6h12"/><circle cx="5" cy="10.7" r=".85" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-min" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8h9"/></symbol>
+  <symbol id="i-max" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="9" height="9" rx="1"/></symbol>
+  <symbol id="i-close" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.3 4.3 11.7 11.7M11.7 4.3 4.3 11.7"/></symbol>
+</defs>
+</svg>
+
+<div class="stage" id="stage">
+  <div class="app-window" id="appWindow">
+
+    <!-- band 1 — main toolbar -->
+    <header class="toolbar">
+      <div class="tb-group">
+        <div class="pop-anchor">
+          <button class="ic-btn lg" id="btnMenu" type="button" aria-haspopup="true" aria-expanded="false" title="Главное меню">
+            <svg class="od-icon" style="--od-icon-size:20px" aria-hidden="true"><use href="#i-menu"/></svg>
+          </button>
+          <div class="popup" id="popMenu" hidden role="menu">
+            <button class="pop-item" type="button" role="menuitem" data-cmd="sync"><span class="pop-check"></span><span class="pop-label">Синхронизировать</span></button>
+            <div class="pop-sep"></div>
+            <button class="pop-item" type="button" role="menuitem" data-cmd="resetzoom"><span class="pop-check"></span><span class="pop-label">Сбросить масштаб</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tb-sep"></div>
+
+      <div class="tb-group">
+        <button class="ic-btn" id="btnBack" type="button" disabled title="Назад — недоступно">
+          <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-back"/></svg>
+        </button>
+        <button class="ic-btn" id="btnFwd" type="button" title="Следующая вкладка">
+          <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-fwd"/></svg>
+        </button>
+        <button class="ic-btn" id="btnUp" type="button" title="В родительскую папку">
+          <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-up"/></svg>
+        </button>
+      </div>
+
+      <div class="tb-sep"></div>
+
+      <div class="pop-anchor">
+        <button class="widget" id="btnView" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="popView" title="Вид">
+          <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-columns"/></svg>
+          <span class="w-label">Вид</span>
+          <svg class="od-icon w-chev" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-down"/></svg>
+        </button>
+        <div class="popup view-pop" id="popView" hidden aria-label="Вид">
+          <div class="vp-header">Вид</div>
+
+          <div class="vp-section">
+            <div class="vp-section-title">Режим просмотра</div>
+            <div class="vp-group" role="radiogroup" aria-label="Режим просмотра">
+              <button class="vp-row" type="button" role="radio" aria-checked="false" data-mode="icons">
+                <span class="vp-radio" aria-hidden="true"></span><span class="vp-label">Значки</span>
+              </button>
+              <button class="vp-row is-current" type="button" role="radio" aria-checked="true" data-mode="columns">
+                <span class="vp-radio" aria-hidden="true"></span><span class="vp-label">Столбцы</span>
+              </button>
+              <button class="vp-row" type="button" role="radio" aria-checked="false" data-mode="details">
+                <span class="vp-radio" aria-hidden="true"></span><span class="vp-label">Подробности</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="vp-section">
+            <div class="vp-section-title">Группировка</div>
+            <div class="vp-group" role="radiogroup" aria-label="Группировка">
+              <button class="vp-row is-current" type="button" role="radio" aria-checked="true" data-grouping="date">
+                <span class="vp-radio" aria-hidden="true"></span><span class="vp-label">По дате изменения</span>
+              </button>
+              <button class="vp-row" type="button" role="radio" aria-checked="false" data-grouping="none">
+                <span class="vp-radio" aria-hidden="true"></span><span class="vp-label">Без группировки</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="vp-section">
+            <div class="vp-section-title">Сортировка</div>
+            <div class="vp-group" role="radiogroup" aria-label="Сортировка">
+              <button class="vp-row is-current" type="button" role="radio" aria-checked="true" data-sort-key="date">
+                <span class="vp-radio" aria-hidden="true"></span><span class="vp-label">Дата изменения</span>
+              </button>
+              <button class="vp-row" type="button" role="radio" aria-checked="false" data-sort-key="size">
+                <span class="vp-radio" aria-hidden="true"></span><span class="vp-label">Размер</span>
+              </button>
+              <button class="vp-row" type="button" role="radio" aria-checked="false" data-sort-key="name">
+                <span class="vp-radio" aria-hidden="true"></span><span class="vp-label">Имя</span>
+              </button>
+            </div>
+            <div class="vp-seg" role="group" aria-label="Направление сортировки">
+              <button class="vp-seg-btn is-active" type="button" data-sort-dir="desc" aria-pressed="true">По убыванию</button>
+              <button class="vp-seg-btn" type="button" data-sort-dir="asc" aria-pressed="false">По возрастанию</button>
+            </div>
+          </div>
+
+          <div class="vp-section">
+            <div class="vp-section-title">Параметры</div>
+            <div class="vp-group">
+              <button class="vp-row" type="button" role="checkbox" aria-checked="false" data-check="hidden">
+                <span class="vp-box" aria-hidden="true"><svg class="od-icon" style="--od-icon-size:10px"><use href="#i-check"/></svg></span>
+                <span class="vp-label">Показывать скрытые файлы</span>
+              </button>
+              <button class="vp-row" type="button" role="checkbox" aria-checked="false" data-check="compact">
+                <span class="vp-box" aria-hidden="true"><svg class="od-icon" style="--od-icon-size:10px"><use href="#i-check"/></svg></span>
+                <span class="vp-label">Плотная раскладка</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="vp-section">
+            <div class="vp-section-title">Масштаб</div>
+            <div class="vp-zoom">
+              <input class="zoom-slider" id="viewZoom" type="range" min="0" max="100" step="1" value="50" aria-label="Масштаб">
+              <span class="vp-pct" id="viewZoomValue">100%</span>
+            </div>
+          </div>
+
+          <div class="vp-foot">Изменения применяются сразу</div>
+        </div>
+      </div>
+
+      <div class="path-widget" id="pathWidget">
+        <div class="pop-anchor path-anchor" id="pathAnchor">
+          <button class="widget path-btn" id="btnLocation" type="button" aria-haspopup="true" aria-expanded="false" title="Перейти к пути">
+            <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-folder"/></svg>
+            <span class="w-label" id="locationLabel">/home/frimm/.cache</span>
+            <svg class="od-icon w-chev" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-down"/></svg>
+          </button>
+          <div class="popup" id="popLocation" hidden role="menu">
+            <button class="pop-item" type="button" role="menuitem" data-path="/home/frimm/.cache"><span class="pop-check"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-check"/></svg></span><span class="pop-label">/home/frimm/.cache</span></button>
+            <button class="pop-item" type="button" role="menuitem" data-path="/home/frimm"><span class="pop-check"></span><span class="pop-label">/home/frimm</span></button>
+            <button class="pop-item" type="button" role="menuitem" data-path="/home/frimm/Загрузки"><span class="pop-check"></span><span class="pop-label">/home/frimm/Загрузки</span></button>
+            <button class="pop-item" type="button" role="menuitem" data-path="/home"><span class="pop-check"></span><span class="pop-label">/home</span></button>
+            <button class="pop-item" type="button" role="menuitem" data-path="/"><span class="pop-check"></span><span class="pop-label">/</span></button>
+          </div>
+        </div>
+        <button class="ic-btn sm path-edit" id="btnPathEdit" type="button" title="Изменить путь" aria-label="Изменить путь">
+          <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-pencil"/></svg>
+        </button>
+        <input class="path-input" id="pathInput" type="text" autocomplete="off" spellcheck="false" aria-label="Путь" hidden>
+      </div>
+
+      <div class="tb-spacer"></div>
+
+      <div class="tb-group">
+        <div class="pop-anchor">
+          <button class="ic-btn tool-btn" id="btnSettings" type="button" aria-haspopup="true" aria-expanded="false" title="Настройки">
+            <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-gear"/></svg>
+          </button>
+          <div class="popup" id="popSettings" hidden role="menu">
+            <button class="pop-item" type="button" role="menuitem" data-cmd="resetzoom"><span class="pop-check"></span><span class="pop-label">Сбросить масштаб</span></button>
+            <button class="pop-item" type="button" role="menuitem" data-cmd="clearfilter"><span class="pop-check"></span><span class="pop-label">Очистить фильтр</span></button>
+            <button class="pop-item" type="button" role="menuitem" data-cmd="resetsort"><span class="pop-check"></span><span class="pop-label">Сбросить сортировку</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tb-sep"></div>
+
+      <div class="tb-group win-controls">
+        <button class="win-btn" id="btnMin" type="button" title="Свернуть">
+          <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-min"/></svg>
+        </button>
+        <button class="win-btn" id="btnMax" type="button" title="Развернуть на весь экран">
+          <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-max"/></svg>
+        </button>
+        <button class="win-btn win-close" id="btnClose" type="button" title="Закрыть">
+          <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-close"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="hairline"></div>
+
+    <!-- bands 3–7 -->
+    <div class="app-body">
+
+      <!-- left tool-window stripe -->
+      <nav class="rail" id="railLeft" aria-label="Панели инструментов">
+        <button class="rail-btn is-active" type="button" data-rail="left" data-action="places" title="Места">
+          <svg class="od-icon" style="--od-icon-size:20px" aria-hidden="true"><use href="#i-home"/></svg>
+        </button>
+        <button class="rail-btn" type="button" data-rail="left" data-action="files" title="Файлы">
+          <svg class="od-icon" style="--od-icon-size:20px" aria-hidden="true"><use href="#i-folder"/></svg>
+        </button>
+        <button class="rail-btn" type="button" data-rail="left" data-action="bookmarks" title="Закладки">
+          <svg class="od-icon" style="--od-icon-size:20px" aria-hidden="true"><use href="#i-star"/></svg>
+        </button>
+        <button class="rail-btn" type="button" data-rail="left" data-action="recent" title="Недавние">
+          <svg class="od-icon" style="--od-icon-size:20px" aria-hidden="true"><use href="#i-clock"/></svg>
+        </button>
+        <button class="rail-btn" type="button" data-rail="left" data-action="devices" title="Устройства">
+          <svg class="od-icon" style="--od-icon-size:20px" aria-hidden="true"><use href="#i-drive"/></svg>
+        </button>
+        <button class="rail-btn" type="button" data-rail="left" data-action="network" title="Сеть">
+          <svg class="od-icon" style="--od-icon-size:20px" aria-hidden="true"><use href="#i-network"/></svg>
+        </button>
+        <div class="rail-sep"></div>
+        <button class="rail-btn" type="button" data-rail="left" data-action="trash" title="Корзина">
+          <svg class="od-icon" style="--od-icon-size:20px" aria-hidden="true"><use href="#i-trash"/></svg>
+        </button>
+      </nav>
+
+      <div class="app-center">
+
+        <!-- band 3 — continuous header band -->
+        <div class="header-band">
+          <div class="tw-header left">
+            <button class="tw-title" id="btnLeftToggle" type="button" title="Свернуть панель">
+              <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-down"/></svg>
+              <span id="leftTitle">Места</span>
+            </button>
+            <div class="tw-actions">
+              <button class="ic-btn sm" id="btnPlacesRefresh" type="button" title="Обновить">
+                <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-refresh"/></svg>
+              </button>
+              <div class="pop-anchor">
+                <button class="ic-btn sm" id="btnPlacesMenu" type="button" title="Действия" aria-haspopup="true" aria-expanded="false">
+                  <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-more"/></svg>
+                </button>
+                <div class="popup up" id="popPlaces" hidden role="menu">
+                  <button class="pop-item" type="button" role="menuitem" data-cmd="expandall"><span class="pop-check"></span><span class="pop-label">Развернуть всё</span></button>
+                  <button class="pop-item" type="button" role="menuitem" data-cmd="collapseall"><span class="pop-check"></span><span class="pop-label">Свернуть всё</span></button>
+                </div>
+              </div>
+              <button class="ic-btn sm" id="btnLeftHide" type="button" title="Скрыть панель">
+                <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-min"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="tab-strip" id="tabStrip" role="tablist" aria-label="Вкладки папок">
+            <button class="tab is-active" type="button" role="tab" data-tab="cache" aria-selected="true">
+              <span class="tab-icon"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-folder"/></svg></span>
+              <span class="tab-label">.cache</span>
+              <span class="tab-close" data-close="cache" title="Закрыть вкладку"><svg class="od-icon" style="--od-icon-size:12px" aria-hidden="true"><use href="#i-close"/></svg></span>
+            </button>
+            <button class="tab" type="button" role="tab" data-tab="home" aria-selected="false">
+              <span class="tab-icon"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-home"/></svg></span>
+              <span class="tab-label">Домашняя папка</span>
+              <span class="tab-close" data-close="home" title="Закрыть вкладку"><svg class="od-icon" style="--od-icon-size:12px" aria-hidden="true"><use href="#i-close"/></svg></span>
+            </button>
+            <button class="tab" type="button" role="tab" data-tab="downloads" aria-selected="false">
+              <span class="tab-icon"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-down"/></svg></span>
+              <span class="tab-label">Загрузки</span>
+              <span class="tab-close" data-close="downloads" title="Закрыть вкладку"><svg class="od-icon" style="--od-icon-size:12px" aria-hidden="true"><use href="#i-close"/></svg></span>
+            </button>
+          </div>
+
+          <div class="tw-header right">
+            <span class="tw-title-static" id="rightTitle">Сведения</span>
+            <div class="tw-actions">
+              <div class="pop-anchor">
+                <button class="ic-btn sm" id="btnDetailsMenu" type="button" title="Действия" aria-haspopup="true" aria-expanded="false">
+                  <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-more"/></svg>
+                </button>
+                <div class="popup up" id="popDetails" hidden role="menu">
+                  <button class="pop-item" type="button" role="menuitem" data-cmd="reveal"><span class="pop-check"></span><span class="pop-label">Показать в дереве</span></button>
+                  <button class="pop-item" type="button" role="menuitem" data-cmd="toggle-details"><span class="pop-check"></span><span class="pop-label">Скрыть панель</span></button>
+                </div>
+              </div>
+              <button class="ic-btn sm" id="btnRightHide" type="button" title="Скрыть панель">
+                <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-min"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="hairline strong"></div>
+
+        <!-- band 5 — workspace -->
+        <div class="workspace">
+
+          <!-- left tool window -->
+          <section class="panel panel-left" id="leftPanel" aria-label="Левая панель">
+            <div class="panel-toolbar">
+              <label class="mini-search" for="placesSearch">
+                <svg class="od-icon" style="--od-icon-size:14px" aria-hidden="true"><use href="#i-search"/></svg>
+                <input id="placesSearch" type="text" placeholder="Поиск…" autocomplete="off">
+              </label>
+              <button class="ic-btn sm" id="btnPlacesFilter" type="button" title="Фильтр по типу">
+                <svg class="od-icon" style="--od-icon-size:14px" aria-hidden="true"><use href="#i-funnel"/></svg>
+              </button>
+              <button class="ic-btn sm" id="btnPlacesSort" type="button" title="Сортировка">
+                <svg class="od-icon" style="--od-icon-size:14px" aria-hidden="true"><use href="#i-sort"/></svg>
+              </button>
+            </div>
+            <div class="panel-scroll" id="placesList"></div>
+          </section>
+
+          <!-- editor: the signature column view -->
+          <section class="editor" id="editor" aria-label="Список файлов">
+            <div class="editor-toolbar">
+              <div class="filter-field" id="filterField">
+                <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-funnel"/></svg>
+                <input id="filterInput" type="text" placeholder="Фильтр…" autocomplete="off" aria-label="Фильтр по имени">
+                <button class="filter-clear" id="filterClear" type="button" title="Очистить фильтр" hidden>
+                  <svg class="od-icon" style="--od-icon-size:12px" aria-hidden="true"><use href="#i-close"/></svg>
+                </button>
+              </div>
+              <div class="tb-sep tight"></div>
+              <div class="tb-spacer"></div>
+              <span class="editor-counts" id="editorCounts">127 папок · 19 файлов (80,1 МиБ)</span>
+            </div>
+
+            <div class="band" id="band">
+              <div class="band-inner" id="bandInner"></div>
+              <div class="band-empty" id="bandEmpty" hidden>
+                <b>Нет совпадений</b>
+                <span>Попробуйте изменить запрос</span>
+              </div>
+            </div>
+            <div class="band-note" id="bandNote" hidden></div>
+          </section>
+
+          <!-- right tool window «Сведения» -->
+          <section class="panel panel-right" id="rightPanel" aria-label="Сведения">
+            <div class="detail-body" id="detailBody"></div>
+            <div class="detail-actions" id="detailActions">
+              <button class="btn btn-primary" type="button" id="btnOpen">Открыть</button>
+              <button class="btn btn-ghost" type="button" id="btnReveal">Показать в папке</button>
+            </div>
+          </section>
+        </div>
+
+        <div class="hairline"></div>
+
+        <!-- band 7 — bottom tool window -->
+        <section class="bottom-window" id="bottomWindow" aria-label="Нижняя панель">
+          <div class="bw-header">
+            <div class="bw-tabs" role="tablist" aria-label="Нижняя панель">
+              <button class="bw-tab is-active" type="button" role="tab" data-btab="ops" aria-selected="true">Операции</button>
+              <button class="bw-tab" type="button" role="tab" data-btab="log" aria-selected="false">Журнал</button>
+            </div>
+            <div class="bw-actions">
+              <button class="ic-btn sm" id="btnBottomMin" type="button" title="Свернуть панель">
+                <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-min"/></svg>
+              </button>
+              <div class="pop-anchor">
+                <button class="ic-btn sm" type="button" title="Действия" aria-haspopup="true" aria-expanded="false">
+                  <svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-more"/></svg>
+                </button>
+                <div class="popup up" id="popBottom" hidden role="menu">
+                  <button class="pop-item" type="button" role="menuitem" data-cmd="clearops"><span class="pop-check"></span><span class="pop-label">Очистить завершённые</span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="bw-content">
+            <div class="bw-pane" id="paneOps">
+              <div class="op-row">
+                <span class="op-icon"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-copy"/></svg></span>
+                <span class="op-name">Копирование large_dataset.zip</span>
+                <span class="op-bar"><span style="width:68%"></span></span>
+                <span class="op-pct">68 %</span>
+                <span class="op-speed">12,4 МБ/с</span>
+                <span class="op-status">В работе</span>
+              </div>
+              <div class="op-row">
+                <span class="op-icon"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-move"/></svg></span>
+                <span class="op-name">Перемещение projector-cache</span>
+                <span class="op-bar done"><span style="width:100%"></span></span>
+                <span class="op-pct">100 %</span>
+                <span class="op-speed">3,4 ГиБ</span>
+                <span class="op-status done">Готово</span>
+              </div>
+              <div class="op-row">
+                <span class="op-icon"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-trash"/></svg></span>
+                <span class="op-name">Удаление old-backups</span>
+                <span class="op-bar queued"><span style="width:0%"></span></span>
+                <span class="op-pct">0 %</span>
+                <span class="op-speed">—</span>
+                <span class="op-status queued">В очереди</span>
+              </div>
+              <div class="op-row">
+                <span class="op-icon"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-checksum"/></svg></span>
+                <span class="op-name">Проверка контрольных сумм</span>
+                <span class="op-bar"><span style="width:42%"></span></span>
+                <span class="op-pct">42 %</span>
+                <span class="op-speed">5,9 МБ/с</span>
+                <span class="op-status">В работе</span>
+              </div>
+            </div>
+            <div class="bw-pane" id="paneLog" hidden>
+              <span class="log-line">[15:21:07] <b>.cache</b> — 127 папок, 19 файлов (80,1 МиБ)</span>
+              <span class="log-line">[15:19:44] <b>операции</b> — 4 задачи, 1 в очереди</span>
+              <span class="log-line">[15:12:02] <b>устройство archive6</b> — свободно 22,8 ГиБ</span>
+              <span class="log-line">[15:03:18] <b>сеть</b> — подключено</span>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- right tool-window stripe -->
+      <nav class="rail" id="railRight" aria-label="Панели сведений">
+        <button class="rail-btn is-active" type="button" data-rail="right" data-action="details" title="Сведения">
+          <svg class="od-icon" style="--od-icon-size:20px" aria-hidden="true"><use href="#i-info"/></svg>
+        </button>
+        <button class="rail-btn" type="button" data-rail="right" data-action="preview" title="Предпросмотр">
+          <svg class="od-icon" style="--od-icon-size:20px" aria-hidden="true"><use href="#i-eye"/></svg>
+        </button>
+      </nav>
+    </div>
+
+    <div class="hairline"></div>
+
+    <!-- band 9 — status bar -->
+    <footer class="statusbar">
+      <div class="sb-left">
+        <span class="sb-status is-scanning" id="statusText" role="status" aria-live="polite">Сканирование…</span>
+      </div>
+      <div class="sb-right">
+        <span class="sb-item">
+          <svg class="od-icon" style="--od-icon-size:14px" aria-hidden="true"><use href="#i-disk"/></svg>
+          свободно 22,8 ГиБ
+        </span>
+        <span class="sb-sep" aria-hidden="true">·</span>
+        <span class="sb-item mono">sdc1</span>
+      </div>
+    </footer>
+
+  </div>
+</div>
+
+<div class="closed-state" id="closedState" hidden>
+  <div class="closed-card">
+    <h1>Волна</h1>
+    <p>Приложение закрыто. Панели и вкладки сохранят состояние при следующем запуске.</p>
+    <button class="btn btn-primary" type="button" id="btnReopen">Открыть Волну</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var root = document.documentElement;
+  function $(id) { return document.getElementById(id); }
+  function ICON(name, size) {
+    return '<svg class="od-icon" style="--od-icon-size:' + (size || '16px') + '" aria-hidden="true" focusable="false"><use href="#' + name + '"/></svg>';
+  }
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function plural(n, one, few, many) {
+    var n10 = n % 10, n100 = n % 100;
+    if (n10 === 1 && n100 !== 11) return one;
+    if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return few;
+    return many;
+  }
+  function objectsWord(n) { return n + ' ' + plural(n, 'объект', 'объекта', 'объектов'); }
+  function closestIn(e, sel) {
+    var t = e.target;
+    if (!t || typeof t.closest !== 'function') return null;
+    return t.closest(sel);
+  }
+
+  /* ============================== DATA ============================== */
+
+  var VIEWS = {
+    cache: {
+      id: 'cache', label: '.cache', icon: 'i-folder',
+      path: '/home/frimm/.cache', crumbs: ['frimm', '.cache'],
+      defaultSel: 'uv',
+      groups: [
+        { id: 'c1', label: 'Сегодня', items: [
+          { n: 'starshp', s: '0 Б', d: 'Сегодня в 15:21', t: '202611131521', c: '10.11.2026 в 18:40', k: 'folder' },
+          { n: 'uv', s: '16,6 ГиБ', d: 'Сегодня в 03:11', t: '202611130311', c: '02.11.2026 в 01:22', k: 'folder' },
+          { n: 'gh', s: '5,9 КиБ', d: 'Сегодня в 02:56', t: '202611130256', c: '09.11.2026 в 23:15', k: 'folder' }
+        ]},
+        { id: 'c2', label: 'Вчера', items: [
+          { n: 'mc', s: '35 Б', d: 'Вчера в 15:06', t: '202611121506', c: '05.11.2026 в 12:02', k: 'folder' },
+          { n: 'bookmarkrunner', s: '0 Б', d: 'Вчера в 14:52', t: '202611121452', c: '06.11.2026 в 09:35', k: 'folder' },
+          { n: 'appstream', s: '66,2 МиБ', d: 'Вчера в 13:21', t: '202611121321', c: '28.10.2026 в 20:12', k: 'folder' },
+          { n: 'kio_http', s: '50,8 МиБ', d: 'Вчера в 08:19', t: '202611120819', c: '30.10.2026 в 15:44', k: 'folder' },
+          { n: 'mpv', s: '1,3 МиБ', d: 'Вчера в 07:03', t: '202611120703', c: '01.11.2026 в 07:55', k: 'folder' },
+          { n: 'gstreamer-1.0', s: '1,7 МиБ', d: 'Вчера в 07:01', t: '202611120701', c: '01.11.2026 в 07:50', k: 'folder' }
+        ]},
+        { id: 'c3', label: 'Среда', items: [
+          { n: 'electron', s: '212,9 МиБ', d: '11.11.2026 в 09:40', t: '202611110940', c: '04.11.2026 в 10:26', k: 'folder' },
+          { n: 'pnpm', s: '12,8 МиБ', d: '11.11.2026 в 07:49', t: '202611110749', c: '08.11.2026 в 06:31', k: 'folder' }
+        ]},
+        { id: 'c4', label: 'Вторник', items: [
+          { n: 'gnome-calculator', s: '1,9 КиБ', d: '10.11.2026 в 20:00', t: '202611102000', c: '10.11.2026 в 19:58', k: 'folder' }
+        ]},
+        { id: 'c5', label: 'Неделю назад', items: [
+          { n: 'llmfit', s: '0 Б', d: '03.11.2026 в 17:01', t: '202611031701', c: '03.11.2026 в 16:58', k: 'folder' },
+          { n: 'qtshadercache-x86…', s: '746,2 КиБ', d: '02.11.2026 в 01:22', t: '202611020122', c: '02.11.2026 в 01:20', k: 'folder' }
+        ]}
+      ]
+    },
+    home: {
+      id: 'home', label: 'Домашняя папка', icon: 'i-home',
+      path: '/home/frimm', crumbs: ['frimm'],
+      defaultSel: 'Документы',
+      groups: [
+        { id: 'h1', label: 'Сегодня', items: [
+          { n: 'Документы', s: '—', d: 'Сегодня в 12:04', t: '202611131204', c: '12.11.2026 в 09:41', k: 'folder' },
+          { n: 'Загрузки', s: '—', d: 'Сегодня в 09:37', t: '202611130937', c: '11.11.2026 в 18:22', k: 'folder' },
+          { n: 'Изображения', s: '—', d: 'Сегодня в 08:52', t: '202611130852', c: '10.11.2026 в 21:14', k: 'folder' },
+          { n: 'Музыка', s: '—', d: 'Сегодня в 07:15', t: '202611130715', c: '09.11.2026 в 16:03', k: 'folder' }
+        ]},
+        { id: 'h2', label: 'Вчера', items: [
+          { n: 'Видео', s: '—', d: 'Вчера в 18:22', t: '202611121822', c: '08.11.2026 в 20:47', k: 'folder' },
+          { n: 'Общедоступные', s: '—', d: 'Вчера в 16:09', t: '202611121609', c: '07.11.2026 в 11:58', k: 'folder' },
+          { n: 'Рабочий стол', s: '—', d: 'Вчера в 11:40', t: '202611121140', c: '06.11.2026 в 09:31', k: 'folder' },
+          { n: 'Шаблоны', s: '—', d: 'Вчера в 09:26', t: '202611120926', c: '06.11.2026 в 08:12', k: 'folder' }
+        ]},
+        { id: 'h3', label: 'Ранее', items: [
+          { n: 'any-limb', s: '—', d: '08.11.2026 в 22:10', t: '202611082210', c: '05.11.2026 в 14:26', k: 'folder' },
+          { n: 'audacity4', s: '—', d: '08.11.2026 в 14:33', t: '202611081433', c: '04.11.2026 в 22:05', k: 'folder' },
+          { n: 'backup', s: '—', d: '07.11.2026 в 19:05', t: '202611071905', c: '03.11.2026 в 17:44', k: 'folder' },
+          { n: 'barbaros', s: '—', d: '07.11.2026 в 10:48', t: '202611071048', c: '03.11.2026 в 09:12', k: 'folder' }
+        ]}
+      ]
+    },
+    downloads: {
+      id: 'downloads', label: 'Загрузки', icon: 'i-down',
+      path: '/home/frimm/Загрузки', crumbs: ['frimm', 'Загрузки'],
+      defaultSel: 'installer.AppImage',
+      groups: [
+        { id: 'd1', label: 'Сегодня', items: [
+          { n: 'installer.AppImage', s: '84,2 МиБ', d: 'Сегодня в 14:37', t: '202611131437', c: '13.11.2026 в 14:30', k: 'file' },
+          { n: 'logo-final.svg', s: '128,4 КиБ', d: 'Сегодня в 12:05', t: '202611131205', c: '13.11.2026 в 11:58', k: 'file' }
+        ]},
+        { id: 'd2', label: 'Вчера', items: [
+          { n: 'dataset.tar.zst', s: '2,1 ГиБ', d: 'Вчера в 21:48', t: '202611122148', c: '12.11.2026 в 21:40', k: 'file' },
+          { n: 'notes.txt', s: '3,4 КиБ', d: 'Вчера в 09:12', t: '202611120912', c: '12.11.2026 в 09:10', k: 'file' }
+        ]}
+      ]
+    }
+  };
+
+  var TAB_DEFS = [
+    { id: 'cache', label: '.cache', icon: 'i-folder' },
+    { id: 'home', label: 'Домашняя папка', icon: 'i-home' },
+    { id: 'downloads', label: 'Загрузки', icon: 'i-down' }
+  ];
+
+  var PLACES_TREE = [
+    { id: 'p-root', kind: 'root', label: 'Домашняя папка', icon: 'i-home', children: [
+      { id: 'p-video', label: 'Видео', icon: 'i-folder-fill' },
+      { id: 'p-docs', label: 'Документы', icon: 'i-folder-fill' },
+      { id: 'p-down', label: 'Загрузки', icon: 'i-folder-fill', view: 'downloads' },
+      { id: 'p-pics', label: 'Изображения', icon: 'i-folder-fill' },
+      { id: 'p-music', label: 'Музыка', icon: 'i-folder-fill' },
+      { id: 'p-pub', label: 'Общедоступные', icon: 'i-folder-fill' },
+      { id: 'p-desk', label: 'Рабочий стол', icon: 'i-folder-fill' },
+      { id: 'p-tpl', label: 'Шаблоны', icon: 'i-folder-fill' },
+      { id: 'p-any', label: 'any-limb', icon: 'i-folder-fill' },
+      { id: 'p-aud', label: 'audacity4', icon: 'i-folder-fill' },
+      { id: 'p-back', label: 'backup', icon: 'i-folder-fill' },
+      { id: 'p-barb', label: 'barbaros', icon: 'i-folder-fill' }
+    ]},
+    { id: 'p-trash', label: 'Корзина', icon: 'i-trash' },
+    { id: 'p-net', kind: 'group', label: 'В сети', children: [
+      { id: 'n-net', label: 'Сеть', icon: 'i-network', special: 'network' }
+    ]},
+    { id: 'p-recent', kind: 'group', label: 'Недавно изменённые', children: [
+      { id: 'r-files', label: 'Последние файлы', icon: 'i-clock' },
+      { id: 'r-places', label: 'Последние расположения', icon: 'i-clock' }
+    ]},
+    { id: 'p-devices', kind: 'group', label: 'Устройства', children: [
+      { id: 'd-archive', label: 'archive6', icon: 'i-drive', usage: 90 },
+      { id: 'd-models', label: 'Models', icon: 'i-drive', usage: 85 }
+    ]}
+  ];
+
+  var FILES_TREE = [
+    { id: 'f-root', kind: 'root', label: '/home/frimm', icon: 'i-home', children: [
+      { id: 'f-docs', label: 'Документы', icon: 'i-folder-fill' },
+      { id: 'f-down', label: 'Загрузки', icon: 'i-folder-fill', view: 'downloads' },
+      { id: 'f-pics', label: 'Изображения', icon: 'i-folder-fill' },
+      { id: 'f-music', label: 'Музыка', icon: 'i-folder-fill' },
+      { id: 'f-video', label: 'Видео', icon: 'i-folder-fill' },
+      { id: 'f-pub', label: 'Общедоступные', icon: 'i-folder-fill' },
+      { id: 'f-desk', label: 'Рабочий стол', icon: 'i-folder-fill' },
+      { id: 'f-tpl', label: 'Шаблоны', icon: 'i-folder-fill' },
+      { id: 'f-cache', label: '.cache', icon: 'i-folder-fill', view: 'cache' }
+    ]}
+  ];
+
+  var BOOKMARKS = [
+    { id: 'b-home', label: 'Домашняя папка', path: '/home/frimm', icon: 'i-home', view: 'home' },
+    { id: 'b-down', label: 'Загрузки', path: '/home/frimm/Загрузки', icon: 'i-folder-fill', view: 'downloads' },
+    { id: 'b-cache', label: '.cache', path: '/home/frimm/.cache', icon: 'i-folder-fill', view: 'cache' }
+  ];
+
+  var DEVICES = [
+    { id: 'v-archive', label: 'archive6', icon: 'i-drive', usage: 90 },
+    { id: 'v-models', label: 'Models', icon: 'i-drive', usage: 85 }
+  ];
+
+  var LEFT_VIEWS = {
+    places: 'Места', files: 'Файлы', bookmarks: 'Закладки', recent: 'Недавние',
+    devices: 'Устройства', network: 'Сеть', trash: 'Корзина'
+  };
+  var RIGHT_VIEWS = { details: 'Сведения', preview: 'Предпросмотр' };
+
+  /* ============================== STATE ============================== */
+
+  var state = {
+    view: 'cache',
+    tabs: TAB_DEFS.map(function (t) { return { id: t.id, label: t.label, icon: t.icon }; }),
+    sort: 'date',
+    sortDir: 'desc',
+    viewMode: 'columns',
+    grouping: 'date',
+    showHidden: false,
+    compact: false,
+    filter: '',
+    zoom: 50,
+    selected: 'uv',
+    collapsed: {},
+    leftView: 'places',
+    rightView: 'details',
+    bottomTab: 'ops',
+    bottomCollapsed: false,
+    placesQuery: '',
+    placesSelected: 'p-root',
+    placesCollapsed: {},
+    placesFilterFolders: false,
+    placesSorted: false,
+    leftOpen: true,
+    rightOpen: true,
+    maximized: false,
+    minimized: false
+  };
+
+  /* ============================ HELPERS ============================ */
+
+  function sizeBytes(s) {
+    if (!s || s === '—') return null;
+    var m = /^([\d.,]+)\s*(Б|КиБ|МиБ|ГиБ)$/.exec(s);
+    if (!m) return null;
+    var n = parseFloat(m[1].replace(',', '.'));
+    if (isNaN(n)) return null;
+    var mult = { 'Б': 1, 'КиБ': 1024, 'МиБ': 1048576, 'ГиБ': 1073741824 }[m[2]];
+    return n * mult;
+  }
+  function currentView() { return VIEWS[state.view]; }
+  function hiddenItemForGroup(index) {
+    if (index === 0) {
+      return { n: '.gitignore', s: '184 Б', d: 'Сегодня в 14:58', t: '202611131458',
+        c: '01.11.2026 в 10:14', k: 'file', hidden: true };
+    }
+    if (index === 1) {
+      return { n: '.cache.lock', s: '0 Б', d: 'Вчера в 16:40', t: '202611121640',
+        c: '02.11.2026 в 09:03', k: 'file', hidden: true };
+    }
+    return null;
+  }
+  function visibleGroups() {
+    return currentView().groups.map(function (g, i) {
+      var extra = state.showHidden ? hiddenItemForGroup(i) : null;
+      return { id: g.id, label: g.label, items: extra ? g.items.concat([extra]) : g.items };
+    });
+  }
+  function findSelected() {
+    var groups = visibleGroups();
+    for (var i = 0; i < groups.length; i++) {
+      for (var j = 0; j < groups[i].items.length; j++) {
+        if (groups[i].items[j].n === state.selected) {
+          return { item: groups[i].items[j], group: groups[i] };
+        }
+      }
+    }
+    return null;
+  }
+  function sortedItems(items) {
+    var arr = items.slice();
+    var dir = state.sortDir === 'asc' ? 1 : -1;
+    if (state.sort === 'date') {
+      arr.sort(function (a, b) { return (a.t < b.t ? -1 : a.t > b.t ? 1 : 0) * dir; });
+    } else if (state.sort === 'size') {
+      arr.sort(function (a, b) {
+        var ba = sizeBytes(a.s), bb = sizeBytes(b.s);
+        if (ba === null && bb === null) return a.n.localeCompare(b.n, 'ru');
+        if (ba === null) return 1;
+        if (bb === null) return -1;
+        return (ba - bb) * dir;
+      });
+    } else {
+      arr.sort(function (a, b) { return a.n.localeCompare(b.n, 'ru') * dir; });
+    }
+    return arr;
+  }
+  function colKey(groupId) { return state.view + ':' + groupId; }
+
+  /* ============================= TABS ============================== */
+
+  function renderTabs() {
+    var strip = $('tabStrip');
+    strip.textContent = '';
+    state.tabs.forEach(function (tab) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tab' + (tab.id === state.view ? ' is-active' : '');
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', tab.id === state.view ? 'true' : 'false');
+      b.setAttribute('data-tab', tab.id);
+      b.innerHTML = '<span class="tab-icon">' + ICON(tab.icon, '16px') + '</span>' +
+        '<span class="tab-label">' + esc(tab.label) + '</span>' +
+        '<span class="tab-close" data-close="' + tab.id + '" title="Закрыть вкладку">' + ICON('i-close', '12px') + '</span>';
+      b.addEventListener('click', function (e) {
+        var close = closestIn(e, '[data-close]');
+        if (close) { e.stopPropagation(); closeTab(close.getAttribute('data-close')); return; }
+        switchView(tab.id);
+      });
+      strip.appendChild(b);
+    });
+  }
+
+  function closeTab(id) {
+    if (state.tabs.length <= 1) return;
+    var idx = -1;
+    state.tabs.forEach(function (t, i) { if (t.id === id) idx = i; });
+    if (idx < 0) return;
+    state.tabs.splice(idx, 1);
+    if (state.view === id) {
+      var next = state.tabs[Math.max(0, idx - 1)];
+      switchView(next.id);
+    } else {
+      renderTabs();
+    }
+  }
+
+  function switchView(id) {
+    if (!VIEWS[id]) return;
+    state.view = id;
+    state.selected = VIEWS[id].defaultSel;
+    state.filter = '';
+    $('filterInput').value = '';
+    $('filterClear').hidden = true;
+    renderTabs();
+    renderBand();
+    renderDetails();
+    renderStatus();
+    renderPlaces();
+    startScan(650);
+  }
+
+  /* ======================= BAND RENDER ENGINE ======================= */
+
+  function filteredGroups() {
+    var q = state.filter.trim().toLowerCase();
+    var out = [];
+    visibleGroups().forEach(function (g) {
+      var items = g.items.filter(function (i) {
+        return !q || i.n.toLowerCase().indexOf(q) !== -1;
+      });
+      if (!items.length) return;
+      out.push({ id: g.id, label: g.label, items: sortedItems(items) });
+    });
+    return out;
+  }
+
+  function flatFilteredItems() {
+    var q = state.filter.trim().toLowerCase();
+    var all = [];
+    visibleGroups().forEach(function (g) {
+      g.items.forEach(function (i) {
+        if (!q || i.n.toLowerCase().indexOf(q) !== -1) all.push(i);
+      });
+    });
+    return sortedItems(all);
+  }
+
+  function finishBand(visible) {
+    $('bandEmpty').hidden = visible > 0;
+    $('bandInner').hidden = visible === 0;
+  }
+
+  function renderBand() {
+    var band = $('band'), inner = $('bandInner');
+    band.className = 'band';
+    inner.className = 'band-inner';
+    inner.textContent = '';
+    if (state.viewMode === 'icons') {
+      band.classList.add('is-icons');
+      inner.classList.add('icons-inner');
+      renderIcons(inner);
+    } else if (state.viewMode === 'details') {
+      band.classList.add('is-details');
+      inner.classList.add('details-inner');
+      renderDetailsView(inner);
+    } else if (state.grouping === 'none') {
+      band.classList.add('is-columns', 'is-ungrouped');
+      inner.classList.add('columns-flat');
+      renderColumnsUngrouped(inner);
+    } else {
+      band.classList.add('is-columns');
+      renderColumns(inner);
+    }
+  }
+
+  /* ------------------------------ icons ------------------------------ */
+
+  function renderIcons(inner) {
+    var visible = 0;
+    if (state.grouping === 'none') {
+      var items = flatFilteredItems();
+      visible = items.length;
+      if (items.length) {
+        var flat = document.createElement('div');
+        flat.className = 'icon-grid is-flat';
+        items.forEach(function (it) { flat.appendChild(iconTile(it)); });
+        inner.appendChild(flat);
+      }
+    } else {
+      filteredGroups().forEach(function (g) {
+        visible += g.items.length;
+        var sec = document.createElement('section');
+        sec.className = 'icon-section';
+        var head = document.createElement('div');
+        head.className = 'icon-section-head';
+        head.innerHTML = '<span class="is-label">' + esc(g.label) + '</span>' +
+          '<span class="is-count">' + g.items.length + '</span>';
+        var grid = document.createElement('div');
+        grid.className = 'icon-grid';
+        g.items.forEach(function (it) { grid.appendChild(iconTile(it)); });
+        sec.appendChild(head);
+        sec.appendChild(grid);
+        inner.appendChild(sec);
+      });
+    }
+    finishBand(visible);
+  }
+
+  function iconTile(it) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'icon-tile' + (it.n === state.selected ? ' is-selected' : '') + (it.hidden ? ' is-hidden' : '');
+    b.setAttribute('data-name', it.n);
+    b.title = it.n;
+    b.innerHTML =
+      '<span class="it-icon">' + ICON(it.k === 'file' ? 'i-file-fill' : 'i-folder-fill', 'var(--tile-icon)') + '</span>' +
+      '<span class="it-name">' + esc(it.n) + '</span>' +
+      '<span class="it-size">' + esc(it.s) + '</span>' +
+      '<span class="it-date">' + esc(it.d) + '</span>';
+    b.addEventListener('click', function () { selectItem(it.n, b); });
+    return b;
+  }
+
+  /* ---------------------------- details view ------------------------ */
+
+  function renderDetailsView(inner) {
+    var visible = 0;
+    inner.appendChild(detailsHeadEl());
+    if (state.grouping === 'none') {
+      var items = flatFilteredItems();
+      visible = items.length;
+      items.forEach(function (it) { inner.appendChild(detailsRowEl(it)); });
+    } else {
+      filteredGroups().forEach(function (g) {
+        visible += g.items.length;
+        inner.appendChild(detailsGroupEl(g.label, g.items.length));
+        g.items.forEach(function (it) { inner.appendChild(detailsRowEl(it)); });
+      });
+    }
+    finishBand(visible);
+  }
+
+  function detailsHeadEl() {
+    var h = document.createElement('div');
+    h.className = 'details-head';
+    h.innerHTML =
+      '<span class="dt-h name">Имя</span>' +
+      '<span class="dt-h size">Размер</span>' +
+      '<span class="dt-h date">Изменён</span>' +
+      '<span class="dt-h type">Тип</span>';
+    return h;
+  }
+
+  function detailsGroupEl(label, count) {
+    var h = document.createElement('div');
+    h.className = 'details-group';
+    h.innerHTML = '<span class="dg-label">' + esc(label) + '</span>' +
+      '<span class="dg-count">' + count + '</span>';
+    return h;
+  }
+
+  function detailsRowEl(it) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'dt-row' + (it.n === state.selected ? ' is-selected' : '') + (it.hidden ? ' is-hidden' : '');
+    b.setAttribute('data-name', it.n);
+    b.title = it.n + ' — ' + it.s;
+    b.innerHTML =
+      '<span class="dt-name">' +
+        '<span class="dt-icon">' + ICON(it.k === 'file' ? 'i-file-fill' : 'i-folder-fill', '16px') + '</span>' +
+        '<span class="dt-label">' + esc(it.n) + '</span>' +
+      '</span>' +
+      '<span class="dt-size">' + esc(it.s) + '</span>' +
+      '<span class="dt-date">' + esc(it.d) + '</span>' +
+      '<span class="dt-type">' + (it.k === 'file' ? 'Файл' : 'Папка') + '</span>';
+    b.addEventListener('click', function () { selectItem(it.n, b); });
+    return b;
+  }
+
+  /* ------------------------------ columns --------------------------- */
+
+  function renderColumns(inner) {
+    var groups = filteredGroups();
+    var visible = 0;
+
+    groups.forEach(function (g) {
+      var items = g.items;
+      visible += items.length;
+
+      var collapsed = !!state.collapsed[colKey(g.id)];
+      var col = document.createElement('div');
+      col.className = 'column';
+
+      var head = document.createElement('button');
+      head.type = 'button';
+      head.className = 'col-head';
+      head.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      head.title = collapsed ? 'Развернуть группу' : 'Свернуть группу';
+      head.innerHTML = '<span class="col-label">' + esc(g.label) + '</span>' +
+        '<span class="col-count">' + items.length + '</span>';
+      head.addEventListener('click', function () {
+        state.collapsed[colKey(g.id)] = !collapsed;
+        renderBand();
+      });
+      col.appendChild(head);
+
+      var body = document.createElement('div');
+      body.className = 'col-items';
+      if (collapsed) {
+        var hint = document.createElement('span');
+        hint.className = 'col-collapsed';
+        hint.textContent = objectsWord(items.length);
+        body.appendChild(hint);
+      } else {
+        items.forEach(function (it) { body.appendChild(itemEl(it)); });
+      }
+      col.appendChild(body);
+      inner.appendChild(col);
+    });
+
+    finishBand(visible);
+  }
+
+  function renderColumnsUngrouped(inner) {
+    var items = flatFilteredItems();
+    if (!items.length) { finishBand(0); return; }
+    var perColumn = 6;
+    for (var i = 0; i < items.length; i += perColumn) {
+      var col = document.createElement('div');
+      col.className = 'column is-flat';
+      var body = document.createElement('div');
+      body.className = 'col-items';
+      items.slice(i, i + perColumn).forEach(function (it) { body.appendChild(itemEl(it)); });
+      col.appendChild(body);
+      inner.appendChild(col);
+    }
+    finishBand(items.length);
+  }
+
+  function itemEl(it) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'col-item' + (it.n === state.selected ? ' is-selected' : '') + (it.hidden ? ' is-hidden' : '');
+    b.setAttribute('data-name', it.n);
+    b.title = it.n;
+    b.innerHTML =
+      '<span class="ci-icon">' + ICON(it.k === 'file' ? 'i-file-fill' : 'i-folder-fill', 'var(--icon-size)') + '</span>' +
+      '<span class="ci-text">' +
+        '<span class="ci-name od-truncate">' + esc(it.n) + '</span>' +
+        '<span class="ci-size">' + esc(it.s) + '</span>' +
+        '<span class="ci-date">' + esc(it.d) + '</span>' +
+      '</span>';
+    b.addEventListener('click', function () { selectItem(it.n, b); });
+    return b;
+  }
+
+  function selectItem(name, el) {
+    state.selected = name;
+    Array.prototype.forEach.call(document.querySelectorAll('#band .is-selected'), function (n) {
+      n.classList.remove('is-selected');
+    });
+    if (el) el.classList.add('is-selected');
+    renderDetails();
+  }
+
+  /* ============================ DETAILS ============================ */
+
+  function renderDetails() {
+    var body = $('detailBody');
+    var sel = findSelected();
+    body.textContent = '';
+    if (state.rightOpen) $('rightTitle').textContent = RIGHT_VIEWS[state.rightView] || 'Сведения';
+
+    if (!sel) {
+      body.innerHTML = '<div class="p-empty"><strong>Объект не выбран</strong>' +
+        'Выберите элемент в списке, чтобы увидеть его свойства.</div>';
+      return;
+    }
+    var it = sel.item, view = currentView();
+    var isFile = it.k === 'file';
+    var typeName = isFile ? 'Файл' : 'Папка';
+    var perms = isFile ? '-rw-r--r--' : 'drwxr-xr-x';
+    var path = view.path + '/' + it.n;
+
+    var card = document.createElement('div');
+    card.className = 'detail-card';
+    card.innerHTML =
+      '<span class="dc-icon">' + ICON(isFile ? 'i-file-fill' : 'i-folder-fill', '64px') + '</span>' +
+      '<span class="dc-name">' + esc(it.n) + '</span>' +
+      '<span class="dc-type">' + typeName + '</span>';
+    body.appendChild(card);
+
+    var meta = document.createElement('div');
+    meta.className = 'meta-list';
+    meta.innerHTML =
+      row('Тип', typeName) +
+      row('Размер', it.s, true) +
+      row('Изменён', it.d, true) +
+      row('Создан', it.c, true) +
+      row('Владелец', 'frimm', true) +
+      row('Группа', 'frimm', true) +
+      row('Права', perms, true) +
+      rowPath('Путь', path);
+    body.appendChild(meta);
+
+    if (state.rightView === 'preview') return;
+
+    var acc = document.createElement('span');
+    acc.className = 'sub-title';
+    acc.textContent = 'Доступ';
+    body.appendChild(acc);
+    var accList = document.createElement('div');
+    accList.className = 'meta-list';
+    accList.innerHTML =
+      row('Владелец', 'чтение, запись') +
+      row('Группа', 'чтение') +
+      row('Остальные', 'чтение');
+    body.appendChild(accList);
+
+    var cont = document.createElement('span');
+    cont.className = 'sub-title';
+    cont.textContent = 'Содержимое';
+    body.appendChild(cont);
+    var contList = document.createElement('div');
+    contList.className = 'meta-list';
+    contList.innerHTML =
+      row('Папок', '127', true) +
+      row('Файлов', '19', true);
+    body.appendChild(contList);
+  }
+
+  function row(label, value, mono) {
+    return '<div class="meta-row"><span class="meta-label">' + esc(label) + '</span>' +
+      '<span class="meta-value' + (mono ? ' mono' : '') + '">' + esc(value) + '</span></div>';
+  }
+  function rowPath(label, value) {
+    return '<div class="meta-row path"><span class="meta-label">' + esc(label) + '</span>' +
+      '<span class="meta-value mono">' + esc(value) + '</span></div>';
+  }
+
+  /* ============================ PLACES ============================ */
+
+  function renderPlaces() {
+    var list = $('placesList');
+    list.textContent = '';
+    $('leftTitle').textContent = LEFT_VIEWS[state.leftView] || 'Места';
+    var q = state.placesQuery.trim().toLowerCase();
+    var count = 0;
+
+    if (state.leftView === 'places' || state.leftView === 'files') {
+      var tree = state.leftView === 'places' ? PLACES_TREE : FILES_TREE;
+      if (state.placesSorted) {
+        tree = tree.slice().sort(function (a, b) { return a.label.localeCompare(b.label, 'ru'); });
+      }
+      tree.forEach(function (node) { count += renderNode(node, 0, q, list); });
+    } else if (state.leftView === 'bookmarks') {
+      BOOKMARKS.forEach(function (b) {
+        if (q && b.label.toLowerCase().indexOf(q) === -1) return;
+        count++;
+        list.appendChild(placeRow({
+          id: b.id, label: b.label, icon: b.icon, selected: state.placesSelected === b.id,
+          sub: b.path, subMono: true, view: b.view
+        }));
+      });
+    } else if (state.leftView === 'recent') {
+      var recent = [];
+      currentView().groups.forEach(function (g) {
+        g.items.forEach(function (i) { recent.push(i); });
+      });
+      recent = recent.slice(0, 8);
+      recent.forEach(function (i) {
+        if (q && i.n.toLowerCase().indexOf(q) === -1) return;
+        count++;
+        list.appendChild(placeRow({
+          id: 'r-' + i.n, label: i.n, icon: i.k === 'file' ? 'i-file-fill' : 'i-folder-fill',
+          selected: state.placesSelected === 'r-' + i.n, sub: i.d, subMono: true
+        }));
+      });
+    } else if (state.leftView === 'devices') {
+      DEVICES.forEach(function (d) {
+        if (q && d.label.toLowerCase().indexOf(q) === -1) return;
+        count++;
+        list.appendChild(placeRow({
+          id: d.id, label: d.label, icon: d.icon, selected: state.placesSelected === d.id
+        }));
+        list.appendChild(usageBar(d.usage, 0));
+      });
+    } else if (state.leftView === 'network') {
+      if (!q || 'сеть'.indexOf(q) !== -1) {
+        count++;
+        list.appendChild(placeRow({ id: 'n-net', label: 'Сеть', icon: 'i-network', sub: 'Подключено' }));
+      }
+    } else if (state.leftView === 'trash') {
+      if (!q) {
+        var e = document.createElement('div');
+        e.className = 'p-empty';
+        e.innerHTML = '<strong>Корзина пуста</strong>Удалённые файлы появятся здесь.';
+        list.appendChild(e);
+      }
+    }
+
+    if (q && count === 0 && state.leftView !== 'trash') {
+      var empty = document.createElement('div');
+      empty.className = 'p-empty';
+      empty.innerHTML = '<strong>Ничего не найдено</strong>Попробуйте другой запрос.';
+      list.appendChild(empty);
+    }
+  }
+
+  function renderNode(node, depth, q, container) {
+    var kids = node.children || [];
+    if (state.placesFilterFolders && node.kind === 'group' &&
+        (node.id === 'p-devices' || node.id === 'p-net')) {
+      return 0;
+    }
+    var matchSelf = !q || node.label.toLowerCase().indexOf(q) !== -1;
+    var matchKids = kids.filter(function (k) {
+      return !q || k.label.toLowerCase().indexOf(q) !== -1;
+    });
+    if (q && !matchSelf && !matchKids.length) return 0;
+
+    var key = 'pc-' + node.id;
+    var expanded = state.placesCollapsed[key] ? false : true;
+    var row = placeRow({
+      id: node.id, label: node.label, icon: node.icon, depth: depth,
+      group: node.kind === 'group', hasKids: kids.length > 0, expanded: expanded,
+      selected: state.placesSelected === node.id
+    });
+    container.appendChild(row);
+    if (node.usage) container.appendChild(usageBar(node.usage, depth));
+    var count = 1;
+
+    if (kids.length && expanded) {
+      kids.forEach(function (k) { count += renderNode(k, depth + 1, q, container); });
+    }
+    return count;
+  }
+
+  function placeRow(o) {
+    var row = document.createElement('div');
+    row.className = 'p-row' + (o.group ? ' is-group' : '') + (o.selected ? ' is-selected' : '');
+    row.tabIndex = 0;
+    row.setAttribute('role', 'button');
+    row.setAttribute('data-id', o.id);
+    if (o.hasKids) row.setAttribute('aria-expanded', o.expanded ? 'true' : 'false');
+
+    var twisty = document.createElement('span');
+    twisty.className = 'p-twisty';
+    if (o.hasKids) {
+      twisty.innerHTML = ICON(o.expanded ? 'i-down' : 'i-right', '16px');
+      twisty.addEventListener('click', function (e) {
+        e.stopPropagation();
+        toggleNode(o.id);
+      });
+    }
+    row.appendChild(twisty);
+
+    if (o.depth) {
+      var ind = document.createElement('span');
+      ind.className = 'p-indent';
+      row.appendChild(ind);
+    }
+
+    if (o.icon) {
+      var ic = document.createElement('span');
+      ic.className = 'p-icon';
+      ic.innerHTML = ICON(o.icon, '16px');
+      row.appendChild(ic);
+    }
+
+    var lbl = document.createElement('span');
+    lbl.className = 'p-label';
+    lbl.textContent = o.label;
+    row.appendChild(lbl);
+
+    if (o.sub) {
+      var sub = document.createElement('span');
+      sub.className = 'p-sub' + (o.subMono ? ' mono' : '');
+      sub.textContent = o.sub;
+      row.appendChild(sub);
+    }
+
+    row.addEventListener('click', function () { activatePlace(o); });
+    row.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activatePlace(o); }
+    });
+    return row;
+  }
+
+  function usageBar(usage, depth) {
+    var bar = document.createElement('div');
+    bar.className = 'usage';
+    bar.style.marginLeft = (52 + (depth || 0) * 22) + 'px';
+    bar.innerHTML = '<span style="width:' + usage + '%"></span>';
+    return bar;
+  }
+
+  function toggleNode(id) {
+    var key = 'pc-' + id;
+    state.placesCollapsed[key] = !state.placesCollapsed[key];
+    renderPlaces();
+  }
+
+  function activatePlace(o) {
+    if (o.group) {
+      toggleNode(o.id);
+      return;
+    }
+    state.placesSelected = o.id;
+    if (o.view) switchView(o.view);
+    renderPlaces();
+  }
+
+  /* ============================ STATUS ============================ */
+
+  function renderStatus() {
+    var view = currentView();
+    $('locationLabel').textContent = view.path;
+    var loc = $('btnLocation');
+    if (loc) loc.title = view.path;
+  }
+
+  var scanTimer = null;
+  function setStatusText(text) {
+    var el = $('statusText');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle('is-scanning', text !== 'Готово.');
+  }
+  function startScan(delay) {
+    setStatusText('Сканирование…');
+    window.clearTimeout(scanTimer);
+    scanTimer = window.setTimeout(function () { setStatusText('Готово.'); }, delay || 700);
+  }
+
+  /* ============================ ZOOM ============================ */
+
+  function applyZoom() {
+    var s = state.zoom;
+    var colW = s <= 50 ? 200 + s * 0.72 : 236 + (s - 50) * 0.88;
+    var icon = Math.ceil(40 + s * 0.16);
+    var tileIcon = Math.round(48 + s * 0.24);
+    var pct = Math.round(85 + s * 0.3);
+    root.style.setProperty('--col-w', colW.toFixed(2) + 'px');
+    root.style.setProperty('--icon-size', icon + 'px');
+    root.style.setProperty('--tile-icon', tileIcon + 'px');
+    var zv = $('viewZoom');
+    if (zv) zv.value = String(s);
+    var zl = $('viewZoomValue');
+    if (zl) zl.textContent = pct + '%';
+  }
+
+  /* ============================ POPUPS ============================ */
+
+  var openPop = null;
+  function closePop() {
+    if (!openPop) return;
+    openPop.pop.hidden = true;
+    if (openPop.trigger) openPop.trigger.setAttribute('aria-expanded', 'false');
+    openPop = null;
+  }
+  function togglePop(pop, trigger) {
+    if (openPop && openPop.pop === pop) { closePop(); return; }
+    closePop();
+    pop.hidden = false;
+    openPop = { pop: pop, trigger: trigger };
+    if (trigger) trigger.setAttribute('aria-expanded', 'true');
+  }
+  document.addEventListener('click', function (e) {
+    if (!openPop) return;
+    if (openPop.pop.contains(e.target)) return;
+    if (openPop.trigger && openPop.trigger.contains(e.target)) return;
+    closePop();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closePop();
+  });
+
+  function bindPop(triggerId, popId) {
+    var t = $(triggerId), p = $(popId);
+    if (!t || !p) return;
+    t.addEventListener('click', function () { togglePop(p, t); });
+  }
+
+  function openViewPopover() {
+    var t = $('btnView'), p = $('popView');
+    if (!t || !p) return;
+    closePop();
+    syncViewPopover();
+    p.hidden = false;
+    openPop = { pop: p, trigger: t };
+    t.setAttribute('aria-expanded', 'true');
+  }
+
+  /* ============================ EVENTS ============================ */
+
+  function syncViewPopover() {
+    var p = $('popView');
+    if (!p) return;
+    p.querySelectorAll('[data-mode]').forEach(function (b) {
+      var on = b.getAttribute('data-mode') === state.viewMode;
+      b.classList.toggle('is-current', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+    p.querySelectorAll('[data-grouping]').forEach(function (b) {
+      var on = b.getAttribute('data-grouping') === state.grouping;
+      b.classList.toggle('is-current', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+    p.querySelectorAll('[data-sort-key]').forEach(function (b) {
+      var on = b.getAttribute('data-sort-key') === state.sort;
+      b.classList.toggle('is-current', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+    p.querySelectorAll('[data-sort-dir]').forEach(function (b) {
+      var on = b.getAttribute('data-sort-dir') === state.sortDir;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    var hiddenBox = p.querySelector('[data-check="hidden"]');
+    if (hiddenBox) {
+      hiddenBox.classList.toggle('is-checked', state.showHidden);
+      hiddenBox.setAttribute('aria-checked', state.showHidden ? 'true' : 'false');
+    }
+    var compactBox = p.querySelector('[data-check="compact"]');
+    if (compactBox) {
+      compactBox.classList.toggle('is-checked', state.compact);
+      compactBox.setAttribute('aria-checked', state.compact ? 'true' : 'false');
+    }
+  }
+
+  function setViewMode(mode) {
+    if (mode !== 'icons' && mode !== 'columns' && mode !== 'details') return;
+    if (mode === state.viewMode) return;
+    state.viewMode = mode;
+    syncViewPopover();
+    renderBand();
+    startScan(700);
+  }
+
+  function setGrouping(grouping) {
+    if (grouping !== 'date' && grouping !== 'none') return;
+    if (grouping === state.grouping) return;
+    state.grouping = grouping;
+    syncViewPopover();
+    renderBand();
+    startScan(700);
+  }
+
+  function setSort(sort) {
+    state.sort = sort;
+    syncViewPopover();
+    renderBand();
+    startScan(650);
+  }
+
+  function setSortDir(dir) {
+    state.sortDir = dir;
+    syncViewPopover();
+    renderBand();
+    startScan(650);
+  }
+
+  function toggleHidden(v) {
+    state.showHidden = v;
+    if (!v && state.selected.charAt(0) === '.') state.selected = currentView().defaultSel;
+    syncViewPopover();
+    renderBand();
+    renderDetails();
+    startScan(650);
+  }
+
+  function toggleCompact(v) {
+    state.compact = v;
+    $('appWindow').classList.toggle('is-compact', v);
+    syncViewPopover();
+  }
+
+  function resetSort() {
+    state.sort = 'date';
+    state.sortDir = 'desc';
+    syncViewPopover();
+    renderBand();
+    startScan(650);
+  }
+
+  function bandNote(text) {
+    var n = $('bandNote');
+    n.hidden = false;
+    n.textContent = text;
+    n.classList.add('is-visible');
+    window.clearTimeout(bandNote._t);
+    bandNote._t = window.setTimeout(function () {
+      n.classList.remove('is-visible');
+      window.setTimeout(function () { n.hidden = true; }, 140);
+    }, 2600);
+  }
+
+  /* ---------------------------- path editing ------------------------ */
+
+  var pathEditing = false;
+
+  function beginPathEdit() {
+    var anchor = $('pathAnchor'), edit = $('btnPathEdit'), input = $('pathInput');
+    if (!anchor || !edit || !input || pathEditing) return;
+    closePop();
+    pathEditing = true;
+    input.value = currentView().path;
+    anchor.hidden = true;
+    edit.hidden = true;
+    input.hidden = false;
+    input.focus();
+    input.select();
+  }
+
+  function endPathEdit() {
+    if (!pathEditing) return;
+    pathEditing = false;
+    $('pathAnchor').hidden = false;
+    $('btnPathEdit').hidden = false;
+    $('pathInput').hidden = true;
+  }
+
+  function cancelPathEdit() {
+    if (!pathEditing) return;
+    endPathEdit();
+    renderStatus();
+  }
+
+  function commitPathEdit() {
+    if (!pathEditing) return;
+    var input = $('pathInput');
+    var raw = input.value.trim();
+    var norm = raw.replace(/\/+$/, '') || '/';
+    var target = null;
+    Object.keys(VIEWS).forEach(function (id) {
+      if (VIEWS[id].path === norm) target = id;
+    });
+    endPathEdit();
+    if (target) {
+      if (target !== state.view) { switchView(target); }
+      else { renderStatus(); startScan(650); }
+    } else {
+      renderStatus();
+      bandNote('Путь недоступен');
+    }
+  }
+
+  function logLine(text) {
+    var pane = $('paneLog');
+    var d = new Date();
+    var stamp = [d.getHours(), d.getMinutes(), d.getSeconds()]
+      .map(function (v) { return (v < 10 ? '0' : '') + v; }).join(':');
+    var line = document.createElement('span');
+    line.className = 'log-line';
+    line.innerHTML = '[' + stamp + '] <b>синхронизация</b> — ' + esc(text);
+    pane.insertBefore(line, pane.firstChild);
+  }
+
+  function wireToolbar() {
+    bindPop('btnMenu', 'popMenu');
+    bindPop('btnLocation', 'popLocation');
+    bindPop('btnView', 'popView');
+    bindPop('btnSettings', 'popSettings');
+    bindPop('btnPlacesMenu', 'popPlaces');
+    bindPop('btnDetailsMenu', 'popDetails');
+
+    $('btnPathEdit').addEventListener('click', function (e) {
+      e.stopPropagation();
+      beginPathEdit();
+    });
+    $('pathInput').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); commitPathEdit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancelPathEdit(); }
+    });
+    $('pathInput').addEventListener('blur', function () {
+      if (pathEditing) cancelPathEdit();
+    });
+
+    $('popMenu').addEventListener('click', function (e) {
+      var b = closestIn(e, '[data-cmd]');
+      if (!b) return;
+      closePop();
+      var cmd = b.getAttribute('data-cmd');
+      if (cmd === 'sync') { logLine('готово'); switchBottom('log'); }
+      if (cmd === 'resetzoom') { resetZoom(); }
+    });
+
+    $('popSettings').addEventListener('click', function (e) {
+      var b = closestIn(e, '[data-cmd]');
+      if (!b) return;
+      closePop();
+      runCmd(b.getAttribute('data-cmd'));
+    });
+
+    $('popLocation').addEventListener('click', function (e) {
+      var b = closestIn(e, '[data-path]');
+      if (!b) return;
+      closePop();
+      var p = b.getAttribute('data-path');
+      if (p === '/home/frimm/.cache') switchView('cache');
+      else if (p === '/home/frimm/Загрузки') switchView('downloads');
+      else switchView('home');
+    });
+
+    $('popView').addEventListener('click', function (e) {
+      var modeBtn = closestIn(e, '[data-mode]');
+      if (modeBtn) { setViewMode(modeBtn.getAttribute('data-mode')); return; }
+      var groupBtn = closestIn(e, '[data-grouping]');
+      if (groupBtn) { setGrouping(groupBtn.getAttribute('data-grouping')); return; }
+      var keyBtn = closestIn(e, '[data-sort-key]');
+      if (keyBtn) { setSort(keyBtn.getAttribute('data-sort-key')); return; }
+      var dirBtn = closestIn(e, '[data-sort-dir]');
+      if (dirBtn) { setSortDir(dirBtn.getAttribute('data-sort-dir')); return; }
+      var checkBtn = closestIn(e, '[data-check]');
+      if (checkBtn) {
+        var key = checkBtn.getAttribute('data-check');
+        if (key === 'hidden') toggleHidden(!state.showHidden);
+        if (key === 'compact') toggleCompact(!state.compact);
+      }
+    });
+    $('btnUp').addEventListener('click', function () {
+      if (state.view === 'cache' || state.view === 'downloads') switchView('home');
+      else bandNote('Домашняя папка — верхний уровень дерева.');
+    });
+    $('btnFwd').addEventListener('click', function () {
+      var i = state.tabs.findIndex(function (t) { return t.id === state.view; });
+      var next = state.tabs[(i + 1) % state.tabs.length];
+      switchView(next.id);
+    });
+    $('btnPlacesRefresh').addEventListener('click', function () { renderPlaces(); });
+    $('btnPlacesFilter').addEventListener('click', function () {
+      state.placesFilterFolders = !state.placesFilterFolders;
+      renderPlaces();
+    });
+    $('btnPlacesSort').addEventListener('click', function () {
+      state.placesSorted = !state.placesSorted;
+      renderPlaces();
+    });
+    $('popPlaces').addEventListener('click', function (e) {
+      var b = closestIn(e, '[data-cmd]');
+      if (!b) return;
+      closePop();
+      var cmd = b.getAttribute('data-cmd');
+      var keys = Object.keys(state.placesCollapsed);
+      if (cmd === 'expandall') keys.forEach(function (k) { state.placesCollapsed[k] = false; });
+      if (cmd === 'collapseall') keys.forEach(function (k) { state.placesCollapsed[k] = true; });
+      renderPlaces();
+    });
+    $('popDetails').addEventListener('click', function (e) {
+      var b = closestIn(e, '[data-cmd]');
+      if (!b) return;
+      closePop();
+      runCmd(b.getAttribute('data-cmd'));
+    });
+  }
+
+  function runCmd(cmd) {
+    if (cmd === 'resetzoom') resetZoom();
+    if (cmd === 'clearfilter') { clearFilter(); }
+    if (cmd === 'resetsort') resetSort();
+    if (cmd === 'toggle-details') toggleRightPanel();
+    if (cmd === 'reveal') revealInTree();
+  }
+
+  function resetZoom() {
+    state.zoom = 50;
+    var zv = $('viewZoom');
+    if (zv) zv.value = '50';
+    applyZoom();
+  }
+  function clearFilter() {
+    state.filter = '';
+    $('filterInput').value = '';
+    $('filterClear').hidden = true;
+    renderBand();
+    startScan(600);
+  }
+
+  /* ============================ PANELS ============================ */
+
+  function setLeftView(view) {
+    state.leftView = view;
+    state.leftOpen = true;
+    root.style.setProperty('--left-w', '280px');
+    renderPlaces();
+    markRail('left', view);
+  }
+  function setRightView(view) {
+    state.rightView = view;
+    state.rightOpen = true;
+    root.style.setProperty('--right-w', '300px');
+    renderDetails();
+    markRail('right', view);
+  }
+  function toggleRightPanel() {
+    state.rightOpen = !state.rightOpen;
+    root.style.setProperty('--right-w', state.rightOpen ? '300px' : '0px');
+    renderDetails();
+  }
+  function markRail(side, action) {
+    document.querySelectorAll('.rail-btn[data-rail="' + side + '"]').forEach(function (b) {
+      b.classList.toggle('is-active', b.getAttribute('data-action') === action);
+    });
+  }
+
+  function wireRails() {
+    document.querySelectorAll('.rail-btn').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var side = b.getAttribute('data-rail');
+        var action = b.getAttribute('data-action');
+        if (side === 'left') { setLeftView(action); }
+        else { setRightView(action); }
+      });
+    });
+  }
+
+  function switchBottom(tab) {
+    state.bottomTab = tab;
+    document.querySelectorAll('.bw-tab').forEach(function (b) {
+      var on = b.getAttribute('data-btab') === tab;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    $('paneOps').hidden = tab !== 'ops';
+    $('paneLog').hidden = tab !== 'log';
+  }
+
+  /* ============================ ACTIONS ============================ */
+
+  function revealSelectedInBand() {
+    var sel = findSelected();
+    if (!sel) return;
+    if (state.viewMode === 'columns' && state.grouping === 'date') {
+      var key = colKey(sel.group.id);
+      if (state.collapsed[key]) { state.collapsed[key] = false; renderBand(); }
+    }
+    var nodes = Array.prototype.slice.call(document.querySelectorAll('#band [data-name]'));
+    var node = null;
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].getAttribute('data-name') === state.selected) { node = nodes[i]; break; }
+    }
+    if (node && node.scrollIntoView) node.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  function revealInTree() {
+    var sel = findSelected();
+    var view = currentView();
+    var parent = view.path.split('/').pop();
+    state.leftView = 'files';
+    state.leftOpen = true;
+    root.style.setProperty('--left-w', '280px');
+    var found = null;
+    (function walk(nodes) {
+      nodes.forEach(function (n) {
+        if (n.label === parent || n.label === view.path ||
+            (n.label.length > parent.length && n.label.slice(-parent.length) === '/' + parent)) {
+          found = n.id;
+        }
+        if (n.children) walk(n.children);
+      });
+    })(FILES_TREE);
+    state.placesSelected = found || 'f-root';
+    renderPlaces();
+    markRail('left', 'files');
+  }
+
+  /* ============================ WINDOW ============================ */
+
+  function fit() {
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = state.maximized
+      ? Math.min((vw - 16) / 1440, (vh - 16) / 900)
+      : Math.min(1, (vw - 48) / 1440, (vh - 48) / 900);
+    root.style.setProperty('--scale', Math.max(0.2, s).toFixed(4));
+  }
+
+  function wireWindow() {
+    $('btnMin').addEventListener('click', function () {
+      state.minimized = !state.minimized;
+      root.style.setProperty('--app-h', state.minimized ? '40px' : '900px');
+      this.title = state.minimized ? 'Развернуть' : 'Свернуть';
+    });
+    $('btnMax').addEventListener('click', function () {
+      state.maximized = !state.maximized;
+      this.title = state.maximized ? 'Восстановить' : 'Развернуть на весь экран';
+      fit();
+    });
+    $('btnClose').addEventListener('click', function () {
+      $('stage').style.display = 'none';
+      $('closedState').hidden = false;
+    });
+    $('btnReopen').addEventListener('click', function () {
+      $('stage').style.display = '';
+      $('closedState').hidden = true;
+    });
+    $('btnLeftToggle').addEventListener('click', function () {
+      state.leftOpen = !state.leftOpen;
+      root.style.setProperty('--left-w', state.leftOpen ? '280px' : '0px');
+    });
+    $('btnLeftHide').addEventListener('click', function () {
+      state.leftOpen = false;
+      root.style.setProperty('--left-w', '0px');
+    });
+    $('btnRightHide').addEventListener('click', function () {
+      toggleRightPanel();
+    });
+    window.addEventListener('resize', fit);
+  }
+
+  /* ============================ FILTER ============================ */
+
+  function wireFilter() {
+    $('filterInput').addEventListener('input', function () {
+      state.filter = this.value;
+      $('filterClear').hidden = !this.value;
+      renderBand();
+      startScan(600);
+    });
+    $('filterInput').addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { clearFilter(); }
+    });
+    $('filterClear').addEventListener('click', function () {
+      clearFilter();
+      $('filterInput').focus();
+    });
+    $('placesSearch').addEventListener('input', function () {
+      state.placesQuery = this.value;
+      renderPlaces();
+    });
+  }
+
+  function wireZoom() {
+    var slider = $('viewZoom');
+    if (!slider) return;
+    slider.addEventListener('input', function () {
+      state.zoom = parseInt(this.value, 10) || 0;
+      applyZoom();
+    });
+    slider.addEventListener('keydown', function (e) {
+      if (e.key === 'Home') { e.preventDefault(); state.zoom = 0; this.value = '0'; applyZoom(); }
+      if (e.key === 'End') { e.preventDefault(); state.zoom = 100; this.value = '100'; applyZoom(); }
+    });
+  }
+
+  /* ============================ BOTTOM ============================ */
+
+  function wireBottom() {
+    document.querySelectorAll('.bw-tab').forEach(function (b) {
+      b.addEventListener('click', function () { switchBottom(b.getAttribute('data-btab')); });
+    });
+    $('btnBottomMin').addEventListener('click', function () {
+      var collapsed = state.bottomCollapsed;
+      state.bottomCollapsed = !collapsed;
+      root.style.setProperty('--bottom-h', collapsed ? '180px' : '40px');
+      this.title = collapsed ? 'Свернуть панель' : 'Развернуть панель';
+      this.innerHTML = ICON(collapsed ? 'i-min' : 'i-max', '16px');
+    });
+    $('popBottom').addEventListener('click', function (e) {
+      var b = closestIn(e, '[data-cmd]');
+      if (!b) return;
+      closePop();
+      if (b.getAttribute('data-cmd') !== 'clearops') return;
+      var rows = Array.prototype.slice.call($('paneOps').querySelectorAll('.op-row'));
+      var removed = 0;
+      rows.forEach(function (r) {
+        var st = r.querySelector('.op-status');
+        if (st && st.classList.contains('done')) { r.remove(); removed++; }
+      });
+      updateBottomMenu();
+      if (!removed) bandNote('Нет завершённых операций — очищать нечего.');
+    });
+    updateBottomMenu();
+    $('btnOpen').addEventListener('click', function () {
+      revealSelectedInBand();
+    });
+    $('btnReveal').addEventListener('click', function () {
+      revealInTree();
+    });
+  }
+
+  function updateBottomMenu() {
+    var rows = $('paneOps').querySelectorAll('.op-row');
+    var done = 0;
+    Array.prototype.forEach.call(rows, function (r) {
+      var st = r.querySelector('.op-status');
+      if (st && st.classList.contains('done')) done++;
+    });
+    var item = $('popBottom').querySelector('[data-cmd="clearops"]');
+    if (!item) return;
+    item.disabled = done === 0;
+    item.style.opacity = done === 0 ? '0.5' : '';
+    item.style.cursor = done === 0 ? 'default' : '';
+    item.title = done === 0 ? 'Нет завершённых операций' : 'Удалить завершённые операции из списка';
+  }
+
+  /* ============================= INIT ============================== */
+
+  function applyHash() {
+    var h = (location.hash || '').replace(/^#/, '');
+    if (h === 'view') { openViewPopover(); return; }
+    if (h === 'icons' || h === 'details') { closePop(); setViewMode(h); return; }
+    if (h === 'ungrouped' || h === 'ungrouped-columns') {
+      closePop();
+      state.viewMode = 'columns';
+      state.grouping = 'none';
+      syncViewPopover();
+      renderBand();
+      return;
+    }
+    if (h === 'icons-ungrouped') {
+      closePop();
+      state.viewMode = 'icons';
+      state.grouping = 'none';
+      syncViewPopover();
+      renderBand();
+    }
+  }
+
+  function init() {
+    wireToolbar();
+    wireRails();
+    wireFilter();
+    wireZoom();
+    wireBottom();
+    wireWindow();
+    renderTabs();
+    renderBand();
+    renderDetails();
+    renderPlaces();
+    renderStatus();
+    switchBottom('ops');
+    applyZoom();
+    syncViewPopover();
+    fit();
+    applyHash();
+    startScan(900);
+    window.addEventListener('hashchange', applyHash);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>

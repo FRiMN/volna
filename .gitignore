@@ -1,0 +1,13 @@
+# runtime / temp
+.tmp/
+
+# scratch
+design/work/
+
+# logs
+*.log
+
+# os / editors
+.DS_Store
+Thumbs.db
+__pycache__/

@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>.cache — Волна</title>
+<style>
+/* OD-LAYOUT-PRIMITIVES v1 — structure only: display, flex/grid, overflow, wrapping, ratio, geometry.
+   Put this @layer first; product CSS outside the layer wins ordinary layout rules.
+   Native hidden and closed-dialog states take precedence over component display rules. */
+@layer od-layout {
+  [hidden]:not([hidden="until-found" i]) { display: none !important; }
+  dialog:not([open]) { display: none !important; }
+
+  :where(.od-stack,.od-row,.od-row-top,.od-cluster,.od-grid,.od-field,.od-stat,.od-cell,.od-tile) > :where(*) { min-width: 0; }
+
+  /* containers */
+  .od-stack   { display: flex; flex-direction: column; gap: var(--od-gap, 8px); }
+  .od-row     { display: flex; align-items: center; gap: var(--od-gap, 8px); }
+  .od-row-top { display: flex; align-items: flex-start; gap: var(--od-gap, 8px); }
+  .od-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--od-gap, 8px); }
+  .od-fill    { flex: 1 1 0; min-width: 0; }
+  .od-fixed   { flex: none; }
+  .od-grid    { display: grid; gap: var(--od-gap, 12px); grid-template-columns: repeat(var(--od-cols, 3), minmax(0, 1fr)); }
+
+  /* stacked information: each piece is its own line — never sibling inline spans */
+  .od-stat, .od-field, .od-cell { display: grid; gap: var(--od-gap, 2px); }
+  :where(.od-stat,.od-field,.od-cell) > :where(*) { display: block; }
+  .od-tile { display: grid; grid-template-rows: auto 1fr; }
+  :where(.od-tile) > :where(*) { display: block; }
+
+  /* media keeps its intrinsic ratio by default; never a distorted or cropped
+     cover by accident. height:auto lets the ratio win over an <img height="…">
+     attribute. Cropping to a uniform box is an explicit opt-in: set --od-ratio
+     AND add .od-media-cover together (per the core rule, only where a crop is
+     deliberate — tile thumbs, decorative fills — never on full-frame content). */
+  .od-media { display: block; width: 100%; height: auto; aspect-ratio: var(--od-ratio, auto); }
+  .od-media-cover { object-fit: cover; }
+
+  /* functional inline SVG icons opt into bounded geometry; content SVGs keep their own */
+  .od-icon { display: inline-block; inline-size: var(--od-icon-size, 1em); block-size: var(--od-icon-size, 1em); flex: none; }
+
+  /* data text only — authored copy is rewritten to its budget instead */
+  .od-truncate { display: block; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .od-clamp-2, .od-clamp-3 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  .od-clamp-2 { -webkit-line-clamp: 2; }
+  .od-clamp-3 { -webkit-line-clamp: 3; }
+  .od-lines-2 { min-height: calc(2 * 1.4em); }   /* block-level reservation for a shared baseline */
+  .od-nowrap  { white-space: nowrap; }           /* 数字+单位 · 价格+起 · 日期+星期 */
+  .od-keep    { word-break: keep-all; overflow-wrap: anywhere; } /* CJK labels break at spaces / <wbr> first */
+
+  /* screen skeleton (optional): bars take their own space, the middle scrolls — no padding guessed for chrome */
+  .od-screen { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; }
+  .od-scroll { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+
+  /* horizontal rail: the next item peeks at the edge; trailing room survives overflow */
+  .od-rail { display: flex; gap: var(--od-gap, 8px); overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none;
+             padding-inline: var(--od-rail-pad, 16px); scroll-padding-inline: var(--od-rail-pad, 16px); }
+  .od-rail::-webkit-scrollbar { display: none; }
+  :where(.od-rail) > :where(*) { flex: none; scroll-snap-align: start; }
+  :where(.od-rail) > :where(:last-child) { margin-inline-end: var(--od-rail-pad, 16px); }
+
+  .od-spacer { flex: none; visibility: hidden; pointer-events: none; }
+  .od-touch  { min-width: 44px; min-height: 44px; }
+}
+:root [hidden]:where(:not([hidden="until-found" i])) { display: none; }
+/* /OD-LAYOUT-PRIMITIVES v1 */
+
+/* ---------------------------------------------------------------- tokens */
+:root{
+  --window-frame:#444343;
+  --chrome:#282727;
+  --chrome-hover:#3c3b3b;
+  --base-bg:#181616;
+  --view-bg:#0d0c0c;
+  --zebra:#12120f;
+  --chrome-divider:#4f504f;
+  --row-divider:#424241;
+  --field-border:#434342;
+  --location-border:#3d3e3e;
+  --sidebar-sep:#2a2828;
+  --scrollbar-side:#363534; --scrollbar-edge:#5e5f5d;
+  --scrollbar-h:#3a3d3e; --scrollbar-h-light:#596063;
+  --text-primary:#d9dcd9;
+  --text-secondary:#a1a49f;
+  --text-muted:#8b8e88;
+  --text-disabled:#6a6b68;
+  --view-focus:#8da4a8; --view-focus-2:#8ba2a6;
+  --group-divider:#292727;
+  --toggle-checked:#3c3b3b; --toggle-border:#575856;
+  --accent:#455661;
+  --accent-fill:#23333f;
+  --selected-tint:#2d4f67;
+  --hover-tint:#262525;
+  --cell-hover:#1a1a19;
+  --salmon:#c4746e;
+  --folder-tab:#1e3545; --folder-body:#2d4f67; --folder-outline:#1d2e3a; --folder-bevel:#4b5d6a;
+  --placeholder:#8b8e88;
+  --checkbox-checked-fill:#1f2931; --checkbox-checked-border:#2d4f67; --checkbox-border:#4e4d4c;
+  --button-default-fill:#292f34; --button-default-border:#455661;
+  --button-disabled-fill:#262525; --button-disabled-border:#363535; --button-disabled-text:#757575;
+  --groove:#2a2828;
+  --knob-ring:#545756;
+  --win-glyph:#b9bdb9;
+  --font:"Noto Sans","Cantarell","DejaVu Sans",system-ui,sans-serif;
+  --zoom:1;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;padding:0}
+body{
+  background:#070707 radial-gradient(ellipse at 50% 38%, #161616 0%, #0a0a0a 55%, #050505 100%);
+  font-family:var(--font); font-size:13px; font-weight:400; line-height:18px;
+  color:var(--text-primary); overflow:hidden; -webkit-font-smoothing:antialiased;
+}
+button,input{font-family:inherit;font-size:13px;font-weight:400;color:inherit}
+button{background:none;border:0;padding:0;cursor:pointer}
+:focus{outline:none}
+:focus-visible{outline:1px solid var(--accent); outline-offset:-1px}
+.svg-defs{position:absolute;width:0;height:0;overflow:hidden}
+
+/* ---------------------------------------------------------------- stage + window */
+.stage{position:fixed;inset:0;display:grid;place-items:center;overflow:hidden}
+.window{
+  position:relative;width:1440px;height:900px;flex:none;
+  background:var(--base-bg);border-radius:6px;overflow:hidden;
+  transform-origin:center center;
+  box-shadow:0 0 0 1px var(--window-frame), 0 34px 90px rgba(0,0,0,.62), 0 4px 16px rgba(0,0,0,.5);
+  display:flex;flex-direction:column;
+}
+.hair{height:1px;flex:none;background:var(--chrome-divider)}
+.bgline{height:1px;flex:none;background:var(--base-bg)}
+.strip{height:7px;flex:none;background:var(--chrome)}
+.row-divider{background:var(--row-divider)}
+
+/* ---------------------------------------------------------------- titlebar */
+.titlebar{position:relative;height:36px;flex:none;background:var(--chrome);display:flex;align-items:center}
+.mark{position:absolute;left:10px;top:10px;width:16px;height:16px;color:var(--folder-body)}
+.tb-title{position:absolute;left:0;right:0;text-align:center;font-size:13px;line-height:36px;color:var(--text-primary);pointer-events:none}
+.tb-right{margin-left:auto;display:flex;align-items:center;padding-right:4px}
+.tbtn{
+  width:26px;height:26px;border-radius:4px;display:grid;place-items:center;color:var(--text-primary);
+  transition:background-color .1s linear,color .1s linear;
+}
+.tbtn:hover{background:var(--chrome-hover)}
+.tbtn:active{background:#333231}
+.tbtn[disabled]{color:#5e5f5d;cursor:default}
+.tbtn[disabled]:hover{background:transparent}
+.wc{color:var(--win-glyph)}
+.wc:hover{background:var(--chrome-hover)}
+.wc-close:hover{background:var(--salmon);color:#1a1a19}
+.wc-close:active{background:#b06a65;color:#1a1a19}
+
+/* ---------------------------------------------------------------- toolbar */
+.toolbar{position:relative;z-index:20;height:28px;flex:none;background:var(--chrome);display:flex;align-items:center;padding:0 6px}
+.toolbar .tbtn{color:var(--text-primary)}
+.toolbar .tbtn:disabled{color:#5e5f5d}
+.vdiv{width:1px;height:16px;background:var(--chrome-divider);margin:0 6px;flex:none}
+.viewmode{position:relative;margin:0 1px}
+.viewmode.is-active{background:var(--toggle-checked);border:1px solid var(--toggle-border)}
+.viewmode.is-active:hover{background:#454442}
+.viewmode .glyph{width:12px;height:12px;color:var(--text-primary)}
+.viewmode.is-active .glyph{color:#e6eae6}
+[data-tip]{position:relative}
+[data-tip]::after{
+  content:attr(data-tip);position:absolute;top:26px;left:50%;transform:translateX(-50%);
+  white-space:nowrap;background:var(--view-bg);border:1px solid var(--field-border);border-radius:4px;
+  color:var(--text-primary);font-size:13px;line-height:16px;padding:4px 9px;z-index:60;
+  display:none;pointer-events:none;
+}
+[data-tip]:hover::after{display:block}
+.viewmode[data-tip]::after{left:0;transform:none}
+
+/* location field */
+.loc{
+  position:relative;flex:1 1 auto;min-width:0;height:30px;margin:0 8px;
+  background:var(--view-bg);border:1px solid var(--location-border);border-radius:6px;
+  display:flex;align-items:center;gap:2px;padding:0 4px 0 8px;
+}
+.loc-path{flex:1 1 auto;display:flex;align-items:center;gap:2px;min-width:0;overflow:hidden;white-space:nowrap}
+.loc-seg{color:var(--text-primary);font-size:13px}
+.loc-seg.dim{color:var(--text-muted)}
+.loc-sep{width:9px;height:9px;color:var(--text-disabled);flex:none}
+.loc-input{flex:1;min-width:0;background:transparent;border:0;padding:0;color:var(--text-primary)}
+.loc-input::placeholder{color:var(--placeholder)}
+.loc-clear{
+  width:16px;height:16px;border-radius:50%;background:#cdd0cc;color:#1c1b1b;flex:none;
+  display:grid;place-items:center;margin-right:2px;
+}
+.loc-clear:hover{background:#e3e6e3}
+.loc-menu-btn{width:20px;height:20px;border-radius:4px;display:grid;place-items:center;color:var(--text-primary);flex:none}
+.loc-menu-btn:hover{background:var(--chrome-hover)}
+.pathmenu{
+  position:absolute;top:32px;right:4px;z-index:70;background:var(--chrome);
+  border:1px solid var(--toggle-border);border-radius:4px;padding:3px 0;min-width:170px;
+}
+.pathmenu button{display:block;width:100%;text-align:left;padding:4px 12px;color:var(--text-primary)}
+.pathmenu button:hover{background:var(--chrome-hover)}
+.toolbar .right-icons{display:flex;align-items:center}
+
+/* ---------------------------------------------------------------- content */
+.content{flex:1 1 auto;min-height:0;display:flex}
+
+/* ---------------------------------------------------------------- sidebar */
+.sidebar{width:272px;flex:none;background:var(--base-bg);display:flex;flex-direction:column;min-height:0}
+.panel{position:relative}
+.panel-a{height:300px;flex:none}
+.panel-b{flex:1 1 auto;min-height:0}
+.scroller{height:100%;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+.scroller::-webkit-scrollbar{display:none}
+.sb-track{position:absolute;top:0;right:0;bottom:0;width:25px;pointer-events:none}
+.sb-thumb{
+  position:absolute;left:50%;top:0;width:6px;transform:translateX(-50%);
+  background:var(--scrollbar-side);border:1px solid var(--scrollbar-edge);border-radius:6px;pointer-events:auto;
+}
+.sb-track.is-empty .sb-thumb{display:none}
+
+/* tree rows */
+.tree-row{height:22px;display:flex;align-items:center;padding:0 25px 0 12px;gap:4px;color:var(--text-primary);cursor:default}
+.tree-row:nth-child(even){background:var(--zebra)}
+.tree-row:hover{background:var(--hover-tint)}
+.tree-row.is-selected{background:var(--selected-tint);box-shadow:inset 0 0 0 1px var(--accent)}
+.tree-chev{width:10px;height:10px;color:var(--text-disabled);flex:none;transition:transform .12s linear}
+.tree-row.is-open .tree-chev{transform:rotate(90deg)}
+.tree-ico{width:16px;height:16px;flex:none;color:var(--text-secondary)}
+.tree-row.is-selected .tree-ico{color:var(--text-primary)}
+.tree-label{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* places rail */
+.places-scroll{padding-top:10px}
+.places-cap{margin:20px 30px 8px 12px;text-align:right;font-size:13px;color:var(--text-muted)}
+.places-cap:first-child{margin-top:0}
+.place-row{height:26px;display:flex;align-items:center;gap:6px;padding:0 25px 0 12px;color:var(--text-primary);cursor:default}
+.place-row:hover{background:var(--hover-tint)}
+.place-row.is-selected{background:var(--selected-tint);box-shadow:inset 0 0 0 1px var(--accent)}
+.place-ico{width:16px;height:16px;flex:none;color:var(--text-secondary)}
+.place-row.is-selected .place-ico{color:var(--text-primary)}
+.place-label{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.device-row{height:26px;display:flex;align-items:center;gap:6px;padding:0 25px 0 12px;cursor:default}
+.device-row:hover{background:var(--hover-tint)}
+.device-ico{width:16px;height:16px;flex:none;color:var(--salmon)}
+.device-label{font-size:13px;color:var(--salmon);white-space:nowrap}
+.device-bar{display:block;width:64px;height:3px;background:#3a3a39;border-radius:2px;margin-left:6px;overflow:hidden;flex:none}
+.device-fill{display:block;height:100%;background:var(--salmon);border-radius:2px}
+
+/* ---------------------------------------------------------------- view column */
+.viewcol{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;background:var(--base-bg)}
+.viewbox{
+  position:relative;flex:1 1 auto;min-height:0;background:var(--view-bg);
+  border:1px solid var(--view-focus);border-right-color:var(--view-focus-2);border-bottom-color:var(--view-focus-2);
+  overflow:hidden;
+}
+.view-scroll{position:absolute;inset:0;padding:17px 0 16px 15px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.view-scroll::-webkit-scrollbar{display:none}
+.columns{display:flex;align-items:stretch;height:100%}
+.col{flex:none;border-left:1px solid var(--group-divider)}
+.col:first-child{border-left:0}
+.col-head{height:46px;display:flex;align-items:flex-start;padding:11px 0 0 11px;font-size:13px;color:var(--text-muted);white-space:nowrap}
+.cell{height:101px;display:flex;align-items:flex-start;padding-left:11px;border-radius:2px;cursor:default}
+.cell:hover{background:var(--cell-hover)}
+.cell.is-selected{background:var(--selected-tint);box-shadow:inset 0 0 0 1px var(--accent)}
+.folder{--od-icon-size:calc(86px * var(--zoom));block-size:calc(78px * var(--zoom));flex:none;display:block}
+.cell-text{margin-left:calc(10px * var(--zoom));margin-top:12px;min-width:0}
+.cell-name,.cell-size,.cell-date{
+  font-size:calc(13px * var(--zoom));line-height:calc(18px * var(--zoom));
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.cell-name{color:var(--text-primary)}
+.cell-size,.cell-date{color:var(--text-secondary)}
+.empty-state{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;color:var(--text-muted)}
+.hscroll{position:absolute;left:15px;right:8px;bottom:3px;height:8px;pointer-events:none}
+.hthumb{
+  position:absolute;left:0;top:0;height:8px;border-radius:8px;
+  background:var(--scrollbar-h);border:1px solid var(--scrollbar-h-light);pointer-events:auto;cursor:default;
+}
+
+/* ---------------------------------------------------------------- filter bar */
+.filterbar{height:30px;flex:none;background:var(--base-bg);display:flex;align-items:center;gap:8px;padding:0 8px}
+.filter-glyph{--od-icon-size:16px;flex:none;color:var(--text-primary)}
+.filter-field{
+  flex:1 1 auto;min-width:0;height:29px;background:var(--view-bg);
+  border:1px solid var(--field-border);border-radius:6px;display:flex;align-items:center;padding:0 8px;
+}
+.filter-field input{width:100%;background:transparent;border:0;padding:0;color:var(--text-primary)}
+.filter-field input::placeholder{color:var(--placeholder)}
+.clear-btn{width:18px;height:18px;flex:none;display:grid;place-items:center;color:var(--salmon);border-radius:4px}
+.clear-btn:hover{background:var(--hover-tint)}
+
+/* ---------------------------------------------------------------- status bar */
+.statusbar{height:31px;flex:none;background:var(--base-bg);display:flex;align-items:center;justify-content:space-between;padding:0 8px}
+.status-left{font-size:13px;color:var(--text-primary)}
+.status-right{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text-primary)}
+.zoom{position:relative;width:116px;height:14px;flex:none;cursor:default}
+.zoom-track{position:absolute;left:0;right:0;top:50%;height:4px;margin-top:-2px;background:var(--groove);border-radius:2px;overflow:hidden}
+.zoom-fill{position:absolute;left:0;top:0;bottom:0;background:var(--accent-fill);border-radius:2px}
+.zoom-knob{
+  position:absolute;top:50%;left:0;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;
+  background:var(--chrome);border:1px solid var(--knob-ring);
+}
+.freebar{width:70px;height:4px;background:var(--accent-fill);border-radius:2px;flex:none}
+
+/* ---------------------------------------------------------------- dialog */
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.45);display:grid;place-items:center;z-index:100}
+.dialog{
+  width:646px;height:364px;background:var(--base-bg);border:1px solid var(--window-frame);
+  border-radius:6px;overflow:hidden;display:flex;flex-direction:column;
+}
+.dlg-titlebar{position:relative;height:28px;flex:none;background:var(--chrome);display:flex;align-items:center}
+.dlg-titlebar .mark{left:9px;top:6px}
+.dlg-title{position:absolute;left:0;right:0;text-align:center;font-size:13px;line-height:28px;color:var(--text-primary);pointer-events:none}
+.dlg-tools{margin-left:auto;display:flex;align-items:center;padding-right:4px}
+.dlg-body{flex:1 1 auto;min-height:0;padding:10px 10px 10px 64px;display:flex;flex-direction:column}
+.dlg-row{display:flex;align-items:center;height:30px}
+.dlg-row + .dlg-row{margin-top:8px}
+.dlg-label{width:211px;text-align:right;color:var(--text-primary);white-space:nowrap}
+.dlg-ctrl{margin-left:9px;display:flex;align-items:center;gap:8px;min-width:0}
+.combo{
+  height:30px;background:var(--chrome);border:1px solid var(--toggle-border);border-radius:4px;
+  display:flex;align-items:center;gap:6px;padding:0 6px 0 8px;color:var(--text-primary);white-space:nowrap;
+}
+.combo:hover{background:#303030}
+.combo .combo-label{overflow:hidden;text-overflow:ellipsis}
+.combo .od-icon{color:var(--text-primary)}
+.combo .chev{margin-left:auto;color:var(--text-secondary)}
+.combo-mode{width:112px}
+.combo-sort-dir{width:136px}
+.combo-sort-key{width:175px}
+.combo-wrap{position:relative;display:flex}
+.popup{
+  position:absolute;top:32px;left:0;z-index:120;background:var(--chrome);
+  border:1px solid var(--toggle-border);border-radius:8px;padding:4px 0;min-width:100%;
+}
+.popup button{display:flex;align-items:center;width:100%;text-align:left;padding:0 12px;height:26px;color:var(--text-primary);white-space:nowrap}
+.popup button:hover{background:var(--chrome-hover)}
+.popup button.is-current{color:var(--text-primary)}
+.popup button.is-current::before{content:"";width:9px;height:5px;margin-right:8px;flex:none;
+  border-left:1.5px solid var(--text-secondary);border-bottom:1.5px solid var(--text-secondary);
+  transform:rotate(-45deg) translateY(-1px)}
+.dlg-section{width:211px;margin-top:10px;height:18px;text-align:right;color:var(--text-primary)}
+.dlg-checks{margin-top:4px;margin-left:0}
+.check{display:flex;align-items:center;gap:7px;height:28px;color:var(--text-primary);cursor:default}
+.check .box{
+  width:16px;height:16px;flex:none;border-radius:2px;border:1px solid var(--checkbox-border);
+  background:var(--view-bg);display:grid;place-items:center;
+}
+.check.is-checked .box{background:var(--checkbox-checked-fill);border-color:var(--checkbox-checked-border)}
+.check .ck{color:var(--text-primary);opacity:0}
+.check.is-checked .ck{opacity:1}
+.check-label{font-size:13px;white-space:nowrap}
+.dlg-expander{margin-top:6px;margin-left:23px;height:24px;display:flex;align-items:center;gap:6px;color:var(--text-muted)}
+.dlg-expander .chev{width:10px;height:10px;transition:transform .12s linear}
+.dlg-expander.is-open .chev{transform:rotate(90deg)}
+.dlg-buttons{margin-top:auto;height:32px;display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-right:0}
+.dlg-btn{
+  height:32px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  border:1px solid var(--toggle-border);border-radius:4px;background:var(--chrome);color:var(--text-primary);
+}
+.dlg-btn:hover{background:#303030}
+.dlg-btn.primary{background:var(--button-default-fill);border-color:var(--button-default-border)}
+.dlg-btn.primary:hover{background:#323a41}
+.dlg-btn[disabled]{background:var(--button-disabled-fill);border-color:var(--button-disabled-border);color:var(--button-disabled-text);cursor:default}
+.dlg-btn[disabled]:hover{background:var(--button-disabled-fill)}
+#dlgOk{width:83px}
+#dlgApply{width:107px}
+#dlgCancel{width:82px}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition:none !important}
+}
+</style>
+</head>
+<body>
+
+<svg class="svg-defs" aria-hidden="true" focusable="false"><defs>
+  <symbol id="i-mark" viewBox="0 0 16 16">
+    <path d="M1.6 4.6a1 1 0 0 1 1-1h4.1l1.5 1.7h5.2a1 1 0 0 1 1 1v6.1a1 1 0 0 1-1 1H2.6a1 1 0 0 1-1-1z" fill="#2d4f67" stroke="#1d2e3a"/>
+    <path d="M3.1 9.6c1.5-1.3 2.4 1.3 3.9 0s2.4 1.3 3.9 0 2.4 1.3 3.9 0" fill="none" stroke="#8da4a8" stroke-width="1" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="i-folder" viewBox="0 0 86 78">
+    <path d="M2 20V7.5A2.5 2.5 0 0 1 4.5 5h22l8.5 7H38a2 2 0 0 1 2 2v6z" fill="#1e3545" stroke="#1d2e3a"/>
+    <path d="M2 18h80a2 2 0 0 1 2 2v52a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V20a2 2 0 0 1 2-2z" fill="#2d4f67" stroke="#1d2e3a"/>
+    <path d="M1.5 19.5h81" fill="none" stroke="#4b5d6a"/>
+  </symbol>
+  <symbol id="i-folder-small" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round">
+    <path d="M2.2 4.3a.9.9 0 0 1 .9-.9h3.2l1.3 1.5h5.5a.9.9 0 0 1 .9.9v6.3a.9.9 0 0 1-.9.9H3.1a.9.9 0 0 1-.9-.9z"/>
+  </symbol>
+  <symbol id="i-chev-left" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 3 5 8l5 5"/>
+  </symbol>
+  <symbol id="i-chev-right" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 3l5 5-5 5"/>
+  </symbol>
+  <symbol id="i-chev-up" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 10l5-5 5 5"/>
+  </symbol>
+  <symbol id="i-chev-down" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 6l5 5 5-5"/>
+  </symbol>
+  <symbol id="i-grid" viewBox="0 0 12 12" fill="currentColor">
+    <rect x="0" y="0" width="5" height="5" rx="1"/><rect x="7" y="0" width="5" height="5" rx="1"/>
+    <rect x="0" y="7" width="5" height="5" rx="1"/><rect x="7" y="7" width="5" height="5" rx="1"/>
+  </symbol>
+  <symbol id="i-columns" viewBox="0 0 12 12" fill="currentColor">
+    <rect x="0" y="1" width="3" height="10" rx="1"/><rect x="4.5" y="4" width="3" height="7" rx="1"/><rect x="9" y="6" width="3" height="5" rx="1"/>
+  </symbol>
+  <symbol id="i-cascade" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.1">
+    <rect x="0" y="0" width="7" height="7" rx="1"/><rect x="5" y="5" width="7" height="7" rx="1"/>
+  </symbol>
+  <symbol id="i-details" viewBox="0 0 12 12" fill="currentColor">
+    <rect x="0" y="1" width="12" height="1.6" rx=".8"/><rect x="0" y="5.2" width="8" height="1.6" rx=".8"/><rect x="0" y="9.4" width="10" height="1.6" rx=".8"/>
+  </symbol>
+  <symbol id="i-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 8.4 6.4 12 13 4.6"/>
+  </symbol>
+  <symbol id="i-check-sm" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2 6.2 4.8 9 10 3"/>
+  </symbol>
+  <symbol id="i-plus-square" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round">
+    <rect x="2" y="2" width="12" height="12" rx="1.5"/><path d="M8 5.4v5.2M5.4 8h5.2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="i-search" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+    <circle cx="7" cy="7" r="4.4"/><path d="M10.4 10.4 14 14"/>
+  </symbol>
+  <symbol id="i-menu" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+    <path d="M2.5 4h11M2.5 8h11M2.5 12h11"/>
+  </symbol>
+  <symbol id="i-close" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+    <path d="M4 4l8 8M12 4l-8 8"/>
+  </symbol>
+  <symbol id="i-help" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+    <path d="M6 6.1a2 2 0 1 1 2.7 1.9c-.6.2-.9.7-.9 1.3v.4"/><path d="M8 12.4h.01"/>
+  </symbol>
+  <symbol id="i-min" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+    <path d="M3.5 11.5h9"/>
+  </symbol>
+  <symbol id="i-max" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2">
+    <rect x="3.5" y="3.5" width="9" height="9" rx="1"/>
+  </symbol>
+  <symbol id="i-funnel" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round">
+    <path d="M2.2 3.4h11.6L9.3 8.9v4.3l-2.6 1.3V8.9z"/>
+  </symbol>
+  <symbol id="i-circle-x" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
+    <circle cx="8" cy="8" r="5.6"/><path d="M5.9 5.9l4.2 4.2M10.1 5.9l-4.2 4.2"/>
+  </symbol>
+  <symbol id="i-home" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2.5 7.2 8 2.6l5.5 4.6"/><path d="M4.2 7.6v5.2c0 .5.4.9.9.9h5.8c.5 0 .9-.4.9-.9V7.6"/>
+  </symbol>
+  <symbol id="i-desktop" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.2" y="3.2" width="11.6" height="8" rx="1"/><path d="M6 13.4h4"/>
+  </symbol>
+  <symbol id="i-doc" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round">
+    <path d="M4 2.6h5l3 3v7.8H4z"/><path d="M9 2.6v3h3"/>
+  </symbol>
+  <symbol id="i-download" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 2.8v6.6"/><path d="M5.2 6.6 8 9.4l2.8-2.8"/><path d="M2.9 11.5v1.6h10.2v-1.6"/>
+  </symbol>
+  <symbol id="i-music" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6.2 12V4.2l5.8-1.1v7.6"/><circle cx="4.4" cy="12.2" r="1.6"/><circle cx="10.2" cy="11.1" r="1.6"/>
+  </symbol>
+  <symbol id="i-image" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round">
+    <rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1"/><path d="M2.6 10.6 6 7.4l2.6 2.3 2.2-1.9 2.6 2.6"/>
+  </symbol>
+  <symbol id="i-video" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round">
+    <rect x="1.9" y="3.6" width="9.2" height="8.8" rx="1"/><path d="M11.1 7.4 14 5.6v4.8l-2.9-1.8z"/>
+  </symbol>
+  <symbol id="i-trash" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.4 4.7h9.2"/><path d="M6.4 4.7V3.3h3.2v1.4"/><path d="M4.7 4.7l.7 8.1h5.2l.7-8.1"/>
+  </symbol>
+  <symbol id="i-network" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
+    <circle cx="8" cy="3.6" r="1.7"/><circle cx="3.4" cy="12" r="1.7"/><circle cx="12.6" cy="12" r="1.7"/>
+    <path d="M6.9 5.1 4.5 10.5M9.1 5.1l2.4 5.4M5.1 12h5.8"/>
+  </symbol>
+  <symbol id="i-clock" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
+    <circle cx="8" cy="8" r="5.4"/><path d="M8 4.9V8l2.1 1.5"/>
+  </symbol>
+  <symbol id="i-pin" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round">
+    <path d="M8 14s4.2-4.6 4.2-7.4A4.2 4.2 0 0 0 8 2.4a4.2 4.2 0 0 0-4.2 4.2C3.8 9.4 8 14 8 14z"/><circle cx="8" cy="6.6" r="1.3"/>
+  </symbol>
+  <symbol id="i-drive" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
+    <rect x="2.2" y="4.4" width="11.6" height="7.2" rx="1.2"/><path d="M4.8 7.5h.01M6.6 7.5h.01"/><circle cx="11.2" cy="7.5" r=".8"/>
+  </symbol>
+</defs></svg>
+
+<div class="stage" id="stage">
+  <div class="window" id="window">
+
+    <!-- titlebar -->
+    <div class="titlebar">
+      <svg class="od-icon mark" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-mark"/></svg>
+      <div class="tb-title">.cache — Волна</div>
+      <div class="tb-right">
+        <button class="tbtn wc" type="button" aria-label="Справка"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button class="tbtn wc" type="button" aria-label="Свернуть"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-min"/></svg></button>
+        <button class="tbtn wc" type="button" aria-label="Развернуть"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-max"/></svg></button>
+        <button class="tbtn wc wc-close" type="button" aria-label="Закрыть"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-close"/></svg></button>
+      </div>
+    </div>
+    <div class="hair"></div>
+
+    <!-- toolbar -->
+    <div class="toolbar" role="toolbar" aria-label="Панель инструментов">
+      <button class="tbtn" id="navBack" type="button" aria-label="Назад"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-chev-left"/></svg></button>
+      <button class="tbtn" id="navFwd" type="button" aria-label="Вперёд" disabled><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-chev-right"/></svg></button>
+      <button class="tbtn" id="navUp" type="button" aria-label="Вверх"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-chev-up"/></svg></button>
+      <div class="vdiv"></div>
+
+      <button class="tbtn viewmode" type="button" data-mode="icons" data-tip="В этом макете показан режим «Столбцы»" aria-label="Значки" aria-pressed="false">
+        <svg class="od-icon glyph" style="--od-icon-size:12px" aria-hidden="true"><use href="#i-grid"/></svg>
+      </button>
+      <button class="tbtn viewmode is-active" type="button" id="viewColumns" data-mode="columns" data-tip="Режим просмотра…" aria-label="Столбцы" aria-pressed="true">
+        <svg class="od-icon glyph" style="--od-icon-size:12px" aria-hidden="true"><use href="#i-columns"/></svg>
+      </button>
+      <button class="tbtn viewmode" type="button" data-mode="cascade" data-tip="В этом макете показан режим «Столбцы»" aria-label="Каскадом" aria-pressed="false">
+        <svg class="od-icon glyph" style="--od-icon-size:12px" aria-hidden="true"><use href="#i-cascade"/></svg>
+      </button>
+      <button class="tbtn viewmode" type="button" data-mode="details" data-tip="В этом макете показан режим «Столбцы»" aria-label="Подробно" aria-pressed="false">
+        <svg class="od-icon glyph" style="--od-icon-size:12px" aria-hidden="true"><use href="#i-details"/></svg>
+      </button>
+
+      <div class="loc" id="loc">
+        <div class="loc-path" id="locPath">
+          <span class="loc-seg">/home</span>
+          <svg class="od-icon loc-sep" style="--od-icon-size:9px" aria-hidden="true"><use href="#i-chev-right"/></svg>
+          <span class="loc-seg">frimm</span>
+          <svg class="od-icon loc-sep" style="--od-icon-size:9px" aria-hidden="true"><use href="#i-chev-right"/></svg>
+          <span class="loc-seg">.cache</span>
+          <svg class="od-icon loc-sep" style="--od-icon-size:9px" aria-hidden="true"><use href="#i-chev-right"/></svg>
+          <span class="loc-seg dim">/</span>
+        </div>
+        <button class="loc-clear" type="button" id="locClear" aria-label="Очистить путь">
+          <svg class="od-icon" style="--od-icon-size:9px" aria-hidden="true"><use href="#i-close"/></svg>
+        </button>
+        <button class="loc-menu-btn" type="button" id="locMenuBtn" aria-label="Показать пути" aria-haspopup="true" aria-expanded="false">
+          <svg class="od-icon" style="--od-icon-size:12px" aria-hidden="true"><use href="#i-chev-down"/></svg>
+        </button>
+        <div class="pathmenu" id="pathMenu" hidden>
+          <button type="button" data-path="/home/frimm">Домашняя папка</button>
+          <button type="button" data-path="/home/frimm/.cache">.cache</button>
+        </div>
+      </div>
+
+      <div class="right-icons">
+        <button class="tbtn" type="button" aria-label="Принять"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-check"/></svg></button>
+        <button class="tbtn" type="button" aria-label="Новая вкладка"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-plus-square"/></svg></button>
+        <button class="tbtn" type="button" aria-label="Поиск"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-search"/></svg></button>
+        <button class="tbtn" type="button" aria-label="Главное меню"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-menu"/></svg></button>
+      </div>
+    </div>
+    <div class="hair"></div>
+    <div class="strip"></div>
+    <div class="hair"></div>
+    <div class="bgline"></div>
+
+    <!-- content -->
+    <div class="content">
+      <aside class="sidebar">
+        <div class="panel panel-a">
+          <div class="scroller" id="treeScroll">
+            <div class="tree-row" tabindex="0"><svg class="od-icon tree-chev" style="--od-icon-size:10px" aria-hidden="true"><use href="#i-chev-right"/></svg><svg class="od-icon tree-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-video"/></svg><span class="tree-label">Видео</span></div>
+            <div class="tree-row" tabindex="0"><svg class="od-icon tree-chev" style="--od-icon-size:10px" aria-hidden="true"><use href="#i-chev-right"/></svg><svg class="od-icon tree-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-doc"/></svg><span class="tree-label">Документы</span></div>
+            <div class="tree-row" tabindex="0"><svg class="od-icon tree-chev" style="--od-icon-size:10px" aria-hidden="true"><use href="#i-chev-right"/></svg><svg class="od-icon tree-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-download"/></svg><span class="tree-label">Загрузки</span></div>
+            <div class="tree-row" tabindex="0"><svg class="od-icon tree-chev" style="--od-icon-size:10px" aria-hidden="true"><use href="#i-chev-right"/></svg><svg class="od-icon tree-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-image"/></svg><span class="tree-label">Изображения</span></div>
+            <div class="tree-row" tabindex="0"><svg class="od-icon tree-chev" style="--od-icon-size:10px" aria-hidden="true"><use href="#i-chev-right"/></svg><svg class="od-icon tree-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-music"/></svg><span class="tree-label">Музыка</span></div>
+            <div class="tree-row" tabindex="0"><svg class="od-icon tree-chev" style="--od-icon-size:10px" aria-hidden="true"><use href="#i-chev-right"/></svg><svg class="od-icon tree-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-network"/></svg><span class="tree-label">Общедоступные</span></div>
+            <div class="tree-row" tabindex="0"><svg class="od-icon tree-chev" style="--od-icon-size:10px" aria-hidden="true"><use href="#i-chev-right"/></svg><svg class="od-icon tree-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-desktop"/></svg><span class="tree-label">Рабочий стол</span></div>
+            <div class="tree-row" tabindex="0"><svg class="od-icon tree-chev" style="--od-icon-size:10px" aria-hidden="true"><use href="#i-chev-right"/></svg><svg class="od-icon tree-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-doc"/></svg><span class="tree-label">Шаблоны</span></div>
+            <div class="tree-row" tabindex="0"><svg class="od-icon tree-chev" style="--od-icon-size:10px" aria-hidden="true"><use href="#i-chev-right"/></svg><svg class="od-icon tree-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-folder-small"/></svg><span class="tree-label">any-limb</span></div>
+            <div class="tree-row" tabindex="0"><svg class="od-icon tree-chev" style="--od-icon-size:10px" aria-hidden="true"><use href="#i-chev-right"/></svg><svg class="od-icon tree-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-folder-small"/></svg><span class="tree-label">audacity4</span></div>
+            <div class="tree-row" tabindex="0"><svg class="od-icon tree-chev" style="--od-icon-size:10px" aria-hidden="true"><use href="#i-chev-right"/></svg><svg class="od-icon tree-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-folder-small"/></svg><span class="tree-label">backup</span></div>
+            <div class="tree-row" tabindex="0"><svg class="od-icon tree-chev" style="--od-icon-size:10px" aria-hidden="true"><use href="#i-chev-right"/></svg><svg class="od-icon tree-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-folder-small"/></svg><span class="tree-label">barbaros</span></div>
+          </div>
+          <div class="sb-track" data-track="treeScroll"><div class="sb-thumb"></div></div>
+        </div>
+
+        <div class="panel panel-b">
+          <div class="scroller places-scroll" id="placesScroll">
+            <div class="places-cap">Точки входа</div>
+            <div class="place-row is-selected" tabindex="0"><svg class="od-icon place-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-home"/></svg><span class="place-label">Домашняя папка</span></div>
+            <div class="place-row" tabindex="0"><svg class="od-icon place-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-desktop"/></svg><span class="place-label">Рабочий стол</span></div>
+            <div class="place-row" tabindex="0"><svg class="od-icon place-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-doc"/></svg><span class="place-label">Документы</span></div>
+            <div class="place-row" tabindex="0"><svg class="od-icon place-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-download"/></svg><span class="place-label">Загрузки</span></div>
+            <div class="place-row" tabindex="0"><svg class="od-icon place-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-music"/></svg><span class="place-label">Музыка</span></div>
+            <div class="place-row" tabindex="0"><svg class="od-icon place-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-image"/></svg><span class="place-label">Изображения</span></div>
+            <div class="place-row" tabindex="0"><svg class="od-icon place-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-video"/></svg><span class="place-label">Видеофайлы</span></div>
+            <div class="place-row" tabindex="0"><svg class="od-icon place-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-trash"/></svg><span class="place-label">Корзина</span></div>
+
+            <div class="places-cap">В сети</div>
+            <div class="place-row" tabindex="0"><svg class="od-icon place-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-network"/></svg><span class="place-label">Сеть</span></div>
+
+            <div class="places-cap">Недавно изменённые</div>
+            <div class="place-row" tabindex="0"><svg class="od-icon place-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-clock"/></svg><span class="place-label">Последние файлы</span></div>
+            <div class="place-row" tabindex="0"><svg class="od-icon place-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-pin"/></svg><span class="place-label">Последние расположения</span></div>
+
+            <div class="places-cap">Устройства</div>
+            <div class="device-row"><svg class="od-icon device-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-drive"/></svg><span class="device-label">archive6</span><span class="device-bar"><span class="device-fill" style="width:90%"></span></span></div>
+            <div class="device-row"><svg class="od-icon device-ico" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-drive"/></svg><span class="device-label">Models</span><span class="device-bar"><span class="device-fill" style="width:85%"></span></span></div>
+          </div>
+          <div class="sb-track" data-track="placesScroll"><div class="sb-thumb"></div></div>
+        </div>
+      </aside>
+
+      <div class="viewcol">
+        <div class="viewbox" id="viewbox">
+          <div class="view-scroll" id="viewScroll">
+            <div class="columns" id="columns">
+
+              <div class="col" style="width:224px">
+                <div class="col-head">Сегодня</div>
+                <div class="cell" tabindex="0" data-name="starshp"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">starshp</div><div class="cell-size">0 Б</div><div class="cell-date">Сегодня в 15:21</div></div></div>
+                <div class="cell is-selected" tabindex="0" data-name="uv"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">uv</div><div class="cell-size">16,6 ГиБ</div><div class="cell-date">Сегодня в 03:11</div></div></div>
+                <div class="cell" tabindex="0" data-name="gh"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">gh</div><div class="cell-size">5,9 КиБ</div><div class="cell-date">Сегодня в 02:56</div></div></div>
+              </div>
+
+              <div class="col" style="width:236px">
+                <div class="col-head">Вчера</div>
+                <div class="cell" tabindex="0" data-name="mc"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">mc</div><div class="cell-size">35 Б</div><div class="cell-date">Вчера в 15:06</div></div></div>
+                <div class="cell" tabindex="0" data-name="bookmarkrunner"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">bookmarkrunner</div><div class="cell-size">0 Б</div><div class="cell-date">Вчера в 14:52</div></div></div>
+                <div class="cell" tabindex="0" data-name="appstream"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">appstream</div><div class="cell-size">66,2 МиБ</div><div class="cell-date">Вчера в 13:21</div></div></div>
+                <div class="cell" tabindex="0" data-name="kio_http"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">kio_http</div><div class="cell-size">50,8 МиБ</div><div class="cell-date">Вчера в 08:19</div></div></div>
+                <div class="cell" tabindex="0" data-name="mpv"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">mpv</div><div class="cell-size">1,3 МиБ</div><div class="cell-date">Вчера в 07:03</div></div></div>
+                <div class="cell" tabindex="0" data-name="gstreamer-1.0"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">gstreamer-1.0</div><div class="cell-size">1,7 МиБ</div><div class="cell-date">Вчера в 07:01</div></div></div>
+              </div>
+
+              <div class="col" style="width:238px">
+                <div class="col-head">Среда</div>
+                <div class="cell" tabindex="0" data-name="electron"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">electron</div><div class="cell-size">212,9 МиБ</div><div class="cell-date">11.11.2026 в 09:40</div></div></div>
+                <div class="cell" tabindex="0" data-name="pnpm"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">pnpm</div><div class="cell-size">12,8 МиБ</div><div class="cell-date">11.11.2026 в 07:49</div></div></div>
+              </div>
+
+              <div class="col" style="width:238px">
+                <div class="col-head">Вторник</div>
+                <div class="cell" tabindex="0" data-name="gnome-calculator"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">gnome-calculator</div><div class="cell-size">1,9 КиБ</div><div class="cell-date">10.11.2026 в 20:00</div></div></div>
+              </div>
+
+              <div class="col" style="width:240px">
+                <div class="col-head">Неделю назад</div>
+                <div class="cell" tabindex="0" data-name="llmfit"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">llmfit</div><div class="cell-size">0 Б</div><div class="cell-date">03.11.2026 в 17:01</div></div></div>
+                <div class="cell" tabindex="0" data-name="qtshadercache-x86…"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">qtshadercache-x86…</div><div class="cell-size">746,2 КиБ</div><div class="cell-date">02.11.2026 в 01:22</div></div></div>
+              </div>
+
+              <div class="col" style="width:236px">
+                <div class="col-head">2 недели назад</div>
+                <div class="cell" tabindex="0" data-name="mesa_shader_cache"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">mesa_shader_cache</div><div class="cell-size">38,4 МиБ</div><div class="cell-date">29.10.2026 в 18:52</div></div></div>
+                <div class="cell" tabindex="0" data-name="fontconfig"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">fontconfig</div><div class="cell-size">612,0 КиБ</div><div class="cell-date">29.10.2026 в 12:14</div></div></div>
+                <div class="cell" tabindex="0" data-name="gdk-pixbuf"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">gdk-pixbuf</div><div class="cell-size">0 Б</div><div class="cell-date">29.10.2026 в 09:03</div></div></div>
+              </div>
+
+              <div class="col" style="width:232px">
+                <div class="col-head">3 недели назад</div>
+                <div class="cell" tabindex="0" data-name="dolphin"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">dolphin</div><div class="cell-size">4,2 МиБ</div><div class="cell-date">22.10.2026 в 21:37</div></div></div>
+                <div class="cell" tabindex="0" data-name="krunner"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">krunner</div><div class="cell-size">1,1 МиБ</div><div class="cell-date">22.10.2026 в 16:02</div></div></div>
+              </div>
+
+              <div class="col" style="width:240px">
+                <div class="col-head">В прошлом месяце</div>
+                <div class="cell" tabindex="0" data-name="qmlcache"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">qmlcache</div><div class="cell-size">84,7 МиБ</div><div class="cell-date">14.10.2026 в 20:41</div></div></div>
+                <div class="cell" tabindex="0" data-name="kdeconnect"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">kdeconnect</div><div class="cell-size">2,6 МиБ</div><div class="cell-date">14.10.2026 в 11:08</div></div></div>
+                <div class="cell" tabindex="0" data-name="zypak"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">zypak</div><div class="cell-size">0 Б</div><div class="cell-date">13.10.2026 в 22:50</div></div></div>
+              </div>
+
+              <div class="col" style="width:228px">
+                <div class="col-head">В октябре</div>
+                <div class="cell" tabindex="0" data-name="ffmpeg"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">ffmpeg</div><div class="cell-size">2,4 МиБ</div><div class="cell-date">06.10.2026 в 22:15</div></div></div>
+                <div class="cell" tabindex="0" data-name="xdg-egl"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">xdg-egl</div><div class="cell-size">118,0 КиБ</div><div class="cell-date">06.10.2026 в 13:48</div></div></div>
+              </div>
+
+              <div class="col" style="width:240px">
+                <div class="col-head">В сентябре</div>
+                <div class="cell" tabindex="0" data-name="breeze-icons"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">breeze-icons</div><div class="cell-size">26,8 МиБ</div><div class="cell-date">29.09.2026 в 19:23</div></div></div>
+                <div class="cell" tabindex="0" data-name="llvmpipe"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">llvmpipe</div><div class="cell-size">0 Б</div><div class="cell-date">29.09.2026 в 10:11</div></div></div>
+                <div class="cell" tabindex="0" data-name="systemd"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">systemd</div><div class="cell-size">1,2 МиБ</div><div class="cell-date">28.09.2026 в 23:59</div></div></div>
+              </div>
+
+              <div class="col" style="width:236px">
+                <div class="col-head">В августе</div>
+                <div class="cell" tabindex="0" data-name="qt-webengine"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">qt-webengine</div><div class="cell-size">143,6 МиБ</div><div class="cell-date">21.08.2026 в 15:07</div></div></div>
+                <div class="cell" tabindex="0" data-name="kio"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">kio</div><div class="cell-size">4,8 МиБ</div><div class="cell-date">21.08.2026 в 11:26</div></div></div>
+              </div>
+
+              <div class="col" style="width:232px">
+                <div class="col-head">В июле</div>
+                <div class="cell" tabindex="0" data-name="mozprofile"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">mozprofile</div><div class="cell-size">712,4 КиБ</div><div class="cell-date">12.07.2026 в 17:44</div></div></div>
+                <div class="cell" tabindex="0" data-name="pip"><svg class="od-icon folder" viewBox="0 0 86 78" aria-hidden="true"><use href="#i-folder"/></svg><div class="cell-text"><div class="cell-name">pip</div><div class="cell-size">0 Б</div><div class="cell-date">12.07.2026 в 09:33</div></div></div>
+              </div>
+
+            </div>
+          </div>
+          <div class="empty-state" id="emptyState" hidden>Нет совпадений</div>
+          <div class="hscroll" id="hscroll"><div class="hthumb" id="hthumb"></div></div>
+        </div>
+
+        <div class="filterbar">
+          <svg class="od-icon filter-glyph" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-funnel"/></svg>
+          <div class="filter-field">
+            <input id="filterInput" type="text" placeholder="Фильтр..." aria-label="Фильтр" autocomplete="off" spellcheck="false">
+          </div>
+          <button class="clear-btn" id="filterClear" type="button" aria-label="Очистить фильтр"><svg class="od-icon" style="--od-icon-size:12px" aria-hidden="true"><use href="#i-close"/></svg></button>
+        </div>
+        <div class="hair row-divider"></div>
+        <div class="statusbar">
+          <div class="status-left">127 папок. 19 файлов (80,1 МиБ)</div>
+          <div class="status-right">
+            <span>Масштаб:</span>
+            <div class="zoom" id="zoom" role="slider" tabindex="0" aria-label="Масштаб" aria-valuemin="85" aria-valuemax="115" aria-valuenow="100" aria-valuetext="100 %">
+              <div class="zoom-track"><div class="zoom-fill" id="zoomFill"></div></div>
+              <div class="zoom-knob" id="zoomKnob"></div>
+            </div>
+            <div class="freebar" aria-hidden="true"></div>
+            <span>свободно 22,8 ГиБ</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- «Режим просмотра» dialog -->
+    <div class="scrim" id="scrim" hidden>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+        <div class="dlg-titlebar">
+          <svg class="od-icon mark" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-mark"/></svg>
+          <div class="dlg-title" id="dlgTitle">Режим просмотра — Волна</div>
+          <div class="dlg-tools">
+            <button class="tbtn wc" type="button" aria-label="Справка"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-help"/></svg></button>
+            <button class="tbtn wc wc-close" type="button" id="dlgClose" aria-label="Закрыть"><svg class="od-icon" style="--od-icon-size:16px" aria-hidden="true"><use href="#i-close"/></svg></button>
+          </div>
+        </div>
+        <div class="hair"></div>
+        <div class="dlg-body">
+          <div class="dlg-row">
+            <div class="dlg-label">Режим просмотра:</div>
+            <div class="dlg-ctrl">
+              <div class="combo-wrap">
+                <button class="combo combo-mode" id="comboMode" type="button" aria-haspopup="listbox" aria-expanded="false">
+                  <svg class="od-icon" style="--od-icon-size:12px" aria-hidden="true"><use href="#i-columns"/></svg>
+                  <span class="combo-label" id="comboModeLabel">Столбцы</span>
+                  <svg class="od-icon chev" style="--od-icon-size:12px" aria-hidden="true"><use href="#i-chev-down"/></svg>
+                </button>
+                <div class="popup" id="popupMode" hidden role="listbox">
+                  <button type="button" role="option" data-value="Столбцы" class="is-current">Столбцы</button>
+                  <button type="button" role="option" data-value="Значки">Значки</button>
+                  <button type="button" role="option" data-value="Подробности">Подробности</button>
+                  <button type="button" role="option" data-value="Каскадом">Каскадом</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dlg-row">
+            <div class="dlg-label">Сортировка:</div>
+            <div class="dlg-ctrl">
+              <div class="combo-wrap">
+                <button class="combo combo-sort-dir" id="comboSortDir" type="button" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="combo-label" id="comboSortDirLabel">По убыванию</span>
+                  <svg class="od-icon chev" style="--od-icon-size:12px" aria-hidden="true"><use href="#i-chev-down"/></svg>
+                </button>
+                <div class="popup" id="popupSortDir" hidden role="listbox">
+                  <button type="button" role="option" data-value="По убыванию" class="is-current">По убыванию</button>
+                  <button type="button" role="option" data-value="По возрастанию">По возрастанию</button>
+                </div>
+              </div>
+              <div class="combo-wrap">
+                <button class="combo combo-sort-key" id="comboSortKey" type="button" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="combo-label" id="comboSortKeyLabel">Размер</span>
+                  <svg class="od-icon chev" style="--od-icon-size:12px" aria-hidden="true"><use href="#i-chev-down"/></svg>
+                </button>
+                <div class="popup" id="popupSortKey" hidden role="listbox">
+                  <button type="button" role="option" data-value="Размер" class="is-current">Размер</button>
+                  <button type="button" role="option" data-value="Имя">Имя</button>
+                  <button type="button" role="option" data-value="Дата">Дата</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dlg-section">Параметры режима просмотра:</div>
+
+          <div class="dlg-checks">
+            <div class="check is-checked" tabindex="0" role="checkbox" aria-checked="true">
+              <span class="box"><svg class="od-icon ck" style="--od-icon-size:11px" aria-hidden="true"><use href="#i-check-sm"/></svg></span>
+              <span class="check-label">Показывать папки перед файлами</span>
+            </div>
+            <div class="check is-checked" tabindex="0" role="checkbox" aria-checked="true">
+              <span class="box"><svg class="od-icon ck" style="--od-icon-size:11px" aria-hidden="true"><use href="#i-check-sm"/></svg></span>
+              <span class="check-label">Миниатюры вместо значков</span>
+            </div>
+            <div class="check" tabindex="0" role="checkbox" aria-checked="false">
+              <span class="box"><svg class="od-icon ck" style="--od-icon-size:11px" aria-hidden="true"><use href="#i-check-sm"/></svg></span>
+              <span class="check-label">Разбивать на группы в соответствии с режимом сортировки</span>
+            </div>
+            <div class="check is-checked" tabindex="0" role="checkbox" aria-checked="true">
+              <span class="box"><svg class="od-icon ck" style="--od-icon-size:11px" aria-hidden="true"><use href="#i-check-sm"/></svg></span>
+              <span class="check-label">Показывать скрытые файлы</span>
+            </div>
+            <div class="check" tabindex="0" role="checkbox" aria-checked="false">
+              <span class="box"><svg class="od-icon ck" style="--od-icon-size:11px" aria-hidden="true"><use href="#i-check-sm"/></svg></span>
+              <span class="check-label">Показывать скрытые объекты в конце</span>
+            </div>
+          </div>
+
+          <div class="dlg-expander" id="dlgExpander" role="button" tabindex="0" aria-expanded="false">
+            <svg class="od-icon chev" style="--od-icon-size:10px" aria-hidden="true"><use href="#i-chev-right"/></svg>
+            <span>Дополнительные сведения</span>
+          </div>
+
+          <div class="dlg-buttons">
+            <button class="dlg-btn primary" id="dlgOk" type="button"><svg class="od-icon" style="--od-icon-size:13px" aria-hidden="true"><use href="#i-check"/></svg>OK</button>
+            <button class="dlg-btn" id="dlgApply" type="button" disabled><svg class="od-icon" style="--od-icon-size:13px" aria-hidden="true"><use href="#i-check"/></svg>Применить</button>
+            <button class="dlg-btn" id="dlgCancel" type="button"><svg class="od-icon" style="--od-icon-size:13px" aria-hidden="true"><use href="#i-circle-x"/></svg>Отмена</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (sel, root) { return (root || document).querySelector(sel); };
+  var $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
+
+  /* ---------------------------------------------------- window scaling */
+  var win = $('#window');
+  function fit() {
+    var s = Math.min((window.innerWidth - 24) / 1440, (window.innerHeight - 24) / 900);
+    win.style.transform = 'scale(' + Math.max(s, 0.2) + ')';
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  /* rendered pixels per CSS pixel of an element */
+  function uiScale(el) {
+    var r = el.getBoundingClientRect();
+    var base = el.offsetWidth || r.width;
+    if (!base || !r.width) return 1;
+    return r.width / base;
+  }
+
+  /* ---------------------------------------------------- thin scrollbars */
+  function attachScrollbar(id) {
+    var scroller = document.getElementById(id);
+    var track = $('.sb-track[data-track="' + id + '"]');
+    if (!scroller || !track) return;
+    var thumb = $('.sb-thumb', track);
+
+    function update() {
+      var sh = scroller.scrollHeight, ch = scroller.clientHeight, max = sh - ch;
+      track.classList.remove('is-empty');
+      var h = max <= 1 ? ch : Math.max(28, Math.round(ch * (ch / sh)));
+      var travel = ch - h;
+      var t = max > 0 ? scroller.scrollTop / max : 0;
+      thumb.style.height = h + 'px';
+      thumb.style.transform = 'translateX(-50%) translateY(' + Math.round(t * travel) + 'px)';
+    }
+    scroller.addEventListener('scroll', update);
+    if (window.ResizeObserver) { new ResizeObserver(update).observe(scroller); }
+    update();
+
+    var dragging = false, startY = 0, startScroll = 0, scale = 1;
+    thumb.addEventListener('pointerdown', function (e) {
+      dragging = true; startY = e.clientY; startScroll = scroller.scrollTop;
+      scale = uiScale(scroller);
+      thumb.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    thumb.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      var max = scroller.scrollHeight - scroller.clientHeight;
+      var travel = scroller.clientHeight - thumb.offsetHeight;
+      if (travel <= 0) return;
+      scroller.scrollTop = startScroll + ((e.clientY - startY) / scale) * (max / travel);
+    });
+    thumb.addEventListener('pointerup', function (e) {
+      dragging = false;
+      if (thumb.hasPointerCapture(e.pointerId)) thumb.releasePointerCapture(e.pointerId);
+    });
+  }
+  attachScrollbar('treeScroll');
+  attachScrollbar('placesScroll');
+
+  /* ---------------------------------------------------- filter + selection */
+  var columnsEl = $('#columns');
+  var emptyState = $('#emptyState');
+  var filterInput = $('#filterInput');
+
+  function applyFilter() {
+    var q = filterInput.value.trim().toLowerCase();
+    var total = 0;
+    $$('.col', columnsEl).forEach(function (col) {
+      var shown = 0;
+      $$('.cell', col).forEach(function (cell) {
+        var hit = !q || cell.getAttribute('data-name').toLowerCase().indexOf(q) !== -1;
+        if (hit) { cell.removeAttribute('hidden'); shown++; } else { cell.setAttribute('hidden', ''); }
+      });
+      total += shown;
+      if (shown === 0) { col.setAttribute('hidden', ''); } else { col.removeAttribute('hidden'); }
+    });
+    if (total === 0) { emptyState.removeAttribute('hidden'); } else { emptyState.setAttribute('hidden', ''); }
+    updateHScroll();
+  }
+  filterInput.addEventListener('input', applyFilter);
+  $('#filterClear').addEventListener('click', function () {
+    filterInput.value = '';
+    applyFilter();
+    filterInput.focus();
+  });
+
+  function selectCell(cell) {
+    $$('.cell.is-selected', columnsEl).forEach(function (c) { c.classList.remove('is-selected'); });
+    cell.classList.add('is-selected');
+  }
+  columnsEl.addEventListener('click', function (e) {
+    var cell = e.target.closest ? e.target.closest('.cell') : null;
+    if (cell) selectCell(cell);
+  });
+  columnsEl.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var cell = e.target.closest ? e.target.closest('.cell') : null;
+    if (!cell) return;
+    e.preventDefault();
+    selectCell(cell);
+  });
+
+  /* ---------------------------------------------------- zoom slider */
+  var zoomEl = $('#zoom'), zoomFill = $('#zoomFill'), zoomKnob = $('#zoomKnob');
+  var ZMIN = 85, ZMAX = 115;
+
+  function setZoom(value) {
+    var v = Math.min(ZMAX, Math.max(ZMIN, Math.round(value)));
+    var w = zoomEl.offsetWidth;
+    var ratio = (v - ZMIN) / (ZMAX - ZMIN);
+    var knobX = 7 + ratio * (w - 14);
+    zoomFill.style.width = knobX + 'px';
+    zoomKnob.style.left = knobX + 'px';
+    zoomEl.setAttribute('aria-valuenow', String(v));
+    zoomEl.setAttribute('aria-valuetext', v + ' %');
+    document.documentElement.style.setProperty('--zoom', String(v / 100));
+  }
+  function zoomFromEvent(e) {
+    var r = zoomEl.getBoundingClientRect();
+    var w = zoomEl.offsetWidth;
+    var frac = r.width ? (e.clientX - r.left) / r.width : 0.5;
+    var ratio = (frac * w - 7) / (w - 14);
+    setZoom(ZMIN + ratio * (ZMAX - ZMIN));
+  }
+  var zoomDragging = false;
+  zoomEl.addEventListener('pointerdown', function (e) {
+    zoomDragging = true;
+    zoomEl.setPointerCapture(e.pointerId);
+    zoomFromEvent(e);
+    e.preventDefault();
+  });
+  zoomEl.addEventListener('pointermove', function (e) { if (zoomDragging) zoomFromEvent(e); });
+  zoomEl.addEventListener('pointerup', function (e) {
+    zoomDragging = false;
+    if (zoomEl.hasPointerCapture(e.pointerId)) zoomEl.releasePointerCapture(e.pointerId);
+  });
+  zoomEl.addEventListener('keydown', function (e) {
+    var cur = parseInt(zoomEl.getAttribute('aria-valuenow'), 10);
+    var step = e.shiftKey ? 5 : 1;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { setZoom(cur + step); e.preventDefault(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { setZoom(cur - step); e.preventDefault(); }
+    else if (e.key === 'Home') { setZoom(ZMIN); e.preventDefault(); }
+    else if (e.key === 'End') { setZoom(ZMAX); e.preventDefault(); }
+  });
+  setZoom(100);
+
+  /* ---------------------------------------------------- horizontal column scrolling */
+  var viewScroll = $('#viewScroll'), hscroll = $('#hscroll'), hthumb = $('#hthumb');
+
+  function updateHScroll() {
+    var trackW = hscroll.clientWidth;
+    var contentW = viewScroll.scrollWidth;
+    var clientW = viewScroll.clientWidth;
+    if (contentW <= clientW + 1) { hthumb.style.display = 'none'; return; }
+    hthumb.style.display = 'block';
+    var w = Math.max(48, Math.round(trackW * (clientW / contentW)));
+    var travel = trackW - w;
+    var max = contentW - clientW;
+    var t = max > 0 ? viewScroll.scrollLeft / max : 0;
+    hthumb.style.width = w + 'px';
+    hthumb.style.transform = 'translateX(' + Math.round(t * travel) + 'px)';
+  }
+  viewScroll.addEventListener('scroll', updateHScroll);
+  window.addEventListener('resize', updateHScroll);
+  viewScroll.addEventListener('wheel', function (e) {
+    var d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if (!d) return;
+    e.preventDefault();
+    viewScroll.scrollLeft += d;
+  }, { passive: false });
+
+  var hDragging = false, hGrab = 0;
+  hthumb.addEventListener('pointerdown', function (e) {
+    var r = hscroll.getBoundingClientRect();
+    var scale = r.width ? r.width / hscroll.offsetWidth : 1;
+    hDragging = true;
+    hGrab = (e.clientX - r.left) / scale - hthumb.offsetLeft;
+    hthumb.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  hthumb.addEventListener('pointermove', function (e) {
+    if (!hDragging) return;
+    var r = hscroll.getBoundingClientRect();
+    var scale = r.width ? r.width / hscroll.offsetWidth : 1;
+    var x = (e.clientX - r.left) / scale - hGrab;
+    var travel = hscroll.offsetWidth - hthumb.offsetWidth;
+    if (travel <= 0) return;
+    x = Math.max(0, Math.min(travel, x));
+    var max = viewScroll.scrollWidth - viewScroll.clientWidth;
+    viewScroll.scrollLeft = (x / travel) * max;
+  });
+  hthumb.addEventListener('pointerup', function (e) {
+    hDragging = false;
+    if (hthumb.hasPointerCapture(e.pointerId)) hthumb.releasePointerCapture(e.pointerId);
+  });
+  updateHScroll();
+
+  /* ---------------------------------------------------- view mode toggles */
+  var viewButtons = $$('.viewmode');
+  var viewColumns = $('#viewColumns');
+  viewButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      viewButtons.forEach(function (b) {
+        var active = b === btn;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+      if (btn.id === 'viewColumns') openDialog();
+    });
+  });
+
+  /* ---------------------------------------------------- location field */
+  var locPath = $('#locPath');
+  var pathMenu = $('#pathMenu');
+  var locMenuBtn = $('#locMenuBtn');
+  var locInput = null;
+
+  function renderPath(text) {
+    locPath.textContent = '';
+    var raw = text.split('/');
+    var parts = raw.filter(function (p, i) { return p !== '' && !(i === raw.length - 1); });
+    if (text.charAt(0) === '/' && parts.length) { parts[0] = '/' + parts[0]; }
+    parts.forEach(function (part) {
+      var seg = document.createElement('span');
+      seg.className = 'loc-seg';
+      seg.textContent = part;
+      locPath.appendChild(seg);
+      var sep = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      sep.setAttribute('class', 'od-icon loc-sep');
+      sep.style.setProperty('--od-icon-size', '9px');
+      sep.setAttribute('aria-hidden', 'true');
+      var use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      use.setAttribute('href', '#i-chev-right');
+      sep.appendChild(use);
+      locPath.appendChild(sep);
+    });
+    var tail = document.createElement('span');
+    tail.className = 'loc-seg dim';
+    tail.textContent = '/';
+    locPath.appendChild(tail);
+  }
+  function commitPath() {
+    if (!locInput) return;
+    var value = locInput.value.trim();
+    var input = locInput;
+    locInput = null;
+    input.parentNode.removeChild(input);
+    locPath.removeAttribute('hidden');
+    if (value) renderPath(value);
+  }
+  function cancelPath() {
+    if (!locInput) return;
+    var input = locInput;
+    locInput = null;
+    input.parentNode.removeChild(input);
+    locPath.removeAttribute('hidden');
+  }
+
+  $('#locClear').addEventListener('click', function () {
+    if (locInput) { locInput.value = ''; locInput.focus(); return; }
+    locInput = document.createElement('input');
+    locInput.className = 'loc-input';
+    locInput.type = 'text';
+    locInput.setAttribute('aria-label', 'Путь');
+    locInput.placeholder = '/home/frimm/.cache/';
+    locPath.parentNode.insertBefore(locInput, locPath);
+    locPath.setAttribute('hidden', '');
+    locInput.focus();
+    locInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); commitPath(); }
+      if (e.key === 'Escape') { e.preventDefault(); cancelPath(); }
+    });
+    locInput.addEventListener('blur', function () { commitPath(); });
+  });
+
+  locMenuBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (pathMenu.hasAttribute('hidden')) {
+      pathMenu.removeAttribute('hidden');
+      locMenuBtn.setAttribute('aria-expanded', 'true');
+    } else {
+      pathMenu.setAttribute('hidden', '');
+      locMenuBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+  $$('#pathMenu button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      renderPath(b.getAttribute('data-path'));
+      pathMenu.setAttribute('hidden', '');
+      locMenuBtn.setAttribute('aria-expanded', 'false');
+    });
+  });
+  document.addEventListener('click', function (e) {
+    if (!pathMenu.hasAttribute('hidden') && !pathMenu.contains(e.target)) {
+      pathMenu.setAttribute('hidden', '');
+      locMenuBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  /* ---------------------------------------------------- sidebar rows */
+  $$('.tree-row').forEach(function (row) {
+    row.addEventListener('click', function () {
+      $$('.tree-row').forEach(function (r) { r.classList.remove('is-selected'); });
+      row.classList.add('is-selected');
+      row.classList.toggle('is-open');
+    });
+    row.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.click(); }
+    });
+  });
+  $$('.place-row').forEach(function (row) {
+    row.addEventListener('click', function () {
+      $$('.place-row').forEach(function (r) { r.classList.remove('is-selected'); });
+      row.classList.add('is-selected');
+    });
+    row.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.click(); }
+    });
+  });
+
+  /* ---------------------------------------------------- dialog */
+  var scrim = $('#scrim');
+  var dialog = $('.dialog');
+
+  function openDialog() {
+    scrim.removeAttribute('hidden');
+    $('#comboMode').focus();
+  }
+  function closeDialog() {
+    closeAllPopups();
+    scrim.setAttribute('hidden', '');
+    var active = $('.viewmode.is-active');
+    (active || viewColumns).focus();
+  }
+  $('#dlgOk').addEventListener('click', closeDialog);
+  $('#dlgCancel').addEventListener('click', closeDialog);
+  $('#dlgClose').addEventListener('click', closeDialog);
+  $('#dlgApply').addEventListener('click', function (e) { e.preventDefault(); });
+  scrim.addEventListener('mousedown', function (e) {
+    if (e.target === scrim) closeDialog();
+  });
+
+  /* checkboxes */
+  $$('.check').forEach(function (box) {
+    function toggle() {
+      var on = box.classList.toggle('is-checked');
+      box.setAttribute('aria-checked', on ? 'true' : 'false');
+    }
+    box.addEventListener('click', toggle);
+    box.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
+
+  /* expander */
+  var expander = $('#dlgExpander');
+  function toggleExpander() {
+    var open = expander.classList.toggle('is-open');
+    expander.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  expander.addEventListener('click', toggleExpander);
+  expander.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpander(); }
+  });
+
+  /* combo popups */
+  var popups = [];
+  function closeAllPopups() {
+    popups.forEach(function (p) {
+      p.popup.setAttribute('hidden', '');
+      p.trigger.setAttribute('aria-expanded', 'false');
+    });
+    popups = [];
+  }
+  function openPopup(popup, trigger) {
+    var wasOpen = !popup.hasAttribute('hidden');
+    closeAllPopups();
+    if (wasOpen) return;
+    popup.removeAttribute('hidden');
+    trigger.setAttribute('aria-expanded', 'true');
+    popups.push({ popup: popup, trigger: trigger });
+  }
+  function bindCombo(trigger, popup, labelId) {
+    trigger.addEventListener('click', function (e) {
+      e.stopPropagation();
+      openPopup(popup, trigger);
+    });
+    $$('button', popup).forEach(function (opt) {
+      opt.addEventListener('click', function (e) {
+        e.stopPropagation();
+        $('#' + labelId).textContent = opt.getAttribute('data-value');
+        $$('button', popup).forEach(function (o) { o.classList.toggle('is-current', o === opt); });
+        closeAllPopups();
+        trigger.focus();
+      });
+    });
+  }
+  bindCombo($('#comboMode'), $('#popupMode'), 'comboModeLabel');
+  bindCombo($('#comboSortDir'), $('#popupSortDir'), 'comboSortDirLabel');
+  bindCombo($('#comboSortKey'), $('#popupSortKey'), 'comboSortKeyLabel');
+
+  document.addEventListener('click', function (e) {
+    if (popups.length && !(e.target.closest && e.target.closest('.combo-wrap'))) closeAllPopups();
+  });
+
+  /* keyboard: Esc closes popup then dialog; Tab stays inside the dialog */
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      if (popups.length) { closeAllPopups(); e.preventDefault(); return; }
+      if (!pathMenu.hasAttribute('hidden')) {
+        pathMenu.setAttribute('hidden', '');
+        locMenuBtn.setAttribute('aria-expanded', 'false');
+        e.preventDefault();
+        return;
+      }
+      if (!scrim.hasAttribute('hidden')) { closeDialog(); e.preventDefault(); }
+      return;
+    }
+    if (e.key === 'Tab' && !scrim.hasAttribute('hidden')) {
+      var focusables = $$('button:not([disabled]), input, [tabindex="0"]', dialog)
+        .filter(function (el) { return el.offsetParent !== null; });
+      if (!focusables.length) return;
+      var first = focusables[0], last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+})();
+</script>
+</body>
+</html>

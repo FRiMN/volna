@@ -6,7 +6,15 @@ No GTK imports here, so the whole package is testable without a display.
 from .entry import Entry, Kind
 from .model import Counters, DirModel, Event, Group, ScanState
 from .order import BUCKET_ORDER, GroupBucket, SortKey, group_of, sort_entries
-from .scanner import Batch, DirScanner, Phase, ScanError, iter_batches
+from .scanner import (
+    Batch,
+    DirScanner,
+    Phase,
+    ScanError,
+    iter_batches,
+    iter_dirents,
+    iter_stats,
+)
 from .statpool import StatPool, StatResult
 
 __all__ = [
@@ -28,5 +36,7 @@ __all__ = [
     "StatResult",
     "group_of",
     "iter_batches",
+    "iter_dirents",
+    "iter_stats",
     "sort_entries",
 ]

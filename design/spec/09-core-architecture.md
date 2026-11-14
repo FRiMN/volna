@@ -171,7 +171,7 @@ src/volna/
   core/
     entry.py      # Entry, Kind — чистые dataclass/enum
     order.py      # компаратор и ключи сортировки — без GTK
-    scanner.py    # DirScanner: readdir-батчи, поколение, отмена
+    scanner.py    # iter_dirents/iter_stats — фазы чтения; DirScanner: поток, поколение, отмена
     statpool.py   # параллельный statx (пул потоков → io_uring)
     model.py      # DirModel: порядок, группы, счётчики, события
   views/

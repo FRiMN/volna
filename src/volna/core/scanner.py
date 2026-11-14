@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import threading
 from collections.abc import Callable, Iterator
+from contextlib import closing
 from dataclasses import dataclass
 from enum import Enum
 
@@ -36,6 +37,73 @@ class ScanError(RuntimeError):
         self.message = message
 
 
+def iter_dirents(
+    path: str,
+    generation: int,
+    *,
+    batch_size: int = DIRENT_BATCH,
+    cancel: threading.Event | None = None,
+) -> Iterator[Batch]:
+    """Phase 1: yield DIRENT batches straight from ``readdir``.
+
+    Entries carry ``name``/``path``/``kind`` only; ``size``/``mtime`` stay empty
+    until a STATS pass. Raises ``ScanError`` when the directory cannot be opened.
+    """
+    try:
+        scandir = os.scandir(path)
+    except OSError as exc:
+        raise ScanError(path, str(exc)) from exc
+
+    with scandir:
+        batch: list[Entry] = []
+        for dirent in scandir:
+            if cancel is not None and cancel.is_set():
+                return
+
+            batch.append(Entry(name=dirent.name, path=dirent.path, kind=_kind(dirent)))
+            if len(batch) >= batch_size:
+                yield Batch(generation, Phase.DIRENT, batch)
+                batch = []
+
+        if batch:
+            yield Batch(generation, Phase.DIRENT, batch)
+
+
+def iter_stats(
+    entries: list[Entry],
+    generation: int,
+    *,
+    stat_pool: StatPool | None = None,
+    chunk_size: int = STAT_CHUNK,
+    cancel: threading.Event | None = None,
+) -> Iterator[Batch]:
+    """Phase 2: fill ``size``/``mtime`` on ``entries`` and yield STATS batches.
+
+    ``entries`` are mutated in place, ``chunk_size`` at a time. Without a
+    ``stat_pool`` a private one is created and closed when the iterator ends;
+    a caller-provided pool is left open.
+    """
+    pool = stat_pool
+    owns_pool = pool is None
+    if pool is None:
+        pool = StatPool()
+    try:
+        for start in range(0, len(entries), chunk_size):
+            if cancel is not None and cancel.is_set():
+                return
+
+            chunk = entries[start : start + chunk_size]
+            results = pool.stat_batch([entry.path for entry in chunk])
+            for entry, result in zip(chunk, results, strict=True):
+                if result.ok:
+                    entry.size = result.size
+                    entry.mtime = result.mtime
+            yield Batch(generation, Phase.STATS, chunk)
+    finally:
+        if owns_pool:
+            pool.close()
+
+
 def iter_batches(
     path: str,
     generation: int,
@@ -46,47 +114,31 @@ def iter_batches(
     cancel: threading.Event | None = None,
 ) -> Iterator[Batch]:
     """Yield DIRENT batches, then (optionally) STATS batches that fill sizes."""
-    try:
-        scandir = os.scandir(path)
-    except OSError as exc:
-        raise ScanError(path, str(exc)) from exc
-
+    dirents = iter_dirents(
+        path,
+        generation,
+        batch_size=batch_size,
+        cancel=cancel,
+    )
     entries: list[Entry] = []
-    with scandir:
-        batch: list[Entry] = []
-        for dirent in scandir:
-            if cancel is not None and cancel.is_set():
-                return
-            batch.append(Entry(name=dirent.name, path=dirent.path, kind=_kind(dirent)))
-            if len(batch) >= batch_size:
-                entries.extend(batch)
-                yield Batch(generation, Phase.DIRENT, batch)
-                batch = []
-        if batch:
-            entries.extend(batch)
-            yield Batch(generation, Phase.DIRENT, batch)
+    with closing(dirents):
+        for batch in dirents:
+            if need_stats:
+                entries.extend(batch.entries)
+            yield batch
 
     if not need_stats:
         return
 
-    pool = stat_pool
-    owns_pool = pool is None
-    if pool is None:
-        pool = StatPool()
-    try:
-        for start in range(0, len(entries), STAT_CHUNK):
-            if cancel is not None and cancel.is_set():
-                return
-            chunk = entries[start : start + STAT_CHUNK]
-            results = pool.stat_batch([entry.path for entry in chunk])
-            for entry, result in zip(chunk, results, strict=True):
-                if result.ok:
-                    entry.size = result.size
-                    entry.mtime = result.mtime
-            yield Batch(generation, Phase.STATS, chunk)
-    finally:
-        if owns_pool:
-            pool.close()
+    if cancel is not None and cancel.is_set():
+        return
+
+    yield from iter_stats(
+        entries,
+        generation,
+        stat_pool=stat_pool,
+        cancel=cancel,
+    )
 
 
 class DirScanner:
@@ -162,6 +214,7 @@ class DirScanner:
             if on_error is not None:
                 on_error(exc)
             return
+
         if on_done is not None:
             on_done()
 
@@ -189,4 +242,5 @@ def _kind(dirent: os.DirEntry[str]) -> Kind:
             return Kind.FILE
     except OSError:
         return Kind.OTHER
+
     return Kind.OTHER

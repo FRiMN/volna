@@ -23,10 +23,30 @@ gi.require_version("Pango", "1.0")
 
 from gi.repository import Gdk, Gtk, Pango  # noqa: E402
 
+from .core import ScanState  # noqa: E402
 from .geometry import edge_at as geometry_edge_at  # noqa: E402
+from .tab import DirectoryTab  # noqa: E402
+from .views.format import format_size  # noqa: E402
 
 _ICONS_DIR = Path(__file__).resolve().parent / "icons"
 _POINTER_CURSOR = Gdk.Cursor.new_from_name("pointer", None)
+
+
+def _downloads_path() -> Path:
+    home = Path.home()
+    for name in ("Загрузки", "Downloads"):
+        candidate = home / name
+        if candidate.is_dir():
+            return candidate
+    return home / "Downloads"
+
+
+def _status_text(state: ScanState) -> str:
+    if state is ScanState.SCANNING:
+        return "Сканирование…"
+    if state is ScanState.ERROR:
+        return "Не удалось прочитать каталог"
+    return "Готово."
 
 
 def icon(name: str, size: int = 16, *, dim: bool = False) -> Gtk.Image:
@@ -117,7 +137,19 @@ class MainWindow(Gtk.ApplicationWindow):
         self.set_size_request(900, 600)
         self.set_resizable(True)
         self.add_css_class("volna-window")
+
+        self._tab_specs = [
+            ("folder", ".cache", Path.home() / ".cache"),
+            ("home", "Домашняя папка", Path.home()),
+            ("down", "Загрузки", _downloads_path()),
+        ]
+        self._tabs: list[DirectoryTab] = []
+        self._tab_widgets: list[Gtk.Box] = []
+        self._active_index = 1
+
         self.set_child(self._content())
+        self.connect("close-request", self._on_close_request)
+        self._activate(self._active_index)
 
     # -- chrome -------------------------------------------------------
 
@@ -176,8 +208,9 @@ class MainWindow(Gtk.ApplicationWindow):
         location.set_hexpand(True)
         location.set_tooltip_text("Перейти к пути")
         location.append(icon("folder", 16))
-        path_label = label("/home/frimm/.cache", "volna-path-label", ellipsize=True)
+        path_label = label(str(Path.home()), "volna-path-label", ellipsize=True)
         path_label.set_hexpand(True)
+        self._path_label = path_label
         location.append(path_label)
         location.append(icon("down", 16, dim=True))
         wrapper.append(location)
@@ -429,9 +462,11 @@ class MainWindow(Gtk.ApplicationWindow):
         tabs = hbox(0)
         tabs.add_css_class("volna-tab-strip")
         tabs.set_hexpand(True)
-        tabs.append(self._tab("folder", ".cache", active=True))
-        tabs.append(self._tab("home", "Домашняя папка"))
-        tabs.append(self._tab("down", "Загрузки"))
+        self._tab_widgets = []
+        for index, (icon_name, title, _path) in enumerate(self._tab_specs):
+            widget = self._tab(icon_name, title, index=index)
+            self._tab_widgets.append(widget)
+            tabs.append(widget)
 
         right = Gtk.CenterBox()
         right.add_css_class("volna-panel-header")
@@ -448,16 +483,15 @@ class MainWindow(Gtk.ApplicationWindow):
         band.append(right)
         return band
 
-    def _tab(self, icon_name: str, text: str, *, active: bool = False) -> Gtk.Box:
+    def _tab(self, icon_name: str, text: str, *, index: int) -> Gtk.Box:
         tab = hbox(6)
         tab.add_css_class("volna-tab")
-        if active:
-            tab.add_css_class("is-active")
         tab.append(icon(icon_name, 16))
         tab.append(label(text, "volna-tab-label", ellipsize=True))
         close = icon("close", 12)
         close.add_css_class("volna-tab-close")
         tab.append(close)
+        make_clickable(tab, lambda i=index: self._activate(i))
         return tab
 
     def _workspace(self) -> Gtk.Box:
@@ -475,6 +509,26 @@ class MainWindow(Gtk.ApplicationWindow):
         editor.add_css_class("volna-editor")
         editor.set_hexpand(True)
         editor.set_size_request(200, -1)
+
+        editor_header = hbox(0)
+        editor_header.add_css_class("volna-editor-header")
+        editor_header.set_size_request(-1, 32)
+        self._counts_label = label("", "volna-editor-counts", ellipsize=True)
+        self._counts_label.set_hexpand(True)
+        self._counts_label.set_margin_start(12)
+        editor_header.append(self._counts_label)
+
+        self._stack = Gtk.Stack()
+        self._stack.set_vexpand(True)
+        self._stack.set_hexpand(True)
+        self._tabs = []
+        for _icon, _title, path in self._tab_specs:
+            tab = DirectoryTab(path, on_change=self._on_tab_change)
+            self._tabs.append(tab)
+            self._stack.add_child(tab.widget)
+
+        editor.append(editor_header)
+        editor.append(self._stack)
 
         right_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         right_panel.add_css_class("volna-panel")
@@ -574,6 +628,7 @@ class MainWindow(Gtk.ApplicationWindow):
 
         status_text = label("Готово.", "volna-status", ellipsize=True)
         status_text.set_hexpand(True)
+        self._status_label = status_text
         status.append(status_text)
 
         right = hbox(8)
@@ -583,6 +638,40 @@ class MainWindow(Gtk.ApplicationWindow):
         right.append(label("sdc1", "sb-item mono"))
         status.append(right)
         return status
+
+    # -- tab wiring ---------------------------------------------------
+
+    def _activate(self, index: int) -> None:
+        self._active_index = index
+        tab = self._tabs[index]
+        self._stack.set_visible_child(tab.widget)
+        self._path_label.set_text(str(tab.path))
+        for position, widget in enumerate(self._tab_widgets):
+            if position == index:
+                widget.add_css_class("is-active")
+            else:
+                widget.remove_css_class("is-active")
+        tab.ensure_loaded()
+        self._update_active_status()
+
+    def _on_tab_change(self, tab: DirectoryTab) -> None:
+        if tab is not self._tabs[self._active_index]:
+            return
+        self._update_active_status()
+
+    def _update_active_status(self) -> None:
+        tab = self._tabs[self._active_index]
+        self._status_label.set_text(_status_text(tab.model.state))
+        counters = tab.model.counters()
+        self._counts_label.set_text(
+            f"{counters.folders} папок · {counters.files} файлов "
+            f"({format_size(counters.total_size)})"
+        )
+
+    def _on_close_request(self, *_args: object) -> bool:
+        for tab in self._tabs:
+            tab.close()
+        return False
 
     def _hairline(self, *, strong: bool = False) -> Gtk.Box:
         line = Gtk.Box()

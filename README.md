@@ -50,7 +50,9 @@ python3 design/tools/build_compare.py
 
 ## Разработка
 
-Каркас Python-проекта для будущей реализации: пакет [`src/volna/`](src/volna/__init__.py), тесты и инструменты. Кода приложения пока нет — только структура.
+Пакет [`src/volna/`](src/volna/__init__.py): GTK4-окно и ядро перечисления каталогов в [`src/volna/core/`](src/volna/core/__init__.py) (`entry` / `order` / `statpool` / `scanner` / `model`, без GTK-зависимостей). Спека ядра — [design/spec/09-core-architecture.md](design/spec/09-core-architecture.md).
+
+Окно открывает `$HOME` и показывает листинг в режиме «Подробности»; табы переключают `~/.cache`, `$HOME` и каталог загрузок — у каждой вкладки свой листинг и своя позиция прокрутки. Сканирование идёт в рабочем потоке, батчи приходят в модель через `GLib.idle_add`; статус и счётчики — живые.
 
 ```bash
 uv sync             # окружение и dev-инструменты

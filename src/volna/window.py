@@ -642,7 +642,7 @@ class MainWindow(Gtk.ApplicationWindow):
         right.append(icon("disk", 14))
         right.append(label("свободно 22,8 ГиБ", "volna-status-item"))
         right.append(label("·", "volna-status-sep"))
-        right.append(label("sdc1", "sb-item mono"))
+        right.append(label("sdc1", "volna-status-item volna-mono"))
         status.append(right)
         return status
 

@@ -5,7 +5,7 @@
   background-color: #1e1f22;
   color: #dfe1e5;
   font-family: "Inter", "Cantarell", "Ubuntu", "Noto Sans", sans-serif;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 /* ---- toolbar (band 1) ------------------------------------------------ */
@@ -68,7 +68,7 @@
 
 .volna-view-label {
   color: #dfe1e5;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 /* path widget */
@@ -86,7 +86,7 @@
 
 .volna-path-label {
   color: #dfe1e5;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 /* ---- header band (band 3) ------------------------------------------- */
@@ -103,7 +103,7 @@
 
 .volna-panel-title-label {
   color: #dfe1e5;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -120,7 +120,7 @@
   min-height: 40px;
   border-radius: 0;
   color: #9da0a8;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .volna-tab:hover {
@@ -136,7 +136,7 @@
 
 .volna-tab-label {
   color: inherit;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .volna-tab-close {
@@ -199,7 +199,19 @@
 
 .volna-editor-counts {
   color: #9da0a8;
-  font-size: 12px;
+  font-size: 13px;
+}
+
+/* details table: name 14 primary, size/date mono 13 secondary (design rev. 6) */
+.volna-dt-name {
+  color: #dfe1e5;
+  font-size: 16px;
+}
+
+.volna-dt-num {
+  color: #9da0a8;
+  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+  font-size: 13px;
 }
 
 /* ---- bottom window (band 7) ----------------------------------------- */
@@ -218,7 +230,7 @@
   min-height: 40px;
   border-radius: 0;
   color: #9da0a8;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .volna-bottom-tab:hover {
@@ -245,17 +257,17 @@
 
 .volna-status {
   color: #9da0a8;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .volna-status-item {
   color: #9da0a8;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .volna-status-sep {
   color: #6f737a;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .volna-status-item.volna-mono {

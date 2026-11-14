@@ -77,16 +77,63 @@
   border: 1px solid #393b40;
   border-radius: 4px;
   min-height: 28px;
+  transition: background-color 280ms ease, border-color 280ms ease;
+}
+
+.volna-path.is-invalid {
+  background-color: #3d2b2f;
+  border-color: #db5c5c;
 }
 
 .volna-path-btn {
   padding: 0 6px;
   min-height: 24px;
+  border-radius: 4px;
+}
+
+.volna-path-btn:hover {
+  background-color: #393b40;
 }
 
 .volna-path-label {
   color: #dfe1e5;
   font-size: 16px;
+}
+
+.volna-path-menu > button {
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  padding: 0 4px;
+  min-height: 24px;
+  border-radius: 4px;
+}
+
+.volna-path-menu > button:hover {
+  background-color: #393b40;
+}
+
+.volna-path-entry {
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  padding: 0 6px;
+  min-height: 0;
+  color: #dfe1e5;
+  font-size: 16px;
+  caret-color: #3574f0;
+}
+
+.volna-path-entry:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px #3574f0;
+  border-radius: 4px;
+}
+
+.volna-path-menu-box {
+  min-width: 240px;
 }
 
 /* ---- header band (band 3) ------------------------------------------- */
@@ -139,13 +186,105 @@
   font-size: 16px;
 }
 
+.volna-tab-scroll,
+.volna-tab-scroll > viewport {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
 .volna-tab-close {
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  min-width: 16px;
+  min-height: 16px;
+  border-radius: 4px;
   opacity: 0;
+}
+
+.volna-tab-close:hover {
+  background-color: #4a4d52;
 }
 
 .volna-tab.is-active .volna-tab-close,
 .volna-tab:hover .volna-tab-close {
   opacity: 1;
+}
+
+/* ---- main menu (☰) --------------------------------------------------- */
+popover.volna-menu {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+popover.volna-menu > contents {
+  background-color: #2b2d30;
+  border: 1px solid #393b40;
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.volna-menu-box {
+  min-width: 190px;
+}
+
+.volna-menu-item {
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  padding: 0 8px;
+  min-height: 24px;
+  border-radius: 4px;
+  color: #dfe1e5;
+  font-size: 14px;
+}
+
+.volna-menu-item:hover {
+  background-color: #393b40;
+}
+
+.volna-menu-item:disabled {
+  background: transparent;
+  color: #6f737a;
+}
+
+.volna-menu-label {
+  color: inherit;
+  font-size: inherit;
+}
+
+.volna-menu-shortcut {
+  color: #9da0a8;
+  font-size: 12px;
+}
+
+.volna-menu-item:disabled .volna-menu-shortcut {
+  color: #6f737a;
+}
+
+.volna-menu-sep {
+  background-color: #393b40;
+  min-height: 1px;
+  margin: 4px 6px;
+}
+
+.volna-menu-button > button {
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+.volna-menu-button:hover > button {
+  background-color: #393b40;
+  border-radius: 4px;
 }
 
 /* ---- hairlines ------------------------------------------------------- */
@@ -326,6 +465,21 @@ windowhandle {
   padding: 0 8px;
 }
 
+.volna-size-wide .volna-path-menu > button {
+  min-height: 30px;
+  padding: 0 5px;
+}
+
+.volna-size-wide .volna-path-entry {
+  padding: 0 8px;
+  min-height: 0;
+  font-size: 17.5px;
+}
+
+.volna-size-wide .volna-path-menu-box {
+  min-width: 300px;
+}
+
 .volna-size-wide .volna-panel-header {
   min-height: 50px;
   padding: 0 10px;
@@ -406,6 +560,35 @@ windowhandle {
 
 .volna-size-wide .volna-dt-num {
   font-size: 16px;
+}
+
+.volna-size-wide .volna-tab-close {
+  min-width: 20px;
+  min-height: 20px;
+  border-radius: 5px;
+}
+
+.volna-size-wide .volna-menu-box {
+  min-width: 238px;
+}
+
+.volna-size-wide .volna-menu-item {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 17.5px;
+}
+
+.volna-size-wide .volna-menu-shortcut {
+  font-size: 15px;
+}
+
+.volna-size-wide .volna-menu-sep {
+  margin: 5px 8px;
+}
+
+.volna-size-wide popover.volna-menu > contents {
+  border-radius: 10px;
+  padding: 5px;
 }
 
 .volna-size-wide windowhandle {

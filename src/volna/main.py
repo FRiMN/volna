@@ -22,6 +22,8 @@ class VolnaApplication(Gtk.Application):
         super().__init__(application_id=APP_ID)
         self.screenshot = screenshot
         self.window = None
+        self.set_accels_for_action("win.new-tab", ["<Control>t"])
+        self.set_accels_for_action("win.close-tab", ["<Control>w"])
         self.connect("startup", self._on_startup)
         self.connect("activate", self._on_activate)
 

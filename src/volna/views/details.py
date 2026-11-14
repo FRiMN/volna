@@ -68,6 +68,11 @@ class DetailsView:
     def render(self, rows: list[Row]) -> None:
         self.store.splice(0, self.store.get_n_items(), rows)
 
+    def reset_scroll(self) -> None:
+        adjustment = self.widget.get_vadjustment()
+        if adjustment is not None:
+            adjustment.set_value(0.0)
+
 
 def _setup_label(
     _factory: Gtk.SignalListItemFactory,

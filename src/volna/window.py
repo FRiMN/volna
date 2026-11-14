@@ -1,17 +1,21 @@
 """GTK4 main window for Volna (design direction C: Dolphin x JetBrains).
 
-First milestone: window chrome and empty panels; header controls are stubs.
+The window owns dynamic directory tabs and the toolbar: main menu, navigation,
+display mode stub and the path widget (dropdown + inline editing). The right
+panel from the design is temporarily hidden in the app.
+
 Geometry follows the size preset from design/spec/02-design-tokens.md §10:
 the «wide» preset is the default (125 % of the compact grid), so the compact
 numbers used below are scaled with size.px():
 
     50 toolbar + 1 hairline + app body + 1 hairline + 35 status = 1125
     app body = 50 header band + 1 strong line + workspace + 1 line + 225 bottom
-    workspace = 350 left panel + flex editor + 375 right panel (rails 50 each)
+    workspace = 350 left panel + flex editor (the design's 375 right panel is hidden)
 """
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from pathlib import Path
 
@@ -21,7 +25,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 gi.require_version("Pango", "1.0")
 
-from gi.repository import Gdk, Gtk, Pango  # noqa: E402
+from gi.repository import Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 
 from .core import ScanState  # noqa: E402
 from .geometry import edge_at as geometry_edge_at  # noqa: E402
@@ -137,7 +141,7 @@ class MainWindow(Gtk.ApplicationWindow):
     _toolbar_height = px(40)
     _window_button_width = px(40)
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, *, start_path: Path | None = None, **kwargs) -> None:
         super().__init__(**kwargs)
         self.set_title("Волна")
         self.set_decorated(False)
@@ -147,18 +151,18 @@ class MainWindow(Gtk.ApplicationWindow):
         self.add_css_class("volna-window")
         self.add_css_class(SIZE_CLASS)
 
-        self._tab_specs = [
-            ("folder", ".cache", Path.home() / ".cache"),
-            ("home", "Домашняя папка", Path.home()),
-            ("down", "Загрузки", _downloads_path()),
-        ]
         self._tabs: list[DirectoryTab] = []
-        self._tab_widgets: list[Gtk.Box] = []
-        self._active_index = 1
+        self._tab_widgets: dict[DirectoryTab, Gtk.Box] = {}
+        self._tab_close_buttons: dict[DirectoryTab, Gtk.Button] = {}
+        self._tab_title_labels: dict[DirectoryTab, Gtk.Label] = {}
+        self._tab_icons: dict[DirectoryTab, Gtk.Image] = {}
+        self._active_tab: DirectoryTab | None = None
+        self._note_timeout: int | None = None
 
+        self._install_actions()
         self.set_child(self._content())
         self.connect("close-request", self._on_close_request)
-        self._activate(self._active_index)
+        self._open_tab(Path(start_path) if start_path is not None else Path.home())
 
     # -- chrome -------------------------------------------------------
 
@@ -167,9 +171,7 @@ class MainWindow(Gtk.ApplicationWindow):
         bar.add_css_class("volna-toolbar")
         bar.set_size_request(-1, px(40))
 
-        bar.append(
-            icon_stub("menu", size=px(32), icon_size=px(20), tooltip="Главное меню")
-        )
+        bar.append(self._main_menu_button())
         bar.append(vertical_separator())
 
         navigation = hbox(px(2))
@@ -178,7 +180,9 @@ class MainWindow(Gtk.ApplicationWindow):
                 "back", tooltip="Назад — недоступно", extra_class="volna-disabled"
             )
         )
-        navigation.append(icon_stub("fwd", tooltip="Следующая вкладка"))
+        self._fwd_button = icon_stub("fwd", tooltip="Следующая вкладка")
+        make_clickable(self._fwd_button, self._activate_next_tab)
+        navigation.append(self._fwd_button)
         navigation.append(icon_stub("up", tooltip="В родительскую папку"))
         bar.append(navigation)
         bar.append(vertical_separator())
@@ -196,6 +200,68 @@ class MainWindow(Gtk.ApplicationWindow):
 
         return bar
 
+    def _main_menu_button(self) -> Gtk.MenuButton:
+        button = Gtk.MenuButton()
+        button.add_css_class("volna-icon")
+        button.add_css_class("volna-menu-button")
+        button.set_size_request(px(32), px(32))
+        button.set_valign(Gtk.Align.CENTER)
+        button.set_tooltip_text("Главное меню")
+        button.set_child(icon("menu", px(20)))
+        self._menu_button = button
+        self._menu_popover = self._main_menu()
+        # A tooltip on the trigger would hang over the open menu: drop it while
+        # the menu is shown and restore it on close.
+        self._menu_popover.connect(
+            "show", lambda *_args: self._menu_button.set_tooltip_text(None)
+        )
+        self._menu_popover.connect(
+            "closed", lambda *_args: self._menu_button.set_tooltip_text("Главное меню")
+        )
+        button.set_popover(self._menu_popover)
+        return button
+
+    def _main_menu(self) -> Gtk.Popover:
+        popover = Gtk.Popover()
+        popover.add_css_class("volna-menu")
+        popover.set_has_arrow(False)
+
+        items = vbox(px(2))
+        items.add_css_class("volna-menu-box")
+        items.append(self._menu_item("Новая вкладка", "win.new-tab", shortcut="Ctrl+T"))
+        items.append(self._menu_separator())
+        self._close_menu_item = self._menu_item(
+            "Закрыть вкладку", "win.close-tab", shortcut="Ctrl+W"
+        )
+        items.append(self._close_menu_item)
+
+        popover.set_child(items)
+        return popover
+
+    def _menu_item(
+        self, text: str, action: str, *, shortcut: str | None = None
+    ) -> Gtk.Button:
+        button = Gtk.Button()
+        button.add_css_class("volna-menu-item")
+        button.set_action_name(action)
+        button.connect("clicked", lambda *_args: self._menu_popover.popdown())
+
+        row = hbox(px(8))
+        row.append(label(text, "volna-menu-label"))
+        if shortcut is not None:
+            spacer = Gtk.Box()
+            spacer.set_hexpand(True)
+            row.append(spacer)
+            row.append(label(shortcut, "volna-menu-shortcut"))
+        button.set_child(row)
+        return button
+
+    def _menu_separator(self) -> Gtk.Box:
+        separator = Gtk.Box()
+        separator.add_css_class("volna-menu-sep")
+        separator.set_size_request(-1, 1)
+        return separator
+
     def _view_widget(self) -> Gtk.Box:
         button = hbox(px(6))
         button.add_css_class("volna-view")
@@ -208,26 +274,242 @@ class MainWindow(Gtk.ApplicationWindow):
         return button
 
     def _path_widget(self) -> Gtk.Box:
-        wrapper = hbox(px(2))
+        wrapper = hbox(0)
         wrapper.add_css_class("volna-path")
         wrapper.set_hexpand(True)
         wrapper.set_size_request(-1, px(28))
         wrapper.set_valign(Gtk.Align.CENTER)
+        self._path_wrapper = wrapper
+
+        display = hbox(0)
+        display.set_hexpand(True)
 
         location = hbox(px(6))
         location.add_css_class("volna-path-btn")
         location.set_hexpand(True)
         location.set_tooltip_text("Перейти к пути")
         location.append(icon("folder", px(16)))
-        path_label = label(str(Path.home()), "volna-path-label", ellipsize=True)
-        path_label.set_hexpand(True)
-        self._path_label = path_label
-        location.append(path_label)
-        location.append(icon("down", px(16), dim=True))
-        wrapper.append(location)
+        self._path_label = label(str(Path.home()), "volna-path-label", ellipsize=True)
+        self._path_label.set_hexpand(True)
+        location.append(self._path_label)
+        self._path_menu_button = self._create_path_menu_button()
+        make_clickable(location, self._open_path_menu)
+        display.append(location)
+        display.append(self._path_menu_button)
 
-        wrapper.append(icon_stub("pencil", tooltip="Изменить путь"))
+        self._path_edit_button = icon_stub("pencil", tooltip="Изменить путь")
+        make_clickable(self._path_edit_button, self._start_path_edit)
+        display.append(self._path_edit_button)
+
+        self._path_entry = Gtk.Entry()
+        self._path_entry.add_css_class("volna-path-entry")
+        self._path_entry.set_hexpand(True)
+        self._path_entry.set_tooltip_text("Введите путь и нажмите Enter")
+        self._path_entry.connect("activate", self._commit_path_edit)
+        key_controller = Gtk.EventControllerKey()
+        key_controller.connect("key-pressed", self._on_path_key_pressed)
+        self._path_entry.add_controller(key_controller)
+        focus_controller = Gtk.EventControllerFocus()
+        focus_controller.connect("leave", self._on_path_focus_leave)
+        self._path_entry.add_controller(focus_controller)
+
+        self._path_stack = Gtk.Stack()
+        self._path_stack.set_hexpand(True)
+        self._path_stack.add_named(display, "display")
+        self._path_stack.add_named(self._path_entry, "edit")
+        wrapper.append(self._path_stack)
+
         return wrapper
+
+    def _create_path_menu_button(self) -> Gtk.MenuButton:
+        button = Gtk.MenuButton()
+        button.add_css_class("volna-path-menu")
+        button.set_valign(Gtk.Align.CENTER)
+        button.set_tooltip_text("Перейти к пути")
+        button.set_child(icon("down", px(16), dim=True))
+
+        popover = Gtk.Popover()
+        popover.add_css_class("volna-menu")
+        popover.set_has_arrow(False)
+        items = vbox(px(2))
+        items.add_css_class("volna-menu-box")
+        items.add_css_class("volna-path-menu-box")
+        popover.set_child(items)
+        popover.connect("show", self._fill_path_menu)
+        button.set_popover(popover)
+
+        self._path_popover = popover
+        self._path_menu_items = items
+        return button
+
+    def _open_path_menu(self) -> None:
+        self._set_path_invalid(False)
+        self._path_menu_button.set_active(True)
+
+    def _close_path_menu(self) -> None:
+        if self._path_menu_button.get_active():
+            self._path_menu_button.set_active(False)
+
+    def _fill_path_menu(self, *_args: object) -> None:
+        child = self._path_menu_items.get_first_child()
+        while child is not None:
+            following = child.get_next_sibling()
+            self._path_menu_items.remove(child)
+            child = following
+
+        for path in self._known_paths():
+            self._path_menu_items.append(self._path_menu_item(path))
+
+    def _known_paths(self) -> list[Path]:
+        home = Path.home()
+        candidates: list[Path] = []
+        if self._active_tab is not None:
+            candidates.append(self._active_tab.path)
+        candidates.extend(
+            [home, home / ".cache", _downloads_path(), Path("/home"), Path("/")]
+        )
+
+        paths: list[Path] = []
+        for path in candidates:
+            if path in paths or not path.is_dir():
+                continue
+            paths.append(path)
+        return paths
+
+    def _path_menu_item(self, path: Path) -> Gtk.Button:
+        button = Gtk.Button()
+        button.add_css_class("volna-menu-item")
+        button.add_css_class("volna-path-item")
+        button.set_tooltip_text(str(path))
+
+        current = self._active_tab is not None and path == self._active_tab.path
+        if current:
+            button.add_css_class("is-current")
+
+        row = hbox(px(8))
+        check_slot = Gtk.Box()
+        check_slot.set_size_request(px(16), px(16))
+        if current:
+            check_slot.append(icon("check", px(16)))
+        row.append(check_slot)
+        path_label = label(str(path), "volna-menu-label", ellipsize=True)
+        path_label.set_hexpand(True)
+        path_label.set_max_width_chars(48)
+        row.append(path_label)
+        button.set_child(row)
+        button.connect(
+            "clicked", lambda _button, target=path: self._on_path_menu_selected(target)
+        )
+        return button
+
+    def _on_path_menu_selected(self, path: Path) -> None:
+        self._close_path_menu()
+        self._navigate_active_tab(path)
+
+    def _start_path_edit(self) -> None:
+        tab = self._active_tab
+        if tab is None:
+            return
+        self._set_path_invalid(False)
+        self._close_path_menu()
+        self._path_entry.set_text(str(tab.path))
+        self._path_stack.set_visible_child_name("edit")
+        if self.get_visible():
+            GLib.idle_add(self._focus_path_entry)
+
+    def _focus_path_entry(self) -> bool:
+        self._path_entry.grab_focus()
+        self._path_entry.select_region(0, -1)
+        return False
+
+    def _cancel_path_edit(self) -> None:
+        self._path_stack.set_visible_child_name("display")
+        if self._active_tab is not None:
+            self._path_label.set_text(str(self._active_tab.path))
+
+    def _on_path_key_pressed(self, _controller, keyval, _keycode, _state) -> bool:
+        if keyval == Gdk.KEY_Escape:
+            self._cancel_path_edit()
+            return True
+        return False
+
+    def _on_path_focus_leave(self, *_args: object) -> None:
+        if self._path_stack.get_visible_child_name() == "edit":
+            self._cancel_path_edit()
+
+    def _commit_path_edit(self, entry: Gtk.Entry) -> None:
+        path = self._parse_path(entry.get_text())
+        self._cancel_path_edit()
+        if path is None:
+            self._set_path_invalid(True)
+            self._show_status_note("Путь недоступен")
+            return
+        self._navigate_active_tab(path)
+
+    def _parse_path(self, text: str) -> Path | None:
+        value = text.strip()
+        if not value:
+            path = Path("/")
+        else:
+            try:
+                path = Path(value).expanduser()
+            except (OSError, RuntimeError):
+                return None
+
+        if not path.is_absolute():
+            base = (
+                self._active_tab.path if self._active_tab is not None else Path.home()
+            )
+            path = base / path
+        path = Path(os.path.normpath(path))
+
+        return path if path.is_dir() else None
+
+    def _navigate_active_tab(self, path: Path) -> None:
+        tab = self._active_tab
+        if tab is None:
+            return
+        self._set_path_invalid(False)
+        if path == tab.path:
+            self._path_label.set_text(str(tab.path))
+            return
+
+        tab.navigate(path)
+        self._path_label.set_text(str(tab.path))
+        self._refresh_tab_widget(tab)
+        self._update_active_status()
+
+    def _refresh_tab_widget(self, tab: DirectoryTab) -> None:
+        title = self._tab_title_labels.get(tab)
+        if title is not None:
+            self._configure_tab_title(title, tab.title)
+
+        tab_icon = self._tab_icons.get(tab)
+        if tab_icon is not None:
+            tab_icon.set_from_file(str(self._tab_icon_file(tab)))
+            tab_icon.set_pixel_size(px(16))
+
+        widget = self._tab_widgets.get(tab)
+        if widget is not None:
+            widget.set_tooltip_text(str(tab.path))
+
+    def _show_status_note(self, text: str) -> None:
+        self._status_label.set_text(text)
+        if self._note_timeout is not None:
+            GLib.source_remove(self._note_timeout)
+        self._note_timeout = GLib.timeout_add(2000, self._clear_status_note)
+
+    def _clear_status_note(self) -> bool:
+        self._note_timeout = None
+        self._set_path_invalid(False)
+        self._update_active_status()
+        return False
+
+    def _set_path_invalid(self, invalid: bool) -> None:
+        if invalid:
+            self._path_wrapper.add_css_class("is-invalid")
+        else:
+            self._path_wrapper.remove_css_class("is-invalid")
 
     def _window_controls(self) -> Gtk.Box:
         controls = hbox(0)
@@ -438,7 +720,7 @@ class MainWindow(Gtk.ApplicationWindow):
         body = hbox(0)
         body.set_vexpand(True)
 
-        body.append(self._rail(left=True))
+        body.append(self._rail())
 
         center = vbox(0)
         center.set_hexpand(True)
@@ -450,7 +732,6 @@ class MainWindow(Gtk.ApplicationWindow):
         center.append(self._bottom_window())
         body.append(center)
 
-        body.append(self._rail(left=False))
         return body
 
     def _header_band(self) -> Gtk.Box:
@@ -478,37 +759,58 @@ class MainWindow(Gtk.ApplicationWindow):
         tabs = hbox(0)
         tabs.add_css_class("volna-tab-strip")
         tabs.set_hexpand(True)
-        self._tab_widgets = []
-        for index, (icon_name, title, _path) in enumerate(self._tab_specs):
-            widget = self._tab(icon_name, title, index=index)
-            self._tab_widgets.append(widget)
-            tabs.append(widget)
+        self._tab_strip = tabs
 
-        right = Gtk.CenterBox()
-        right.add_css_class("volna-panel-header")
-        right.set_size_request(px(300), -1)
-        right.set_start_widget(label("Сведения", "volna-panel-title-label"))
-
-        right_actions = hbox(px(8))
-        right_actions.append(icon_stub("more", tooltip="Действия"))
-        right_actions.append(icon_stub("min", tooltip="Скрыть панель"))
-        right.set_end_widget(right_actions)
+        # Unbounded tabs must not widen the window: scroll the strip
+        # horizontally instead of clipping the last tabs.
+        tab_scroll = Gtk.ScrolledWindow()
+        tab_scroll.add_css_class("volna-tab-scroll")
+        tab_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
+        tab_scroll.set_propagate_natural_height(True)
+        tab_scroll.set_hexpand(True)
+        tab_scroll.set_child(tabs)
+        self._tab_scroll = tab_scroll
 
         band.append(left)
-        band.append(tabs)
-        band.append(right)
+        band.append(tab_scroll)
         return band
 
-    def _tab(self, icon_name: str, text: str, *, index: int) -> Gtk.Box:
-        tab = hbox(px(6))
-        tab.add_css_class("volna-tab")
-        tab.append(icon(icon_name, px(16)))
-        tab.append(label(text, "volna-tab-label", ellipsize=True))
-        close = icon("close", px(12))
+    def _tab_widget(self, tab: DirectoryTab) -> Gtk.Box:
+        widget = hbox(px(6))
+        widget.add_css_class("volna-tab")
+        widget.set_tooltip_text(str(tab.path))
+
+        tab_icon = icon(tab.icon_name, px(16))
+        self._tab_icons[tab] = tab_icon
+        widget.append(tab_icon)
+
+        title = label(tab.title, "volna-tab-label", ellipsize=True)
+        self._configure_tab_title(title, tab.title)
+        self._tab_title_labels[tab] = title
+        widget.append(title)
+
+        close = Gtk.Button()
         close.add_css_class("volna-tab-close")
-        tab.append(close)
-        make_clickable(tab, lambda i=index: self._activate(i))
-        return tab
+        close.set_child(icon("close", px(12)))
+        close.set_valign(Gtk.Align.CENTER)
+        close.set_tooltip_text("Закрыть вкладку")
+        close.connect("clicked", lambda _button, current=tab: self._close_tab(current))
+        self._tab_close_buttons[tab] = close
+        widget.append(close)
+
+        make_clickable(widget, lambda current=tab: self._activate(current))
+        return widget
+
+    def _tab_icon_file(self, tab: DirectoryTab) -> Path:
+        return _ICONS_DIR / str(px(16)) / f"{tab.icon_name}.svg"
+
+    def _configure_tab_title(self, title: Gtk.Label, text: str) -> None:
+        title.set_text(text)
+        # width-chars keeps the label from collapsing to its "…" minimum when
+        # many tabs compete for space; that minimum is what makes the scrolled
+        # tab strip show its horizontal scrollbar instead of squeezing tabs.
+        title.set_width_chars(min(len(text), 18))
+        title.set_max_width_chars(18)
 
     def _workspace(self) -> Gtk.Box:
         workspace = hbox(0)
@@ -537,48 +839,30 @@ class MainWindow(Gtk.ApplicationWindow):
         self._stack = Gtk.Stack()
         self._stack.set_vexpand(True)
         self._stack.set_hexpand(True)
-        self._tabs = []
-        for _icon, _title, path in self._tab_specs:
-            tab = DirectoryTab(path, on_change=self._on_tab_change)
-            self._tabs.append(tab)
-            self._stack.add_child(tab.widget)
 
         editor.append(editor_header)
         editor.append(self._stack)
 
-        right_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        right_panel.add_css_class("volna-panel")
-        right_panel.add_css_class("volna-panel-right")
-        right_panel.set_size_request(px(300), -1)
-        right_panel.set_vexpand(True)
-
         workspace.append(left_panel)
         workspace.append(editor)
-        workspace.append(right_panel)
         return workspace
 
-    def _rail(self, *, left: bool) -> Gtk.Box:
+    def _rail(self) -> Gtk.Box:
         rail = vbox(0)
         rail.add_css_class("volna-rail")
         rail.set_size_request(px(40), -1)
         rail.set_vexpand(True)
 
-        if left:
-            items = [
-                ("home", "Места", True),
-                ("folder", "Файлы", False),
-                ("star", "Закладки", False),
-                ("clock", "Недавние", False),
-                ("drive", "Устройства", False),
-                ("network", "Сеть", False),
-                ("separator", "", False),
-                ("trash", "Корзина", False),
-            ]
-        else:
-            items = [
-                ("info", "Сведения", True),
-                ("eye", "Предпросмотр", False),
-            ]
+        items = [
+            ("home", "Места", True),
+            ("folder", "Файлы", False),
+            ("star", "Закладки", False),
+            ("clock", "Недавние", False),
+            ("drive", "Устройства", False),
+            ("network", "Сеть", False),
+            ("separator", "", False),
+            ("trash", "Корзина", False),
+        ]
 
         for name, tooltip, active in items:
             if name == "separator":
@@ -655,28 +939,138 @@ class MainWindow(Gtk.ApplicationWindow):
         status.append(right)
         return status
 
-    # -- tab wiring ---------------------------------------------------
+    # -- tabs and actions -----------------------------------------------
 
-    def _activate(self, index: int) -> None:
-        self._active_index = index
-        tab = self._tabs[index]
+    def _install_actions(self) -> None:
+        new_tab = Gio.SimpleAction.new("new-tab", None)
+        new_tab.connect("activate", self._on_new_tab_action)
+        self.add_action(new_tab)
+
+        self._close_action = Gio.SimpleAction.new("close-tab", None)
+        self._close_action.connect("activate", self._on_close_tab_action)
+        self.add_action(self._close_action)
+
+    def _on_new_tab_action(self, *_args: object) -> None:
+        self._open_tab(self._new_tab_path())
+
+    def _on_close_tab_action(self, *_args: object) -> None:
+        self._close_active_tab()
+
+    def _new_tab_path(self) -> Path:
+        if self._active_tab is not None:
+            return self._active_tab.path
+        return Path.home()
+
+    def _open_tab(self, path: Path) -> DirectoryTab:
+        tab = DirectoryTab(path, on_change=self._on_tab_change)
+        self._tabs.append(tab)
+        self._stack.add_child(tab.widget)
+
+        widget = self._tab_widget(tab)
+        self._tab_widgets[tab] = widget
+        self._tab_strip.append(widget)
+
+        self._activate(tab)
+        self._refresh_tab_controls()
+        return tab
+
+    def _activate(self, tab: DirectoryTab) -> None:
+        if tab not in self._tab_widgets:
+            return
+
+        self._active_tab = tab
         self._stack.set_visible_child(tab.widget)
+        if self._path_stack.get_visible_child_name() == "edit":
+            self._cancel_path_edit()
         self._path_label.set_text(str(tab.path))
-        for position, widget in enumerate(self._tab_widgets):
-            if position == index:
+        for current, widget in self._tab_widgets.items():
+            if current is tab:
                 widget.add_css_class("is-active")
             else:
                 widget.remove_css_class("is-active")
         tab.ensure_loaded()
         self._update_active_status()
+        self._reveal_tab(tab)
+
+    def _reveal_tab(self, tab: DirectoryTab) -> None:
+        if not self.get_visible():
+            return
+        # The tab is laid out only after this turn: scroll on the next idle so
+        # its allocation is known.
+        GLib.idle_add(self._scroll_tab_into_view, tab, 0)
+
+    def _scroll_tab_into_view(self, tab: DirectoryTab, attempts: int) -> bool:
+        widget = self._tab_widgets.get(tab)
+        if widget is None or widget.get_width() == 0:
+            if attempts < 5:
+                GLib.idle_add(self._scroll_tab_into_view, tab, attempts + 1)
+            return False
+
+        ok, bounds = widget.compute_bounds(self._tab_strip)
+        if not ok:
+            return False
+
+        adjustment = self._tab_scroll.get_hadjustment()
+        if adjustment is None:
+            return False
+        value = adjustment.get_value()
+        page = adjustment.get_page_size()
+        left = bounds.get_x()
+        right = left + bounds.get_width()
+        if left < value:
+            adjustment.set_value(left)
+        elif right > value + page:
+            adjustment.set_value(min(right - page, adjustment.get_upper() - page))
+        return False
+
+    def _activate_next_tab(self) -> None:
+        if len(self._tabs) < 2 or self._active_tab is None:
+            return
+        index = self._tabs.index(self._active_tab)
+        self._activate(self._tabs[(index + 1) % len(self._tabs)])
+
+    def _close_active_tab(self) -> None:
+        if self._active_tab is not None:
+            self._close_tab(self._active_tab)
+
+    def _close_tab(self, tab: DirectoryTab) -> None:
+        if len(self._tabs) <= 1 or tab not in self._tabs:
+            return
+
+        index = self._tabs.index(tab)
+        was_active = tab is self._active_tab
+        self._tabs.pop(index)
+        self._stack.remove(tab.widget)
+        self._tab_strip.remove(self._tab_widgets.pop(tab))
+        self._tab_close_buttons.pop(tab)
+        self._tab_title_labels.pop(tab)
+        self._tab_icons.pop(tab)
+        tab.close()
+
+        if was_active:
+            self._activate(self._tabs[max(0, index - 1)])
+        self._refresh_tab_controls()
+
+    def _refresh_tab_controls(self) -> None:
+        can_close = len(self._tabs) > 1
+        for button in self._tab_close_buttons.values():
+            button.set_visible(can_close)
+        self._close_action.set_enabled(can_close)
+        self._close_menu_item.set_sensitive(can_close)
+        self._fwd_button.set_sensitive(can_close)
+        self._fwd_button.remove_css_class("volna-disabled")
+        if not can_close:
+            self._fwd_button.add_css_class("volna-disabled")
 
     def _on_tab_change(self, tab: DirectoryTab) -> None:
-        if tab is not self._tabs[self._active_index]:
+        if tab is not self._active_tab:
             return
         self._update_active_status()
 
     def _update_active_status(self) -> None:
-        tab = self._tabs[self._active_index]
+        tab = self._active_tab
+        if tab is None:
+            return
         self._status_label.set_text(_status_text(tab.model.state))
         counters = tab.model.counters()
         self._counts_label.set_text(
@@ -685,6 +1079,9 @@ class MainWindow(Gtk.ApplicationWindow):
         )
 
     def _on_close_request(self, *_args: object) -> bool:
+        if self._note_timeout is not None:
+            GLib.source_remove(self._note_timeout)
+            self._note_timeout = None
         for tab in self._tabs:
             tab.close()
         return False

@@ -50,8 +50,10 @@ class DirectoryController:
             self._scanner.join(timeout)
 
     def close(self) -> None:
+        # Cancel only: a join would block the GTK main loop for up to a second
+        # while the scanner is inside a slow stat/readdir call. The daemon
+        # scanner stops at its next cancellation check on its own.
         if self._scanner is not None:
             self._scanner.cancel()
-            self._scanner.join(1.0)
             self._scanner = None
         self._stat_pool.close()

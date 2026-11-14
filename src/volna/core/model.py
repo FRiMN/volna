@@ -175,6 +175,7 @@ class DirModel:
         buckets: dict[GroupBucket, list[Entry]] = defaultdict(list)
         for entry in self._entries:
             buckets[group_of(entry.mtime, now=now)].append(entry)
+
         return [
             Group(bucket, buckets[bucket])
             for bucket in BUCKET_ORDER

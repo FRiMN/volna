@@ -22,6 +22,7 @@ def _stat_one(path: str) -> StatResult:
         info = os.stat(path)
     except OSError:
         return StatResult(path=path, ok=False)
+
     return StatResult(path=path, ok=True, size=info.st_size, mtime=info.st_mtime)
 
 

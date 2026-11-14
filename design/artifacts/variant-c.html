@@ -39,7 +39,7 @@
   .od-media-cover { object-fit: cover; }
 
   /* functional inline SVG icons opt into bounded geometry; content SVGs keep their own */
-  .od-icon { display: inline-block; inline-size: var(--od-icon-size, 1em); block-size: var(--od-icon-size, 1em); flex: none; }
+  .od-icon { display: inline-block; inline-size: calc(var(--od-icon-size, 1em) * var(--icon-scale, 1)); block-size: calc(var(--od-icon-size, 1em) * var(--icon-scale, 1)); flex: none; }
 
   /* data text only — authored copy is rewritten to its budget instead */
   .od-truncate { display: block; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -120,6 +120,8 @@
   --tile-icon:60px;
   --app-h:900px;
   --scale:1;
+  --window-scale:1;
+  --icon-scale:1;
 }
 
 *,*::before,*::after{box-sizing:border-box}
@@ -146,13 +148,13 @@ button{font-family:inherit;color:inherit}
 /* ---- stage & window ---- */
 .stage{
   position:fixed;left:50%;top:50%;
-  width:1440px;height:var(--app-h);
+  width:calc(1440px * var(--window-scale, 1));height:var(--app-h);
   transform:translate(-50%,-50%) scale(var(--scale));
   transform-origin:center center;
 }
 .app-window{
   position:relative;
-  width:1440px;height:100%;
+  width:100%;height:100%;
   border-radius:8px;overflow:hidden;
   background:var(--bg-canvas);
   box-shadow:inset 0 0 0 1px #3b3e43, 0 30px 90px rgba(0,0,0,.62), 0 6px 18px rgba(0,0,0,.45);
@@ -922,6 +924,195 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
 @media (prefers-reduced-motion: reduce){
   *{transition-duration:0ms !important;animation-duration:0ms !important}
 }
+
+/* ============================================================
+   Size variants (revision 7): wide (default, below) and compact (base, above).
+   Wide = compact × 1.25, the scale the PyCharm reference shows
+   (reference/pycharm.png is a 125% UI capture: 24px tree rows -> 30,
+   40px chrome bands -> 50, 13px UI text -> ~16px).
+   ?size=compact switches to the 100% grid; the switch is meant for the
+   future "interface size" setting.
+   ============================================================ */
+.app-window.is-wide {
+  --icon-scale:1.25;
+  --fs-display:24px;
+  --fs-title:21px;
+  --fs-body:17.5px;
+  --fs-item:17px;
+  --fs-meta:16px;
+  --fs-caption:15px;
+  --fs-compact-meta:15.5px;
+  --fs-compact-caption:14.5px;
+}
+
+/* ---- window shell and toolbars ---- */
+.app-window.is-wide { border-radius:10px }
+.app-window.is-wide .app-center { width:1700px }
+.app-window.is-wide .toolbar { height:50px;gap:10px;padding:0 5px }
+.app-window.is-wide .ic-btn,
+.app-window.is-wide .ic-btn.sm { width:30px;height:30px }
+.app-window.is-wide .ic-btn.lg { width:40px;height:40px }
+.app-window.is-wide .tb-group { gap:3px }
+.app-window.is-wide .tb-sep { height:25px;margin:0 8px }
+.app-window.is-wide .tb-sep.tight { height:20px;margin:0 3px }
+.app-window.is-wide .tb-spacer { min-width:10px }
+.app-window.is-wide .toolbar .tb-spacer { flex:0 0 10px }
+.app-window.is-wide .widget { height:35px;gap:8px;padding:0 10px }
+.app-window.is-wide .path-widget { height:35px;padding:0 3px }
+.app-window.is-wide .path-btn { height:30px;padding:0 8px }
+.app-window.is-wide .path-edit { width:30px;height:30px }
+.app-window.is-wide .path-input { height:30px;padding:0 8px }
+.app-window.is-wide .win-btn { width:50px;height:50px }
+
+/* ---- rails and header band ---- */
+.app-window.is-wide .rail { width:50px;padding:5px 0 }
+.app-window.is-wide .rail-btn { width:40px;height:40px }
+.app-window.is-wide .rail-sep { width:25px;margin:5px 0 }
+.app-window.is-wide .header-band { height:50px }
+.app-window.is-wide .tw-header { height:50px;gap:10px;padding:0 10px }
+.app-window.is-wide .tw-header.left,
+.app-window.is-wide .panel-left { width:calc(var(--left-w) * 1.25) }
+.app-window.is-wide .tw-header.right,
+.app-window.is-wide .panel-right { width:calc(var(--right-w) * 1.25) }
+.app-window.is-wide .tw-title { height:35px;gap:8px;padding:0 3px }
+.app-window.is-wide .tw-title-static { padding:0 3px }
+.app-window.is-wide .tw-actions { gap:10px }
+.app-window.is-wide .tab { height:50px;max-width:275px;gap:8px;padding:0 12px }
+.app-window.is-wide .tab.is-active::after { height:4px }
+.app-window.is-wide .tab-close { width:20px;height:20px }
+
+/* ---- workspace: left panel tree ---- */
+.app-window.is-wide .workspace { height:auto;flex:1 1 auto }
+.app-window.is-wide .panel-toolbar { height:40px;gap:5px;padding:0 8px }
+.app-window.is-wide .mini-search { height:30px;gap:5px;padding:0 8px }
+.app-window.is-wide .panel-scroll { padding:3px 0 12px }
+.app-window.is-wide .p-row { height:30px;gap:8px;margin:0 5px;padding:0 5px }
+.app-window.is-wide .p-twisty { width:20px;height:20px }
+.app-window.is-wide .p-indent { width:20px }
+.app-window.is-wide .usage { height:4px;margin:0 12px 6px 0 }
+.app-window.is-wide .p-empty { padding:18px 15px }
+.app-window.is-wide .p-empty strong { margin-bottom:5px }
+
+/* ---- editor toolbar ---- */
+.app-window.is-wide .editor-toolbar { height:40px;gap:10px;padding:0 10px }
+.app-window.is-wide .filter-field { width:250px;height:30px;gap:8px;padding:0 8px 0 10px }
+.app-window.is-wide .filter-clear { width:20px;height:20px }
+.app-window.is-wide .mini-btn { height:30px;gap:8px;padding:0 10px }
+
+/* ---- «Столбцы» ---- */
+.app-window.is-wide .column { flex:0 0 calc(var(--col-w) * 1.25);width:calc(var(--col-w) * 1.25) }
+.app-window.is-wide .col-head { height:35px;gap:10px;padding:0 10px }
+.app-window.is-wide .col-items { padding:5px }
+.app-window.is-wide .col-collapsed { padding:12px 10px }
+.app-window.is-wide .col-item { height:82px;gap:12px;padding:8px 10px;margin:0 0 3px }
+.app-window.is-wide .band.is-ungrouped .column.is-flat { min-width:238px;max-width:375px }
+.app-window.is-wide .band.is-ungrouped .col-items { padding-top:8px }
+
+/* ---- band states ---- */
+.app-window.is-wide .band.is-icons .band-inner { padding:5px 15px 25px }
+.app-window.is-wide .band.is-details .band-inner { padding:0 0 18px }
+.app-window.is-wide .band-empty { gap:5px }
+.app-window.is-wide .band-note { bottom:20px;max-width:650px;padding:8px 12px }
+
+/* ---- «Значки» ---- */
+.app-window.is-wide .icon-section + .icon-section { margin-top:12px }
+.app-window.is-wide .icon-section-head { height:35px;gap:10px;padding:0 5px;margin:0 0 10px }
+.app-window.is-wide .icon-grid { grid-template-columns:repeat(auto-fill,minmax(188px,222px));gap:8px;padding:0 0 8px }
+.app-window.is-wide .icon-tile { min-height:188px;padding:12px 10px 10px;gap:3px }
+.app-window.is-wide .it-icon { height:calc(var(--tile-icon) * 1.25 + 10px);margin-bottom:3px }
+.app-window.is-wide .it-icon .od-icon { inline-size:calc(var(--tile-icon) * 1.25);block-size:calc(var(--tile-icon) * 1.25) }
+
+/* ---- «Подробности» ---- */
+.app-window.is-wide .details-head,
+.app-window.is-wide .dt-row { grid-template-columns:minmax(0,1fr) 120px 210px 95px;gap:15px;padding:0 18px }
+.app-window.is-wide .details-head { height:35px }
+.app-window.is-wide .details-group { height:35px;gap:10px;padding:0 18px;margin-top:3px }
+.app-window.is-wide .dt-row { height:30px }
+.app-window.is-wide .dt-name { gap:10px }
+.app-window.is-wide .dt-icon { width:20px;height:20px }
+
+/* ---- inspector ---- */
+.app-window.is-wide .detail-body { padding:12px 15px 0 }
+.app-window.is-wide .detail-card { padding:15px;gap:5px }
+.app-window.is-wide .dc-icon { margin-bottom:3px }
+.app-window.is-wide .meta-list { margin-top:10px }
+.app-window.is-wide .meta-row { grid-template-columns:120px minmax(0,1fr);gap:15px;height:30px }
+.app-window.is-wide .meta-row.path { padding-top:4px }
+.app-window.is-wide .sub-title { margin:15px 0 3px;padding-top:10px }
+.app-window.is-wide .detail-actions { gap:10px;padding:15px }
+.app-window.is-wide .btn { height:40px;gap:8px;padding:0 15px }
+
+/* ---- bottom tool window ---- */
+.app-window.is-wide .bottom-window { height:calc(var(--bottom-h,180px) * 1.25) }
+.app-window.is-wide .bw-header,
+.app-window.is-wide .bw-tab { height:50px }
+.app-window.is-wide .bw-tab { padding:0 15px }
+.app-window.is-wide .bw-tab.is-active::after { height:4px }
+.app-window.is-wide .bw-actions { gap:10px;padding-right:8px }
+.app-window.is-wide .bw-content { height:175px;padding:12px 15px }
+.app-window.is-wide .op-row { grid-template-columns:25px 350px minmax(200px,525px) 65px 105px 115px;gap:10px;height:30px;margin-bottom:7px }
+.app-window.is-wide .op-bar { height:5px }
+
+/* ---- status bar ---- */
+.app-window.is-wide .statusbar { height:35px;gap:15px;padding:0 10px }
+.app-window.is-wide .sb-left,
+.app-window.is-wide .sb-right { gap:10px }
+.app-window.is-wide .sb-item { gap:8px }
+
+/* ---- popovers and presets ---- */
+.app-window.is-wide .popup { min-width:238px;padding:5px;top:calc(100% + 5px) }
+.app-window.is-wide .popup.up { bottom:calc(100% + 5px) }
+.app-window.is-wide .popup.to-right { left:calc(100% + 8px) }
+.app-window.is-wide .pop-item { height:30px;gap:10px;padding:0 10px }
+.app-window.is-wide .pop-check { width:20px }
+.app-window.is-wide .pop-sep { margin:5px 8px }
+.app-window.is-wide .view-pop { width:400px;padding:15px;max-height:1000px }
+.app-window.is-wide .vp-header { margin:0 0 8px }
+.app-window.is-wide .vp-section { padding:10px 0 }
+.app-window.is-wide .vp-section-title { margin:0 0 5px }
+.app-window.is-wide .vp-row { height:32px;gap:10px;padding:0 5px }
+.app-window.is-wide .vp-radio,
+.app-window.is-wide .vp-box { width:18px;height:18px }
+.app-window.is-wide .vp-seg { gap:3px;margin-top:8px;padding:3px }
+.app-window.is-wide .vp-seg-btn { height:30px }
+.app-window.is-wide .vp-zoom { gap:12px;padding:3px 5px }
+.app-window.is-wide .vp-pct { min-width:48px }
+.app-window.is-wide .vp-foot { margin-top:8px;padding-top:10px }
+.app-window.is-wide .zoom-slider { width:120px;height:18px }
+.app-window.is-wide .zoom-slider::-webkit-slider-runnable-track { height:5px }
+.app-window.is-wide .zoom-slider::-webkit-slider-thumb { width:12px;height:12px;margin-top:-3.5px }
+.app-window.is-wide .zoom-slider::-moz-range-track { height:5px }
+.app-window.is-wide .zoom-slider::-moz-range-thumb { width:12px;height:12px }
+.app-window.is-wide .preset-field { gap:5px }
+.app-window.is-wide .preset-select { height:35px;gap:8px;padding:0 10px }
+.app-window.is-wide .preset-save { width:35px;height:35px }
+.app-window.is-wide .preset-list { margin-top:5px;padding:3px;max-height:218px }
+.app-window.is-wide .preset-item { height:32px }
+.app-window.is-wide .preset-apply { gap:10px;padding:0 8px }
+.app-window.is-wide .preset-check { width:20px;height:20px }
+.app-window.is-wide .preset-item .preset-actions { gap:3px;padding-right:5px }
+.app-window.is-wide .preset-act { width:28px;height:28px }
+.app-window.is-wide .preset-rename-input { height:30px;margin:0 5px 0 0;padding:0 8px }
+.app-window.is-wide .preset-modal { padding:20px }
+.app-window.is-wide .preset-dialog { width:475px;padding:20px }
+.app-window.is-wide .preset-dialog-title { margin:0 0 18px }
+.app-window.is-wide .preset-dialog-label { margin:0 0 8px }
+.app-window.is-wide .preset-name-input { height:35px;margin:0 0 18px;padding:0 10px }
+.app-window.is-wide .preset-dialog-sub { margin:0 0 8px }
+.app-window.is-wide .preset-existing { margin:0 0 12px;padding:3px;max-height:180px }
+.app-window.is-wide .preset-existing-row { height:30px;padding:0 8px }
+.app-window.is-wide .preset-hint { margin:0 0 18px }
+.app-window.is-wide .preset-actions { gap:10px }
+.app-window.is-wide .preset-btn { height:40px;padding:0 18px }
+.app-window.is-wide .preset-confirm-dialog { width:475px }
+.app-window.is-wide .preset-confirm-text { margin:0 0 22px }
+
+/* ---- compact density inside the wide variant ---- */
+.app-window.is-wide.is-compact .col-item { height:68px;padding:3px 10px;gap:10px }
+.app-window.is-wide.is-compact .ci-icon .od-icon { inline-size:50px;block-size:50px }
+.app-window.is-wide.is-compact .icon-tile { min-height:165px;padding:8px 8px 6px }
+.app-window.is-wide.is-compact .details-group { height:30px }
+
 </style>
 </head>
 <body>
@@ -3390,16 +3581,17 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
 
   function fit() {
     var vw = window.innerWidth, vh = window.innerHeight;
+    var w = 1440 * windowScale, h = 900 * windowScale;
     var s = state.maximized
-      ? Math.min((vw - 16) / 1440, (vh - 16) / 900)
-      : Math.min(1, (vw - 48) / 1440, (vh - 48) / 900);
+      ? Math.min((vw - 16) / w, (vh - 16) / h)
+      : Math.min(1, (vw - 48) / w, (vh - 48) / h);
     root.style.setProperty('--scale', Math.max(0.2, s).toFixed(4));
   }
 
   function wireWindow() {
     $('btnMin').addEventListener('click', function () {
       state.minimized = !state.minimized;
-      root.style.setProperty('--app-h', state.minimized ? '40px' : '900px');
+      root.style.setProperty('--app-h', state.minimized ? Math.round(40 * windowScale) + 'px' : Math.round(900 * windowScale) + 'px');
       this.title = state.minimized ? 'Развернуть' : 'Свернуть';
     });
     $('btnMax').addEventListener('click', function () {
@@ -3541,7 +3733,20 @@ input[type=range].zoom-slider::-moz-range-thumb{width:10px;height:10px;border:0;
     }
   }
 
+  var windowScale = 1;
+
+  function applySizeVariant() {
+    // wide is the default interface size; ?size=compact switches to the 100% grid
+    var compact = new URLSearchParams(location.search).get('size') === 'compact';
+    var win = $('appWindow');
+    if (win) win.classList.toggle('is-wide', !compact);
+    windowScale = compact ? 1 : 1.25;
+    root.style.setProperty('--window-scale', String(windowScale));
+    root.style.setProperty('--app-h', Math.round(900 * windowScale) + 'px');
+  }
+
   function init() {
+    applySizeVariant();
     wireToolbar();
     wireRails();
     wireFilter();

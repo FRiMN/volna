@@ -1,8 +1,8 @@
-"""Tab titles and icons: friendly names for known folders, basename otherwise."""
+"""Tab and listing icons: friendly names for known folders, names for row glyphs."""
 
 from pathlib import Path
 
-from volna.naming import tab_icon, tab_title
+from volna.naming import content_icon, content_icon_label, tab_icon, tab_title
 
 
 def test_home_location_has_friendly_name_and_icon() -> None:
@@ -33,3 +33,13 @@ def test_nested_directory_uses_its_basename(tmp_path: Path) -> None:
 def test_filesystem_root_is_named_by_its_path() -> None:
     assert tab_title(Path("/")) == "/"
     assert tab_icon(Path("/")) == "folder"
+
+
+def test_listing_folders_use_the_saturated_glyph() -> None:
+    assert content_icon(True) == "folder-filled"
+    assert content_icon(False) == "file"
+
+
+def test_listing_glyph_carries_an_accessible_name() -> None:
+    assert content_icon_label(True) == "Папка"
+    assert content_icon_label(False) == "Файл"

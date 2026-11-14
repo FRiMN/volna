@@ -494,3 +494,104 @@ def test_path_edit_accepts_relative_path(gtk_display, tmp_path: Path) -> None:
         assert _path_label(window) == str(nested)
     finally:
         _close(window)
+
+
+def _pump_until(condition, timeout: float = 5.0) -> bool:
+    """Run the GTK main loop until ``condition`` holds (listing is async)."""
+    import gi
+
+    gi.require_version("GLib", "2.0")
+    from gi.repository import GLib
+
+    context = GLib.MainContext.default()
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        while context.pending():
+            context.iteration(False)
+        if condition():
+            return True
+        time.sleep(0.01)
+    return False
+
+
+def _name_cell_rows(window: object) -> dict[str, str]:
+    """Map a visible row label to the file name of its type glyph."""
+    import gi
+
+    from volna.size import px
+
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import Gtk
+
+    rows: dict[str, str] = {}
+    for image in _by_class(window, "volna-dt-icon"):
+        assert image.get_pixel_size() == px(16)
+        assert Gtk.test_accessible_has_property(image, Gtk.AccessibleProperty.LABEL)
+        cell = image.get_parent()
+        label = cell.get_last_child()
+        glyph = image.get_property("file")
+        assert glyph is not None, "the row glyph was not loaded from a file"
+        path = Path(glyph if isinstance(glyph, str) else glyph.get_path())
+        assert path.parent.name == str(px(16))
+        rows[label.get_text()] = path.name
+
+    return rows
+
+
+def test_details_rows_show_kind_icons(gtk_display, tmp_path: Path) -> None:
+    (tmp_path / "alpha").mkdir()
+    (tmp_path / "beta.txt").write_text("x", encoding="utf-8")
+
+    window = _main_window(tmp_path)
+    try:
+        window.present()
+        assert _pump_until(lambda: len(_by_class(window, "volna-dt-icon")) >= 2), (
+            "the details rows were not rendered"
+        )
+
+        assert _name_cell_rows(window) == {
+            "alpha": "folder-filled.svg",
+            "beta.txt": "file.svg",
+        }
+    finally:
+        _close(window)
+
+
+def test_row_glyph_accessible_name_tracks_the_bound_kind(
+    gtk_display, tmp_path: Path, monkeypatch
+) -> None:
+    (tmp_path / "alpha").mkdir()
+    (tmp_path / "beta.txt").write_text("x", encoding="utf-8")
+
+    from volna.naming import content_icon as real_content_icon
+
+    icon_kinds: list[bool] = []
+    label_kinds: list[bool] = []
+
+    def icon_spy(is_dir: bool) -> str:
+        icon_kinds.append(is_dir)
+        return real_content_icon(is_dir)
+
+    def label_spy(is_dir: bool) -> str:
+        label_kinds.append(is_dir)
+        return "Папка" if is_dir else "Файл"
+
+    import volna.views.details as details
+
+    monkeypatch.setattr(details, "content_icon", icon_spy)
+    monkeypatch.setattr(details, "content_icon_label", label_spy)
+
+    window = _main_window(tmp_path)
+    try:
+        window.present()
+        assert _pump_until(
+            lambda: (
+                len(_by_class(window, "volna-dt-icon")) >= 2
+                and icon_kinds == label_kinds
+                and {True, False} <= set(label_kinds)
+            )
+        ), "the row glyph names were not bound"
+
+        assert icon_kinds == label_kinds
+    finally:
+        _close(window)

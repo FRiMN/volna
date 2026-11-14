@@ -10,6 +10,8 @@ gi.require_version("Gtk", "4.0")
 
 from gi.repository import Gio, GObject, Gtk, Pango  # noqa: E402
 
+from ..glyph import icon_path  # noqa: E402
+from ..naming import content_icon, content_icon_label  # noqa: E402
 from ..size import px  # noqa: E402
 
 
@@ -25,6 +27,35 @@ class Row(GObject.Object):
         self.date_text = date_text
         self.is_dir = is_dir
 
+    @property
+    def icon_name(self) -> str:
+        return content_icon(self.is_dir)
+
+
+class _NameCell(Gtk.Box):
+    """The name column cell: a type glyph followed by an ellipsized label."""
+
+    __gtype_name__ = "VolnaNameCell"
+
+    def __init__(self) -> None:
+        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=px(8))
+        self.set_hexpand(True)
+
+        self.picture = Gtk.Image()
+        self.picture.set_pixel_size(px(16))
+        self.picture.set_halign(Gtk.Align.CENTER)
+        self.picture.set_valign(Gtk.Align.CENTER)
+        self.picture.add_css_class("volna-dt-icon")
+
+        self.text = Gtk.Label(xalign=0)
+        self.text.set_ellipsize(Pango.EllipsizeMode.END)
+        self.text.set_hexpand(True)
+        self.text.set_valign(Gtk.Align.CENTER)
+        self.text.add_css_class("volna-dt-name")
+
+        self.append(self.picture)
+        self.append(self.text)
+
 
 class DetailsView:
     """A three-column table; ``render`` replaces the visible rows."""
@@ -36,33 +67,35 @@ class DetailsView:
         self._column_view.set_show_column_separators(True)
         self._column_view.set_show_row_separators(False)
 
-        self._add_column("Имя", lambda row: row.name, expand=True)
-        self._add_column(
-            "Размер", lambda row: row.size_text, width=px(96), numeric=True
-        )
-        self._add_column("Дата", lambda row: row.date_text, width=px(168), numeric=True)
+        self._add_name_column("Имя")
+        self._add_numeric_column("Размер", lambda row: row.size_text, width=px(96))
+        self._add_numeric_column("Дата", lambda row: row.date_text, width=px(168))
 
         self.widget = Gtk.ScrolledWindow(vexpand=True)
         self.widget.set_child(self._column_view)
 
-    def _add_column(
+    def _add_name_column(self, title: str) -> None:
+        factory = Gtk.SignalListItemFactory()
+        factory.connect("setup", _setup_name)
+        factory.connect("bind", _bind_name)
+        column = Gtk.ColumnViewColumn.new(title, factory)
+        column.set_expand(True)
+        self._column_view.append_column(column)
+
+    def _add_numeric_column(
         self,
         title: str,
         getter: Callable[[Row], str],
         *,
-        expand: bool = False,
-        width: int | None = None,
-        numeric: bool = False,
+        width: int,
     ) -> None:
         factory = Gtk.SignalListItemFactory()
-        factory.connect("setup", _setup_label, numeric)
-        factory.connect("bind", _bind_label, getter)
+        factory.connect("setup", _setup_numeric)
+        factory.connect("bind", _bind_text, getter)
         column = Gtk.ColumnViewColumn.new(title, factory)
-        column.set_expand(expand)
-        if width is not None:
-            # Fixed widths from the design table: the automatic measure would
-            # clip the date column as soon as the UI font grows.
-            column.set_fixed_width(width)
+        # Fixed widths from the design table: the automatic measure would clip
+        # the date column as soon as the UI font grows.
+        column.set_fixed_width(width)
         self._column_view.append_column(column)
 
     def render(self, rows: list[Row]) -> None:
@@ -74,18 +107,38 @@ class DetailsView:
             adjustment.set_value(0.0)
 
 
-def _setup_label(
+def _setup_name(
     _factory: Gtk.SignalListItemFactory,
     item: Gtk.ListItem,
-    numeric: bool,
 ) -> None:
-    widget = Gtk.Label(xalign=1 if numeric else 0)
+    item.set_child(_NameCell())
+
+
+def _bind_name(
+    _factory: Gtk.SignalListItemFactory,
+    item: Gtk.ListItem,
+) -> None:
+    row: Row = item.get_item()
+    cell = item.get_child()
+    cell.picture.set_from_file(str(icon_path(row.icon_name, px(16))))
+    # The icon is the only type cue in the table, so give it a name for AT.
+    cell.picture.update_property(
+        [Gtk.AccessibleProperty.LABEL], [content_icon_label(row.is_dir)]
+    )
+    cell.text.set_text(row.name)
+
+
+def _setup_numeric(
+    _factory: Gtk.SignalListItemFactory,
+    item: Gtk.ListItem,
+) -> None:
+    widget = Gtk.Label(xalign=1)
     widget.set_ellipsize(Pango.EllipsizeMode.END)
-    widget.add_css_class("volna-dt-num" if numeric else "volna-dt-name")
+    widget.add_css_class("volna-dt-num")
     item.set_child(widget)
 
 
-def _bind_label(
+def _bind_text(
     _factory: Gtk.SignalListItemFactory,
     item: Gtk.ListItem,
     getter: Callable[[Row], str],

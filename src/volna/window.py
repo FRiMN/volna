@@ -29,11 +29,11 @@ from gi.repository import Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 
 from .core import ScanState  # noqa: E402
 from .geometry import edge_at as geometry_edge_at  # noqa: E402
+from .glyph import icon, icon_path  # noqa: E402
 from .size import SIZE_CLASS, px  # noqa: E402
 from .tab import DirectoryTab  # noqa: E402
 from .views.format import format_size  # noqa: E402
 
-_ICONS_DIR = Path(__file__).resolve().parent / "icons"
 _POINTER_CURSOR = Gdk.Cursor.new_from_name("pointer", None)
 
 
@@ -52,19 +52,6 @@ def _status_text(state: ScanState) -> str:
     if state is ScanState.ERROR:
         return "Не удалось прочитать каталог"
     return "Готово."
-
-
-def icon(name: str, size: int = px(16), *, dim: bool = False) -> Gtk.Image:
-    image = Gtk.Image.new_from_file(str(_ICONS_DIR / str(size) / f"{name}.svg"))
-    # GtkImage measures its paintable at 16px by default (GTK 4.14), ignoring the
-    # SVG's intrinsic size: without the explicit pixel size the 12/20px glyphs of
-    # the toolbar, tabs and rails are all drawn at 16px with rescaled strokes.
-    image.set_pixel_size(size)
-    image.set_halign(Gtk.Align.CENTER)
-    image.set_valign(Gtk.Align.CENTER)
-    if dim:
-        image.add_css_class("volna-icon-dim")
-    return image
 
 
 def label(
@@ -802,7 +789,7 @@ class MainWindow(Gtk.ApplicationWindow):
         return widget
 
     def _tab_icon_file(self, tab: DirectoryTab) -> Path:
-        return _ICONS_DIR / str(px(16)) / f"{tab.icon_name}.svg"
+        return icon_path(tab.icon_name, px(16))
 
     def _configure_tab_title(self, title: Gtk.Label, text: str) -> None:
         title.set_text(text)

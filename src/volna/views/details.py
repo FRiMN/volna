@@ -10,6 +10,8 @@ gi.require_version("Gtk", "4.0")
 
 from gi.repository import Gio, GObject, Gtk, Pango  # noqa: E402
 
+from ..size import px  # noqa: E402
+
 
 class Row(GObject.Object):
     """One listing row, bound by the column factories."""
@@ -35,8 +37,10 @@ class DetailsView:
         self._column_view.set_show_row_separators(False)
 
         self._add_column("Имя", lambda row: row.name, expand=True)
-        self._add_column("Размер", lambda row: row.size_text, width=96, numeric=True)
-        self._add_column("Дата", lambda row: row.date_text, width=168, numeric=True)
+        self._add_column(
+            "Размер", lambda row: row.size_text, width=px(96), numeric=True
+        )
+        self._add_column("Дата", lambda row: row.date_text, width=px(168), numeric=True)
 
         self.widget = Gtk.ScrolledWindow(vexpand=True)
         self.widget.set_child(self._column_view)

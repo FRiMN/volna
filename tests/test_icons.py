@@ -17,7 +17,7 @@ gi.require_version("GdkPixbuf", "2.0")
 GdkPixbuf = pytest.importorskip("gi.repository.GdkPixbuf")
 
 ICONS_DIR = Path(__file__).resolve().parents[1] / "src" / "volna" / "icons"
-SIZES = (12, 14, 16, 20)
+SIZES = (12, 14, 15, 16, 18, 20, 25)
 SUPERSAMPLE = 4
 INK_ALPHA = 8
 EDGE_MARGIN = 0.25  # px at the declared icon size

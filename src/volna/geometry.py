@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-EDGE = 6
-CORNER = 12
+from .size import px
+
+EDGE = px(6)
+CORNER = px(12)
 
 
 def edge_at(x: int, y: int, width: int, height: int) -> str | None:

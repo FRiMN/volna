@@ -288,3 +288,126 @@ windowhandle {
   min-height: 40px;
   padding: 0;
 }
+
+/* ---- interface size preset: «широкий» (125 %, default) -----------------
+   Base styles above are the compact 100 % grid (design/spec/02 §10).
+   The wide preset is applied by MainWindow (size.SIZE_CLASS); the compact
+   preset will be switchable in settings later. */
+.volna-size-wide {
+  font-size: 17.5px;
+}
+
+.volna-size-wide .volna-toolbar {
+  min-height: 50px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+.volna-size-wide .volna-view {
+  min-height: 35px;
+  padding: 0 10px;
+}
+
+.volna-size-wide .volna-view-label,
+.volna-size-wide .volna-path-label,
+.volna-size-wide .volna-panel-title-label,
+.volna-size-wide .volna-tab,
+.volna-size-wide .volna-tab-label,
+.volna-size-wide .volna-bottom-tab {
+  font-size: 17.5px;
+}
+
+.volna-size-wide .volna-path {
+  min-height: 35px;
+}
+
+.volna-size-wide .volna-path-btn {
+  min-height: 30px;
+  padding: 0 8px;
+}
+
+.volna-size-wide .volna-panel-header {
+  min-height: 50px;
+  padding: 0 10px;
+}
+
+.volna-size-wide .volna-panel-title {
+  min-height: 35px;
+  padding: 0 3px;
+}
+
+.volna-size-wide .volna-tab {
+  min-height: 50px;
+  padding: 0 12px;
+}
+
+.volna-size-wide .volna-rail {
+  padding: 5px 0;
+}
+
+.volna-size-wide .volna-rail-btn {
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.volna-size-wide .volna-rail-sep {
+  min-width: 25px;
+  margin: 5px 0;
+}
+
+.volna-size-wide .volna-panel-left {
+  min-width: 350px;
+}
+
+.volna-size-wide .volna-panel-right {
+  min-width: 375px;
+}
+
+.volna-size-wide .volna-editor-header {
+  min-height: 40px;
+}
+
+.volna-size-wide .volna-editor-counts {
+  font-size: 16px;
+}
+
+.volna-size-wide .volna-bottom {
+  min-height: 225px;
+}
+
+.volna-size-wide .volna-bottom-header {
+  min-height: 50px;
+}
+
+.volna-size-wide .volna-bottom-tab {
+  min-height: 50px;
+  padding: 0 15px;
+}
+
+.volna-size-wide .volna-bottom-content {
+  min-height: 175px;
+  padding: 12px 15px;
+}
+
+.volna-size-wide .volna-statusbar {
+  min-height: 35px;
+  padding: 0 10px;
+}
+
+.volna-size-wide .volna-status,
+.volna-size-wide .volna-status-item,
+.volna-size-wide .volna-status-sep {
+  font-size: 16px;
+}
+
+.volna-size-wide .volna-dt-name {
+  font-size: 17.5px;
+}
+
+.volna-size-wide .volna-dt-num {
+  font-size: 16px;
+}
+
+.volna-size-wide windowhandle {
+  min-height: 50px;
+}

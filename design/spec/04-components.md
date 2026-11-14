@@ -12,7 +12,7 @@
 | «Вид» widget | 28px высота, padding 0 8 | иконка 16 + label 13 + шеврон 16; hover `#393b40`; `aria-haspopup`, `aria-expanded` |
 | Path widget | flex, 28px | иконка папки 16, путь 13 (truncate), шеврон; hover; клик — dropdown |
 | Path edit | 24×24 | карандаш 16, title «Изменить путь» |
-| Path input (режим редактирования) | 24px высота, mono 12 | select-all, accent-border при фокусе; Enter/Blur/Esc |
+| Path input (режим редактирования) | 24px высота, mono 14 | select-all, accent-border при фокусе; Enter/Blur/Esc |
 | Spacer | flex | не даёт правой группе двигаться |
 | Настройки ⚙ | 24×24 | поповер: «Сбросить масштаб», «Очистить фильтр», «Сбросить сортировку» |
 | Window controls | 40×40 | свернуть/развернуть/закрыть; close hover `#db5c5c` |
@@ -50,15 +50,15 @@
 
 | Часть | Метрики |
 |---|---|
-| Header | 13px/600 primary, margin-bottom 6 |
+| Header | 14px/600 primary, margin-bottom 6 |
 | Section | padding 8 0; между секциями 1px `#393b40` |
-| Section title | 11px/600 secondary, `letter-spacing .02em`, title case |
-| Row | 26px, padding 0 4, radius 4, hover `#393b40`; label 13 primary |
+| Section title | 12px/600 secondary, `letter-spacing .02em`, title case |
+| Row | 26px, padding 0 4, radius 4, hover `#393b40`; label 14 primary |
 | Radio | 14px, border 1.5px `#6f737a`; selected — accent border + 5px dot accent |
 | Checkbox | 14px, border 1.5px `#6f737a`, radius 3; checked — accent fill + 10px check icon белый |
 | Segmented | контейнер `#1e1f22`, 1px border, radius 6, padding 2, gap 2; кнопка 24px, radius 4; active `#393b40` + primary text; inactive secondary |
-| Zoom | слайдер 96×14 (трек 4), thumb 10 accent; проценты mono 12, min-width 38, right |
-| Footer | 11px muted, border-top 1px, margin-top 6, padding-top 8 |
+| Zoom | слайдер 96×14 (трек 4), thumb 10 accent; проценты mono 13, min-width 38, right |
+| Footer | 12px muted, border-top 1px, margin-top 6, padding-top 8 |
 | Поведение | открытие/закрытие, `aria-expanded`, весь поповер скроллится при max-height 820 |
 
 Все изменения применяются сразу, без кнопки «Применить».
@@ -76,12 +76,12 @@
 
 | Часть | Метрики/поведение |
 |---|---|
-| Поле выбора (`#btnPresetSelect`) | 28px, flex:1, radius 4, фон `#1e1f22`, border `#393b40`; имя 13 primary (truncate), chevron 16 secondary; `aria-haspopup="listbox"`, `aria-expanded`, `aria-controls`; hover border `#4d5057`; expanded — accent border; label при отсутствии пресета — «Настроено вручную» |
+| Поле выбора (`#btnPresetSelect`) | 28px, flex:1, radius 4, фон `#1e1f22`, border `#393b40`; имя 14 primary (truncate), chevron 16 secondary; `aria-haspopup="listbox"`, `aria-expanded`, `aria-controls`; hover border `#4d5057`; expanded — accent border; label при отсутствии пресета — «Настроено вручную» |
 | Кнопка сохранения (`#btnPresetSave`) | 28×28, radius 4, border `#393b40`, иконка 16 «дискета»; hover `#393b40`; title «Сохранить пресет» |
 | Инлайн-список (`#presetList`) | строки 26px, padding 0 4, radius 4, hover `#393b40`, check 16 accent у текущего (имя 600), внутренний скролл при переполнении; клик — применить и закрыть; Esc/клик вне — закрыть |
 | Встроенные пресеты | «По умолчанию», «Плотный список», «Крупные значки», «Без группировки» (снапшоты — см. [05 · Пресеты](05-interactions.md#18-пресеты-отображения)) |
 | Действия кастомного пресета | 22×22 кнопки справа в строке: «Переименовать» (карандаш) и «Удалить» (корзина); иконки 14; видны на hover/`:focus-within`, доступны с Tab; delete-hover — `#db5c5c`; у встроенных действий нет |
-| Инлайн-переименование | строка превращается в input 24px (13px UI, фон `#1e1f22`, accent-border при фокусе), текст выделен; Enter — сохранить, Esc/blur — отмена; действия скрыты |
+| Инлайн-переименование | строка превращается в input 24px (14px UI, фон `#1e1f22`, accent-border при фокусе), текст выделен; Enter — сохранить, Esc/blur — отмена; действия скрыты |
 | Кастомные | добавляются/перезаписываются через диалог; хранятся в localStorage; перекрывают встроенный с тем же именем; переименовываются и удаляются |
 
 ### 2.2 Диалог «Сохранить пресет»
@@ -104,11 +104,11 @@
 |---|---|
 | Оверлей | absolute поверх окна, `rgba(0,0,0,.45)`, z-index 70; клик по фону — отмена |
 | Карточка | 380px, radius 8, padding 16, bg `#2b2d30`, border `#393b40`, тень `0 24px 70px rgba(0,0,0,.55)`; `role=dialog`, `aria-modal`, `aria-labelledby` |
-| Заголовок | «Сохранить пресет» 13/600 |
-| Label | «Название пресета» 11/600 secondary |
-| Input (`#presetName`) | 28px, radius 4, фон `#1e1f22`, border `#393b40`, 13px; focus — accent border; автопредзаполнение: текущий пресет → «<Имя> (копия)», ручной режим → «Мой вид»; текст выделен; Enter — сохранить |
-| Список существующих | подпись «Или выберите существующий» 11/600; строки 24px, hover `#393b40`; клик подставляет имя в input (позволяет перезапись) |
-| Подсказка (`#presetHint`) | 11px muted «Новый пресет будет добавлен в список»; при совпадении имени — warning «Пресет с таким именем будет перезаписан» |
+| Заголовок | «Сохранить пресет» 14/600 |
+| Label | «Название пресета» 12/600 secondary |
+| Input (`#presetName`) | 28px, radius 4, фон `#1e1f22`, border `#393b40`, 14px; focus — accent border; автопредзаполнение: текущий пресет → «<Имя> (копия)», ручной режим → «Мой вид»; текст выделен; Enter — сохранить |
+| Список существующих | подпись «Или выберите существующий» 12/600; строки 24px, hover `#393b40`; клик подставляет имя в input (позволяет перезапись) |
+| Подсказка (`#presetHint`) | 12px muted «Новый пресет будет добавлен в список»; при совпадении имени — warning «Пресет с таким именем будет перезаписан» |
 | Кнопки | «Отмена» (ghost, border `#393b40`), «Сохранить» (accent, white), 32px; «Сохранить» disabled при пустом имени; Esc/отмена/backdrop — закрыть и вернуть фокус на `#btnPresetSave` |
 | После сохранения | пресет выбран, bandNote «Пресет сохранён: <name>», поповер «Вид» остаётся открыт |
 
@@ -132,19 +132,19 @@
 
 ## 4. Header band
 
-- Левый заголовок: шеврон 16 + title 13/600 + действия 24×24 (refresh, «…», hide), padding 0 8.
+- Левый заголовок: шеврон 16 + title 14/600 + действия 24×24 (refresh, «…», hide), padding 0 8.
 - Табы: 40px, max-width 220, padding 0 10, gap 6, label 13, иконка 16; inactive secondary, active primary + 3px accent underline по низу; close 16×16 появляется на hover/active, hover-фон `#4a4d52`.
-- Правый заголовок: title 13/600 + «…» + hide; same metrics.
+- Правый заголовок: title 14/600 + «…» + hide; same metrics.
 - Фон панельных заголовков chrome, таб-стрипа canvas; снизу 1px `#393b40`.
 
 ## 5. Левая панель «Места»
 
 - Панельный тулбар 32: поле поиска 24 (иконка 16, placeholder «Поиск…», радиус 4, focus — accent border), кнопки фильтра/сортировки 24.
-- Дерево: `p-row` 24px, margin 0 4, padding 0 4, radius 4; twisty 16, indent 16/уровень, иконка 16, label 13, sub 11 mono muted.
-- Секции (`p-row.is-group`): 12px/600 secondary.
+- Дерево: `p-row` 24px, margin 0 4, padding 0 4, radius 4; twisty 16, indent 16/уровень, иконка 16, label 14, sub 12 mono muted.
+- Секции (`p-row.is-group`): 13px/600 secondary.
 - Устройства: label + usage-bar 3px высотой (track `#3c3f44`, fill `#db5c5c`), отступ 10 справа.
 - Выбор: `is-selected` → `#43454a`; hover `#393b40`; фокус — accent ring.
-- Empty state поиска: 12px secondary; скролл вертикальный 8px.
+- Empty state поиска: 13px secondary; скролл вертикальный 8px.
 - Никаких дублирующихся локаций; «Домашняя папка» встречается один раз.
 
 ## 6. Редактор
@@ -162,23 +162,23 @@
 #### «Столбцы» (grouped)
 
 - Контейнер `band-inner`: flex, `width: max-content`, горизонтальный скролл.
-- Колонка: width `--col-w` (236 по умолчанию; зум 200–280), вертикальная граница 1px `#393b40`; header 28px: label 12/600 secondary + count 11 mono muted (справа), клик сворачивает группу (aria-expanded); свёрнутая — заголовок + «N объектов» muted.
-- Item: 62px (плотная — 54), padding 6 8, margin-bottom 2, radius 4, flex: иконка 48 (плотная 40; зум 40–56) + 3-строчный текст (name 12.5 primary, size/date 11 mono muted, межстрочный 1–1.25), gap 8–10.
+- Колонка: width `--col-w` (236 по умолчанию; зум 200–280), вертикальная граница 1px `#393b40`; header 28px: label 13/600 secondary + count 12 mono muted (справа), клик сворачивает группу (aria-expanded); свёрнутая — заголовок + «N объектов» muted.
+- Item: 66px (плотная — 54), padding 6 8, margin-bottom 2, radius 4, flex: иконка 48 (плотная 40; зум 40–56) + 3-строчный текст (name 13.5 primary, size/date 12 mono muted, межстрочный 1–1.25), gap 8–10.
 - Hover — `#393b40`; selected — `#1d2432`; focus — accent ring; hidden-элемент — приглушённые иконка/текст.
 - Групповые headers — по одной колонке на дату («Сегодня», «Вчера», «Среда», «Вторник», «Неделю назад»).
 
 #### «Значки» (grouped)
 
-- Секции по датам: header 28px (label 12/600 secondary + count 11 mono muted, border-bottom), затем grid.
+- Секции по датам: header 28px (label 13/600 secondary + count 12 mono muted, border-bottom), затем grid.
 - Grid: `repeat(auto-fill, minmax(150px, 178px))`, gap 6, padding 0 0 6; выравнивание `space-between`.
-- Плитка: min-height 150 (плотная 132), padding 10 8 8, radius 6, центр; иконка 48–72 (зум), имя 12.5 до 2 строк (`line-clamp:2`), size/date 11 mono muted; hover `#393b40`; selected `#1d2432`; hidden — приглушение.
+- Плитка: min-height 150 (плотная 132), padding 10 8 8, radius 6, центр; иконка 48–72 (зум), имя 13.5 до 2 строк (`line-clamp:2`), size/date 12 mono muted; hover `#393b40`; selected `#1d2432`; hidden — приглушение.
 - Вертикальный скролл всей полосы.
 
 #### «Подробности» (grouped)
 
-- Sticky header 28px: grid `minmax(0,1fr) 96px 168px 76px`, gap 12, padding 0 14; заголовки «Имя / Размер / Изменён / Тип» 11/600 secondary, размер/дата right-aligned; border-bottom.
-- Групповая строка 28px: label 12/600 secondary + count 11 mono muted; фон `#26282d`, линии сверху/снизу.
-- Строка 24px: иконка 16 + name 12.5 primary; size/date 12 mono secondary (right); type 12 secondary; hover `#393b40`; selected `#1d2432`; hidden — приглушение; focus — accent ring.
+- Sticky header 28px: grid `minmax(0,1fr) 96px 168px 76px`, gap 12, padding 0 14; заголовки «Имя / Размер / Изменён / Тип» 12/600 secondary, размер/дата right-aligned; border-bottom.
+- Групповая строка 28px: label 13/600 secondary + count 12 mono muted; фон `#26282d`, линии сверху/снизу.
+- Строка 24px: иконка 16 + name 13.5 primary; size/date 13 mono secondary (right); type 13 secondary; hover `#393b40`; selected `#1d2432`; hidden — приглушение; focus — accent ring.
 - Вертикальный скролл.
 
 #### Без группировки
@@ -188,8 +188,8 @@
 
 ## 7. Правая панель «Сведения»
 
-- Заголовок в header band: «Сведения» 13/600 + «…» (показать в дереве / скрыть панель) + hide.
-- Тело (скролл вертикальный): карточка (иконка 64, имя 16/600, тип 12 secondary) в `#26282d`, radius 4; метаданные: строки 24px (label 11 secondary слева, value 13 primary/mono справа; path переносится mono 12); секции «Доступ» (владелец/группа/остальные → чтение/запись) и «Содержимое» (Папок 127 / Файлов 19) — заголовки 12/600 secondary.
+- Заголовок в header band: «Сведения» 14/600 + «…» (показать в дереве / скрыть панель) + hide.
+- Тело (скролл вертикальный): карточка (иконка 64, имя 17/600, тип 13 secondary) в `#26282d`, radius 4; метаданные: строки 24px (label 12 secondary слева, value 14 primary/mono справа; path переносится mono 13); секции «Доступ» (владелец/группа/остальные → чтение/запись) и «Содержимое» (Папок 127 / Файлов 19) — заголовки 13/600 secondary.
 - Действия снизу: `Открыть` (accent, 32px, radius 4, white) и `Показать в папке` (ghost, border `#393b40`, 32px); gap 8, padding 12, border-top.
 - Empty state: «Объект не выбран» + подсказка.
 - Выбранный объект может быть файлом — тип/права меняются.
@@ -197,15 +197,15 @@
 ## 8. Bottom window
 
 - Шапка 40: табы «Операции»/«Журнал» (40px, padding 0 12, active primary + 3px underline), справа «—» и «…».
-- Контент 140, padding 10 12: строки операций 24px (иконка 16, name 13, progress 4px радиус 2, %, скорость mono 12, статус); журнал — mono 12, время в начале строки.
+- Контент 140, padding 10 12: строки операций 24px (иконка 16, name 14, progress 4px радиус 2, %, скорость mono 13, статус); журнал — mono 13, время в начале строки.
 - Прогресс: track `#393b40`, fill accent (в работе) / success (готово) / muted (очередь); width по проценту.
 - Свёрнуто: 40px, остаётся только шапка; меню «…» — «Очистить завершённые» (disabled, если нет завершённых).
 
 ## 9. Status bar
 
 - 28px, chrome, padding 0 8, gap 12, left/right.
-- Слева: `sb-status` 12px secondary (`Готово.`) / muted (`Сканирование…`); `role="status"`, `aria-live="polite"`.
-- Справа: `свободно 22,8 ГиБ` с иконкой диска 14, разделитель «·», `sdc1` (mono 12).
+- Слева: `sb-status` 13px secondary (`Готово.`) / muted (`Сканирование…`); `role="status"`, `aria-live="polite"`.
+- Справа: `свободно 22,8 ГиБ` с иконкой диска 14, разделитель «·», `sdc1` (mono 13).
 - Ни зума, ни пути, ни режима просмотра, ни счётчиков.
 
 ## 10. Поповеры действий
@@ -218,4 +218,4 @@
 
 ## 11. Состояние «приложение закрыто» (прототип)
 
-Отдельная карточка вне окна (фон затемнён): заголовок «Волна» 18/600, описание 13 secondary, primary-кнопка «Открыть Волну». В реальном приложении не нужно (закрытие = выход), оставлено для демонстрации оконных контролов.
+Отдельная карточка вне окна (фон затемнён): заголовок «Волна» 19/600, описание 14 secondary, primary-кнопка «Открыть Волну». В реальном приложении не нужно (закрытие = выход), оставлено для демонстрации оконных контролов.

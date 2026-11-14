@@ -83,19 +83,22 @@
 
 ## 4. Типографика
 
-| Стиль | Размер/высота | Вес | Семейство | Где |
-|---|---|---|---|---|
-| UI default | 13px / 1 | 400 | `--ui` (Inter, JetBrains Sans, system-ui) | имена, вкладки, кнопки, попапы, дерево |
-| UI secondary | 12px / 1–1.3 | 400 | `--ui` | подписи панелей, статус-бар, meta |
-| UI caption | 11px / 1.2 | 400 | `--ui` | footer поповера, placeholder, подписи секций/счётчики |
-| Section title | 11px / 1.2 | 600 | `--ui` | заголовки секций «Вид» (`letter-spacing:.02em`, title case) |
-| Popover header | 13px / 1.2 | 600 | `--ui` | заголовок «Вид» |
-| Panel/tool window title | 13px / 1 | 600 | `--ui` | «Места», «Сведения» |
-| Item name (cols) | 12.5px / 1.25 | 400 | `--ui` | имя в 3-строчной ячейке |
-| Details row | 12.5px / 1 | 400 | `--ui` | таблица «Подробности» (compact: 12px) |
-| Icon tile name | 12.5px / 1.3 | 400 | `--ui` | «Значки», до 2 строк, `line-clamp:2` |
-| Mono | 12px / 1–1.3 | 400 | `--mono` (JetBrains Mono, ui-monospace) | размеры, даты, проценты, путь, device, счётчики |
-| Dialog/card title | 16px / 1.3 | 600 | `--ui` | имя в инспекторе |
+**Ревизия 6:** шкала увеличена на 1px (13/12/11 → 14/13/12), имя элемента 12.5 → 13.5, заголовок карточки 16 → 17. Все размеры — CSS-переменные `--fs-*` в `:root`; при следующей ревизии менять только их, а не размеры по месту.
+
+| Стиль | Токен | Размер/высота | Вес | Семейство | Где |
+|---|---|---|---|---|---|
+| UI default | `--fs-body` | 14px / 1 | 400 | `--ui` (Inter, JetBrains Sans, system-ui) | имена, вкладки, кнопки, попапы, дерево |
+| UI secondary | `--fs-meta` | 13px / 1–1.3 | 400 | `--ui` | подписи панелей, статус-бар, meta |
+| UI caption | `--fs-caption` | 12px / 1.2 | 400 | `--ui` | footer поповера, placeholder, подписи секций/счётчики |
+| Section title | `--fs-caption` | 12px / 1.2 | 600 | `--ui` | заголовки секций «Вид» (`letter-spacing:.02em`, title case) |
+| Popover header | `--fs-body` | 14px / 1.2 | 600 | `--ui` | заголовок «Вид» |
+| Panel/tool window title | `--fs-body` | 14px / 1 | 600 | `--ui` | «Места», «Сведения» |
+| Item name (cols) | `--fs-item` | 13.5px / 1.25 | 400 | `--ui` | имя в 3-строчной ячейке |
+| Details row | `--fs-item` | 13.5px / 1 | 400 | `--ui` | таблица «Подробности» (compact: 13px) |
+| Icon tile name | `--fs-item` | 13.5px / 1.3 | 400 | `--ui` | «Значки», до 2 строк, `line-clamp:2` |
+| Mono | `--fs-meta` / `--fs-body` | 13–14px / 1–1.3 | 400 | `--mono` (JetBrains Mono, ui-monospace) | размеры, даты, проценты, путь, device, счётчики |
+| Dialog/card title | `--fs-title` | 17px / 1.3 | 600 | `--ui` | имя в инспекторе |
+| Compact overrides | `--fs-compact-meta` / `--fs-compact-caption` | 12.5 / 11.5px | — | — | плотная раскладка: на 0.5px меньше обычной шкалы |
 
 Правила:
 
@@ -168,13 +171,13 @@
 | Метрика | Обычная | Плотная (`is-compact`) |
 |---|---|---|
 | Строка дерева (`p-row`) | 24px | 24px (без изменений) |
-| 3-строчная ячейка «Столбцов» | 62px | 54px |
+| 3-строчная ячейка «Столбцов» | 66px | 54px |
 | Иконка папки в колонках | 48px | 40px |
 | Плитка «Значки» (min-height) | 150px | 132px |
 | Иконка плитки | 48–72px (зум) | −8px от обычной |
-| Строка «Подробностей» | 24px, 12.5px | 24px, 12px |
+| Строка «Подробностей» | 24px, 13.5px | 24px, 13px |
 | Отступы строки колонки | 6px 8px | 2px 8px |
-| Текст имени (колонки) | 12.5px | 12.5px |
+| Текст имени (колонки) | 14px (`--fs-body`) | 13.5px (`--fs-item`) |
 
 Плотность не ломает выравнивание колонок/строк и не меняет ширины панелей.
 
@@ -192,6 +195,8 @@
   --folder-blue:#4a88d8; --folder-blue-light:#7fb2ec;
   --ui:'Inter','JetBrains Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
   --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  --fs-display:19px; --fs-title:17px; --fs-body:14px; --fs-item:13.5px;
+  --fs-meta:13px; --fs-caption:12px; --fs-compact-meta:12.5px; --fs-compact-caption:11.5px;
   --left-w:280px; --right-w:300px; --col-w:236px; --icon-size:48px; --tile-icon:60px;
   --app-h:900px; --scale:1;
 }

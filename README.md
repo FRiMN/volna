@@ -48,6 +48,26 @@ python3 design/tools/build_compare.py
 
 Подробности — в [`design/spec/README.md`](design/spec/README.md).
 
+## Разработка
+
+Каркас Python-проекта для будущей реализации: пакет [`src/volna/`](src/volna/__init__.py), тесты и инструменты. Кода приложения пока нет — только структура.
+
+```bash
+uv sync             # окружение и dev-инструменты
+uv run pytest       # тесты
+uv run ruff check   # линт
+uv run ruff format  # форматирование
+```
+
+То же через `invoke`: `uv run invoke check`, `uv run invoke testing`, `uv run invoke fmt`.
+
+Для GTK4-разработки PyGObject берётся из системы (через pip не ставится), поэтому окружение создаётся на системном Python 3.12 с доступом к системным пакетам:
+
+```bash
+uv venv --system-site-packages --python /usr/bin/python3.12
+uv sync
+```
+
 ## Лицензия и данные
 
 Дизайн-материалы созданы для проекта «Волна». Источники шрифтов — системные (Inter/JetBrains Mono при наличии); внешние ассеты не используются. Демонстрационные данные взяты из референса Dolphin.

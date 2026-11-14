@@ -1,0 +1,62 @@
+# Docs: https://packaging.python.org/en/latest/guides/writing-pyproject-toml
+
+[project]
+name = "volna"
+description = "«Волна» — плотный файловый менеджер для Linux-десктопа (рабочее название)"
+keywords = ["file-manager", "desktop", "linux", "gui"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: POSIX :: Linux",
+    "Intended Audience :: End Users/Desktop",
+]
+readme = "README.md"
+authors = [{ name = "Nik Volkov", email = "freezemandix@ya.ru" }]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+requires-python = ">=3.11"
+dynamic = ["version"]
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "ruff~=0.17.4",
+    "pytest~=9.2.0",
+    "invoke~=3.0.3",
+]
+
+[build-system]
+requires = ["hatchling>=1.27", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/volna/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/volna"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/design", "/reference", "/uv.lock"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not slow'"
+markers = [
+    "slow: long-running and non-functional (timing/memory) tests",
+]
+
+[tool.ruff]
+target-version = "py311"
+extend-exclude = ["design", "reference"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = [
+    "E741", # Ambiguous variable name
+    "E501", # Line too long
+]

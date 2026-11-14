@@ -1,5 +1,16 @@
 # runtime / temp
 .tmp/
+.venv/
+
+# python / uv
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+src/volna/_version.py
+
+# build artifacts
+build/
+dist/
 
 # scratch
 design/work/
@@ -10,4 +21,5 @@ design/work/
 # os / editors
 .DS_Store
 Thumbs.db
+.idea/
 __pycache__/

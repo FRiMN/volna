@@ -19,6 +19,9 @@ requires-python = ">=3.11"
 dynamic = ["version"]
 dependencies = []
 
+[project.gui-scripts]
+volna = "volna.main:main"
+
 [dependency-groups]
 dev = [
     "ruff~=0.17.4",

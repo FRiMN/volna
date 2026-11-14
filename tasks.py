@@ -2,6 +2,12 @@ from invoke import task
 
 
 @task
+def deps(c):
+    """Установить системные GIR-типелибы GTK4 (нужен sudo)"""
+    c.run("sudo apt-get install -y gir1.2-gtk-4.0 gir1.2-graphene-1.0")
+
+
+@task
 def venv(c):
     """Пересоздать окружение на системном Python 3.12 (PyGObject из system-site-packages)"""
     c.run("uv venv --clear --system-site-packages --python /usr/bin/python3.12")

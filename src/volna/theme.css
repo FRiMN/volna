@@ -1,0 +1,268 @@
+/* Волна — design direction C (Dolphin × JetBrains), dark theme.
+   Tokens: design/spec/tokens.json; chrome rhythm 40/24/28. */
+
+.volna-window {
+  background-color: #1e1f22;
+  color: #dfe1e5;
+  font-family: "Inter", "Cantarell", "Ubuntu", "Noto Sans", sans-serif;
+  font-size: 13px;
+}
+
+/* ---- toolbar (band 1) ------------------------------------------------ */
+.volna-toolbar {
+  background-color: #2b2d30;
+  padding-left: 4px;
+  padding-right: 4px;
+  min-height: 40px;
+}
+
+.volna-sep {
+  background-color: #393b40;
+}
+
+.volna-icon,
+.volna-view,
+.volna-path-btn,
+.volna-tab,
+.volna-bottom-tab,
+.volna-panel-title,
+.volna-rail-btn,
+.volna-win {
+  background: transparent;
+  background-image: none;
+  border: none;
+  border-radius: 4px;
+  box-shadow: none;
+  padding: 0;
+  color: #ced0d6;
+}
+
+.volna-icon:hover,
+.volna-view:hover,
+.volna-panel-title:hover,
+.volna-rail-btn:hover,
+.volna-win:hover {
+  background-color: #393b40;
+  color: #dfe1e5;
+}
+
+.volna-icon.volna-disabled {
+  opacity: 0.42;
+}
+
+.volna-win-close:hover {
+  background-color: #db5c5c;
+  color: #ffffff;
+}
+
+.volna-rail-btn.is-active {
+  background-color: #43454a;
+  color: #dfe1e5;
+}
+
+/* view widget */
+.volna-view {
+  padding: 0 8px;
+  min-height: 28px;
+}
+
+.volna-view-label {
+  color: #dfe1e5;
+  font-size: 13px;
+}
+
+/* path widget */
+.volna-path {
+  background-color: #26282d;
+  border: 1px solid #393b40;
+  border-radius: 4px;
+  min-height: 28px;
+}
+
+.volna-path-btn {
+  padding: 0 6px;
+  min-height: 24px;
+}
+
+.volna-path-label {
+  color: #dfe1e5;
+  font-size: 13px;
+}
+
+/* ---- header band (band 3) ------------------------------------------- */
+.volna-panel-header {
+  background-color: #2b2d30;
+  padding: 0 8px;
+  min-height: 40px;
+}
+
+.volna-panel-title {
+  padding: 0 2px;
+  min-height: 28px;
+}
+
+.volna-panel-title-label {
+  color: #dfe1e5;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.volna-band {
+  background-color: #1e1f22;
+}
+
+.volna-tab-strip {
+  background-color: #1e1f22;
+}
+
+.volna-tab {
+  padding: 0 10px;
+  min-height: 40px;
+  border-radius: 0;
+  color: #9da0a8;
+  font-size: 13px;
+}
+
+.volna-tab:hover {
+  background-color: #232529;
+  color: #dfe1e5;
+}
+
+.volna-tab.is-active {
+  background-color: #1e1f22;
+  color: #dfe1e5;
+  box-shadow: inset 0 -3px #3574f0;
+}
+
+.volna-tab-label {
+  color: inherit;
+  font-size: 13px;
+}
+
+.volna-tab-close {
+  opacity: 0;
+}
+
+.volna-tab.is-active .volna-tab-close,
+.volna-tab:hover .volna-tab-close {
+  opacity: 1;
+}
+
+/* ---- hairlines ------------------------------------------------------- */
+.hairline {
+  background-color: #1e1f22;
+  min-height: 1px;
+}
+
+.hairline.strong {
+  background-color: #393b40;
+}
+
+/* ---- body: rails, panels, editor ------------------------------------ */
+.volna-rail {
+  background-color: #2b2d30;
+  padding: 4px 0;
+}
+
+.volna-rail-btn {
+  min-width: 32px;
+  min-height: 32px;
+}
+
+.volna-rail-sep {
+  background-color: #393b40;
+  min-width: 20px;
+  min-height: 1px;
+  margin: 4px 0;
+}
+
+.volna-panel {
+  background-color: #2b2d30;
+}
+
+.volna-panel-left {
+  min-width: 280px;
+}
+
+.volna-panel-right {
+  min-width: 300px;
+}
+
+.volna-editor {
+  background-color: #1e1f22;
+}
+
+/* ---- bottom window (band 7) ----------------------------------------- */
+.volna-bottom {
+  background-color: #1e1f22;
+  min-height: 180px;
+}
+
+.volna-bottom-header {
+  background-color: #2b2d30;
+  min-height: 40px;
+}
+
+.volna-bottom-tab {
+  padding: 0 12px;
+  min-height: 40px;
+  border-radius: 0;
+  color: #9da0a8;
+  font-size: 13px;
+}
+
+.volna-bottom-tab:hover {
+  background-color: #34363a;
+  color: #dfe1e5;
+}
+
+.volna-bottom-tab.is-active {
+  color: #dfe1e5;
+  box-shadow: inset 0 -3px #3574f0;
+}
+
+.volna-bottom-content {
+  min-height: 120px;
+  padding: 10px 12px;
+}
+
+/* ---- status bar (band 9) -------------------------------------------- */
+.volna-statusbar {
+  background-color: #2b2d30;
+  min-height: 28px;
+  padding: 0 8px;
+}
+
+.volna-status {
+  color: #9da0a8;
+  font-size: 12px;
+}
+
+.volna-status-item {
+  color: #9da0a8;
+  font-size: 12px;
+}
+
+.volna-status-sep {
+  color: #6f737a;
+  font-size: 12px;
+}
+
+.volna-status-item.volna-mono {
+  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+}
+
+.volna-icon-dim {
+  opacity: 0.72;
+}
+
+/* ---- borderless window resize edges --------------------------------- */
+.volna-resize {
+  background: transparent;
+}
+
+/* give the drag handle exactly the toolbar height (theme pads it) */
+windowhandle {
+  min-height: 40px;
+  padding: 0;
+}

@@ -51,6 +51,10 @@ def _status_text(state: ScanState) -> str:
 
 def icon(name: str, size: int = 16, *, dim: bool = False) -> Gtk.Image:
     image = Gtk.Image.new_from_file(str(_ICONS_DIR / str(size) / f"{name}.svg"))
+    # GtkImage measures its paintable at 16px by default (GTK 4.14), ignoring the
+    # SVG's intrinsic size: without the explicit pixel size the 12/20px glyphs of
+    # the toolbar, tabs and rails are all drawn at 16px with rescaled strokes.
+    image.set_pixel_size(size)
     image.set_halign(Gtk.Align.CENTER)
     image.set_valign(Gtk.Align.CENTER)
     if dim:
@@ -108,16 +112,19 @@ def icon_stub(
     tooltip: str | None = None,
     extra_class: str | None = None,
     dim: bool = False,
-) -> Gtk.Box:
+) -> Gtk.CenterBox:
     """Non-interactive control placeholder: a fixed box with a 1:1 icon."""
-    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+    # Gtk.Box packs a horizontal child at its natural width, so a glyph in a
+    # fixed-size stub would hug the left edge of the hit area; CenterBox keeps
+    # it in the middle.
+    box = Gtk.CenterBox()
     box.add_css_class("volna-icon")
     if extra_class:
         box.add_css_class(extra_class)
     box.set_size_request(size, size)
     box.set_halign(Gtk.Align.CENTER)
     box.set_valign(Gtk.Align.CENTER)
-    box.append(icon(name, icon_size, dim=dim))
+    box.set_center_widget(icon(name, icon_size, dim=dim))
     if tooltip:
         box.set_tooltip_text(tooltip)
     return box

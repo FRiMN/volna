@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/home/nik/code/my/volna/.archify/architecture-volna-core-20261114-233600/candidate.json",
+    "sha256": "63fe1333e1fd7a06502ef0deb0937b48dd72fca8d65c018d3ca84480c1a83fc4",
+    "bytes": 3327
+  },
+  "artifact": {
+    "path": "/home/nik/code/my/volna/.archify/architecture-volna-core-20261114-233600/volna-core.html",
+    "sha256": "2f1551af83d69c5b3f65208bd405e676bdb3f9d06d49fdcd9bb6557b14996f41",
+    "bytes": 759769
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/home/nik/code/my/volna/.archify/architecture-volna-core-20261114-233600/volna-core.finalize.json",
+    "summaryReceipt": "/home/nik/code/my/volna/.archify/architecture-volna-core-20261114-233600/volna-core.finalize-summary.json",
+    "browserCheckReceipt": "/home/nik/code/my/volna/.archify/architecture-volna-core-20261114-233600/volna-core.browser-check.json"
+  },
+  "update": {
+    "status": "unavailable",
+    "installedVersion": null,
+    "availableVersion": null,
+    "releaseNotes": null,
+    "checkedAt": null,
+    "source": null,
+    "noticeRequired": false,
+    "noticeText": null,
+    "reason": "cache-unavailable"
+  },
+  "visualReview": "not-requested",
+  "durationMs": 1995
+}

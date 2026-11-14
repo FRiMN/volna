@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Волна · ядро: перечисление и сортировка каталогов",
+    "output": ".archify/architecture-volna-core-20261114-233600/volna-core.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "ui", "type": "frontend", "label": "GTK4 · Значки/Столбцы/Подробности", "sublabel": "Gtk.ListView + Gio.ListStore + FilterListModel", "pos": [160, 40], "size": [250, 60] },
+    { "id": "model", "type": "backend", "label": "DirModel", "sublabel": "сходящийся порядок · группы · счётчики", "pos": [160, 170], "size": [200, 60] },
+    { "id": "scanner", "type": "backend", "label": "DirScanner", "sublabel": "readdir-батчи · поколение · отмена", "pos": [160, 300], "size": [200, 60] },
+    { "id": "os", "type": "external", "label": "Linux: getdents64 · statx · io_uring", "sublabel": "d_type бесплатно; размер/дата — statx", "pos": [160, 430], "size": [260, 56] },
+    { "id": "statpool", "type": "backend", "label": "StatPool", "sublabel": "параллельный statx (пул потоков)", "pos": [470, 302], "size": [200, 56] },
+    { "id": "rust", "type": "backend", "label": "Rust stat-ядро (PyO3)", "sublabel": "опциональная замена StatPool · stat_batch", "pos": [470, 420], "size": [200, 56] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Процесс «Волна» (Python + GTK4)", "wraps": ["ui", "model", "scanner", "statpool", "rust"] }
+  ],
+  "connections": [
+    { "id": "ui-to-model", "from": "ui", "to": "model", "label": "открыть путь · фильтр", "variant": "emphasis" },
+    { "id": "model-to-scanner", "from": "model", "to": "scanner", "label": "start_scan · generation=N" },
+    { "id": "scanner-to-os", "from": "scanner", "to": "os", "label": "readdir · statx (d_type)" },
+    { "id": "os-to-scanner", "from": "os", "to": "scanner", "label": "dirent-батчи", "variant": "dashed" },
+    { "id": "scanner-to-model", "from": "scanner", "to": "model", "label": "батчи Entry[]", "variant": "emphasis" },
+    { "id": "model-to-ui", "from": "model", "to": "ui", "label": "diff → splice", "variant": "emphasis" },
+    { "id": "scanner-to-statpool", "from": "scanner", "to": "statpool", "label": "нужны size/mtime" },
+    { "id": "statpool-to-scanner", "from": "statpool", "to": "scanner", "label": "size · mtime", "variant": "dashed" },
+    { "id": "statpool-to-rust", "from": "statpool", "to": "rust", "label": "тот же stat_batch · после бенчмарка", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Два батча", "items": ["I/O-порция — чтение, чтобы не блокировать цикл", "render-порция — слить изменения до splice()"] },
+    { "dot": "emerald", "title": "Поток", "items": ["контроль вниз: open → scan → readdir", "данные вверх: dirent → Entry → diff"] },
+    { "dot": "rose", "title": "Отмена", "items": ["generation-токен отбрасывает устаревший скан", "повторный open(path) идемпотентен"] }
+  ]
+}

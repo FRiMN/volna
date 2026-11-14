@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "00e5e3a7-8b18-456e-8a33-02733e7148dd",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/home/nik/code/my/volna/.archify/architecture-volna-core-20261114-233600/candidate.json",
+  "output": "/home/nik/code/my/volna/.archify/architecture-volna-core-20261114-233600/volna-core.html",
+  "specification": {
+    "sha256": "63fe1333e1fd7a06502ef0deb0937b48dd72fca8d65c018d3ca84480c1a83fc4",
+    "bytes": 3327
+  },
+  "artifact": {
+    "sha256": "2f1551af83d69c5b3f65208bd405e676bdb3f9d06d49fdcd9bb6557b14996f41",
+    "bytes": 759769
+  }
+}

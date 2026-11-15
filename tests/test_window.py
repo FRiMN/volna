@@ -290,26 +290,214 @@ def test_switch_tab_updates_path_and_visible_listing(
         _close(window)
 
 
-def test_forward_button_cycles_tabs(gtk_display, tmp_path: Path) -> None:
+def test_navigation_buttons_start_with_a_clean_history(
+    gtk_display, tmp_path: Path
+) -> None:
     window = _main_window(tmp_path)
     try:
+        assert not window._back_button.get_sensitive()
         assert not window._fwd_button.get_sensitive()
-        assert window._fwd_button.has_css_class("volna-disabled")
+        assert window._up_button.get_sensitive()
+        assert window._back_button.get_tooltip_text() == "Назад"
+        assert window._fwd_button.get_tooltip_text() == "Вперёд"
+        assert window._up_button.get_tooltip_text() == "В родительскую папку"
 
-        window.activate_action("win.new-tab", None)
-        window.activate_action("win.new-tab", None)
-        assert window._fwd_button.get_sensitive()
-        assert _active_tabs(window) == [_tabs(window)[-1]]
+        import gi
 
-        window._activate_next_tab()
-        assert _active_tabs(window) == [_tabs(window)[0]]
+        gi.require_version("Gtk", "4.0")
+        from gi.repository import Gtk
 
-        window._activate_next_tab()
-        assert _active_tabs(window) == [_tabs(window)[1]]
+        for button in (
+            window._back_button,
+            window._fwd_button,
+            window._up_button,
+        ):
+            assert Gtk.test_accessible_has_property(
+                button, Gtk.AccessibleProperty.LABEL
+            )
+    finally:
+        _close(window)
 
-        window._activate_next_tab()
-        assert _active_tabs(window) == [_tabs(window)[-1]]
+
+def test_up_is_disabled_at_the_filesystem_root(gtk_display) -> None:
+    window = _main_window(Path("/"))
+    try:
+        assert not window._up_button.get_sensitive()
+        assert not window._back_button.get_sensitive()
+    finally:
+        _close(window)
+
+
+def test_directory_row_activation_opens_the_directory(
+    gtk_display, tmp_path: Path
+) -> None:
+    child = tmp_path / "child"
+    child.mkdir()
+    (tmp_path / "note.txt").write_text("x", encoding="utf-8")
+
+    window = _main_window(tmp_path)
+    try:
+        window.present()
+        assert not window._active_tab._view._column_view.get_single_click_activate()
+        _activate_listed_row(window, "child")
+
+        assert window._active_tab.path == child
+        assert _path_label(window) == str(child)
+        assert window._tab_title_labels[window._active_tab].get_text() == "child"
+        assert window._back_button.get_sensitive()
+        assert window._up_button.get_sensitive()
+        assert not window._fwd_button.get_sensitive()
+    finally:
+        _close(window)
+
+
+def test_file_row_activation_keeps_the_directory(gtk_display, tmp_path: Path) -> None:
+    (tmp_path / "note.txt").write_text("x", encoding="utf-8")
+
+    window = _main_window(tmp_path)
+    try:
+        window.present()
+        _activate_listed_row(window, "note.txt")
+
+        assert window._active_tab.path == tmp_path
         assert _path_label(window) == str(tmp_path)
+        assert not window._back_button.get_sensitive()
+    finally:
+        _close(window)
+
+
+def test_back_and_forward_walk_the_navigation_history(
+    gtk_display, tmp_path: Path
+) -> None:
+    child = tmp_path / "child"
+    grand = child / "grand"
+    grand.mkdir(parents=True)
+
+    window = _main_window(tmp_path)
+    try:
+        window.present()
+        _activate_listed_row(window, "child")
+        assert window._active_tab.path == child
+
+        _activate_listed_row(window, "grand")
+        assert window._active_tab.path == grand
+        assert window._back_button.get_sensitive()
+        assert not window._fwd_button.get_sensitive()
+
+        window._back_button.emit("clicked")
+        assert window._active_tab.path == child
+        assert _path_label(window) == str(child)
+        assert window._fwd_button.get_sensitive()
+
+        window._back_button.emit("clicked")
+        assert window._active_tab.path == tmp_path
+        assert not window._back_button.get_sensitive()
+
+        window._fwd_button.emit("clicked")
+        assert window._active_tab.path == child
+        window._fwd_button.emit("clicked")
+        assert window._active_tab.path == grand
+        assert not window._fwd_button.get_sensitive()
+    finally:
+        _close(window)
+
+
+def test_new_navigation_after_back_drops_the_forward_branch(
+    gtk_display, tmp_path: Path
+) -> None:
+    (tmp_path / "first").mkdir()
+    (tmp_path / "second").mkdir()
+
+    window = _main_window(tmp_path)
+    try:
+        window.present()
+        _activate_listed_row(window, "first")
+        window._back_button.emit("clicked")
+        assert window._active_tab.path == tmp_path
+        assert window._fwd_button.get_sensitive()
+
+        _activate_listed_row(window, "second")
+
+        assert window._active_tab.path == tmp_path / "second"
+        assert not window._fwd_button.get_sensitive()
+    finally:
+        _close(window)
+
+
+def test_up_navigates_to_the_parent_and_back_returns(
+    gtk_display, tmp_path: Path
+) -> None:
+    child = tmp_path / "child"
+    child.mkdir()
+
+    window = _main_window(child)
+    try:
+        assert window._up_button.get_sensitive()
+
+        window._up_button.emit("clicked")
+
+        assert window._active_tab.path == tmp_path
+        assert _path_label(window) == str(tmp_path)
+        assert window._tab_title_labels[window._active_tab].get_text() == tmp_path.name
+        assert window._back_button.get_sensitive()
+
+        window._back_button.emit("clicked")
+        assert window._active_tab.path == child
+        assert _path_label(window) == str(child)
+    finally:
+        _close(window)
+
+
+def test_history_is_kept_per_tab(gtk_display, tmp_path: Path) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    (first / "nested").mkdir(parents=True)
+    second.mkdir()
+    (second / "inside").mkdir()
+
+    window = _main_window(first)
+    try:
+        window._open_tab(second)
+        window._activate(window._tabs[0])
+        window._navigate_active_tab(first / "nested")
+        assert window._back_button.get_sensitive()
+
+        window._activate(window._tabs[1])
+        assert not window._back_button.get_sensitive()
+        assert not window._fwd_button.get_sensitive()
+
+        window.present()
+        _activate_listed_row(window, "inside")
+        assert window._tabs[1].path == second / "inside"
+
+        window._activate(window._tabs[0])
+        assert window._back_button.get_sensitive()
+        window._back_button.emit("clicked")
+        assert window._tabs[0].path == first
+
+        assert window._tabs[1].path == second / "inside"
+    finally:
+        _close(window)
+
+
+def test_path_edit_records_a_history_entry(gtk_display, tmp_path: Path) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+
+    window = _main_window(first)
+    try:
+        window._start_path_edit()
+        window._path_entry.set_text(str(second))
+        window._path_entry.emit("activate")
+
+        assert window._active_tab.path == second
+        assert window._back_button.get_sensitive()
+
+        window._back_button.emit("clicked")
+        assert window._active_tab.path == first
+        assert _path_label(window) == str(first)
     finally:
         _close(window)
 
@@ -593,5 +781,259 @@ def test_row_glyph_accessible_name_tracks_the_bound_kind(
         ), "the row glyph names were not bound"
 
         assert icon_kinds == label_kinds
+    finally:
+        _close(window)
+
+
+def _listed_names(window: object) -> list[str]:
+    store = window._active_tab._view.store
+    return [store.get_item(index).name for index in range(store.get_n_items())]
+
+
+def _wait_for_listing(window: object, *names: str) -> None:
+    assert _pump_until(lambda: all(name in _listed_names(window) for name in names)), (
+        f"rows {names} never appeared in {_listed_names(window)}"
+    )
+
+
+def _activate_listed_row(window: object, name: str) -> None:
+    """Emit the ColumnView activation GTK sends for a double click / Enter."""
+    store = window._active_tab._view.store
+    _wait_for_listing(window, name)
+    position = next(
+        index
+        for index in range(store.get_n_items())
+        if store.get_item(index).name == name
+    )
+    window._active_tab._view._column_view.emit("activate", position)
+
+
+def test_navigation_clears_the_old_listing(gtk_display, tmp_path: Path) -> None:
+    child = tmp_path / "child"
+    child.mkdir()
+    (child / "inner").mkdir()
+
+    window = _main_window(tmp_path)
+    try:
+        window.present()
+        _wait_for_listing(window, "child")
+        view = window._active_tab._view
+        assert view.store.get_n_items() > 0
+
+        window._navigate_active_tab(child)
+
+        assert window._active_tab.path == child
+        assert view.store.get_n_items() == 0
+    finally:
+        _close(window)
+
+
+def test_activation_of_a_row_from_the_previous_listing_is_ignored(
+    gtk_display, tmp_path: Path
+) -> None:
+    alpha = tmp_path / "alpha"
+    beta = tmp_path / "beta"
+    alpha.mkdir()
+    beta.mkdir()
+
+    window = _main_window(tmp_path)
+    try:
+        window.present()
+        _wait_for_listing(window, "beta")
+        store = window._active_tab._view.store
+        stale = next(
+            store.get_item(index)
+            for index in range(store.get_n_items())
+            if store.get_item(index).name == "beta"
+        )
+
+        window._navigate_active_tab(alpha)
+        window._active_tab._on_row_activated(stale)
+
+        assert window._active_tab.path == alpha
+    finally:
+        _close(window)
+
+
+def _pump_seconds(seconds: float) -> None:
+    import gi
+
+    gi.require_version("GLib", "2.0")
+    from gi.repository import GLib
+
+    context = GLib.MainContext.default()
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        while context.pending():
+            context.iteration(False)
+        time.sleep(0.005)
+
+
+_X11_LIBRARIES = None
+
+
+def _x11_libraries():
+    """Load libX11/libXtst and declare prototypes; skip without them."""
+    global _X11_LIBRARIES
+
+    if _X11_LIBRARIES is not None:
+        return _X11_LIBRARIES
+
+    import ctypes
+    import ctypes.util
+
+    x11_path = ctypes.util.find_library("X11")
+    xtst_path = ctypes.util.find_library("Xtst")
+    if x11_path is None or xtst_path is None:
+        pytest.skip("libX11/libXtst are not installed")
+
+    x11 = ctypes.CDLL(x11_path)
+    xtst = ctypes.CDLL(xtst_path)
+
+    # Display* is a 64-bit pointer: without restype ctypes truncates it to
+    # c_int, which crashes on PIE builds where the address does not fit.
+    x11.XOpenDisplay.restype = ctypes.c_void_p
+    x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    x11.XCloseDisplay.restype = ctypes.c_int
+    x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+    x11.XDefaultRootWindow.restype = ctypes.c_ulong
+    x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+    x11.XDefaultScreen.restype = ctypes.c_int
+    x11.XDefaultScreen.argtypes = [ctypes.c_void_p]
+    x11.XFlush.restype = ctypes.c_int
+    x11.XFlush.argtypes = [ctypes.c_void_p]
+    x11.XTranslateCoordinates.restype = ctypes.c_int
+    x11.XTranslateCoordinates.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_ulong,
+        ctypes.c_ulong,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_ulong),
+    ]
+    xtst.XTestFakeMotionEvent.restype = ctypes.c_int
+    xtst.XTestFakeMotionEvent.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_ulong,
+    ]
+    xtst.XTestFakeButtonEvent.restype = ctypes.c_int
+    xtst.XTestFakeButtonEvent.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.c_ulong,
+    ]
+
+    _X11_LIBRARIES = (x11, xtst)
+    return _X11_LIBRARIES
+
+
+def _root_point(window, widget) -> tuple[int, int]:
+    """Center of ``widget`` in X11 root coordinates (for XTestFake*)."""
+    import ctypes
+
+    import gi
+
+    gi.require_version("GdkX11", "4.0")
+    gi.require_version("Graphene", "1.0")
+    from gi.repository import GdkX11, Graphene
+
+    x11, _xtst = _x11_libraries()
+    display = x11.XOpenDisplay(None)
+    assert display, "cannot open the X display"
+    try:
+        root = x11.XDefaultRootWindow(display)
+        origin_x = ctypes.c_int()
+        origin_y = ctypes.c_int()
+        child = ctypes.c_ulong()
+        surface = window.get_native().get_surface()
+        x11.XTranslateCoordinates(
+            display,
+            GdkX11.X11Surface.get_xid(surface),
+            root,
+            0,
+            0,
+            ctypes.byref(origin_x),
+            ctypes.byref(origin_y),
+            ctypes.byref(child),
+        )
+        surface_x, surface_y = window.get_native().get_surface_transform()
+        center = Graphene.Point().init(widget.get_width() / 2, widget.get_height() / 2)
+        result = widget.compute_point(window, center)
+        point = result[1] if isinstance(result, tuple) else result
+
+        return (
+            origin_x.value + int(surface_x + point.x),
+            origin_y.value + int(surface_y + point.y),
+        )
+    finally:
+        x11.XCloseDisplay(display)
+
+
+def _fake_click(x: int, y: int, count: int = 1) -> None:
+    """Send real X11 button events (the pointer press path GTK handles)."""
+    x11, xtst = _x11_libraries()
+    display = x11.XOpenDisplay(None)
+    assert display, "cannot open the X display"
+    try:
+        screen = x11.XDefaultScreen(display)
+        xtst.XTestFakeMotionEvent(display, screen, x, y, 0)
+        x11.XFlush(display)
+        _pump_seconds(0.05)
+        for _ in range(count):
+            xtst.XTestFakeButtonEvent(display, 1, True, 0)
+            xtst.XTestFakeButtonEvent(display, 1, False, 0)
+            x11.XFlush(display)
+            _pump_seconds(0.08)
+    finally:
+        x11.XCloseDisplay(display)
+
+
+def _details_label(window, text: str):
+    import gi
+
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import Gtk
+
+    for widget in _walk(window):
+        if (
+            isinstance(widget, Gtk.Label)
+            and widget.get_text() == text
+            and "volna-dt-name" in widget.get_css_classes()
+        ):
+            return widget
+    raise AssertionError(f"row {text!r} is not rendered")
+
+
+@pytest.mark.slow
+def test_real_double_click_opens_a_directory(gtk_display, tmp_path: Path) -> None:
+    """The GTK gesture, not just ColumnView::activate: one click vs two."""
+    (tmp_path / "child").mkdir()
+
+    window = _main_window(tmp_path)
+    try:
+        window.present()
+        _wait_for_listing(window, "child")
+        _pump_seconds(0.2)
+
+        status = _by_class(window, "volna-status")[0]
+        _fake_click(*_root_point(window, status))
+        _pump_seconds(0.3)
+
+        x, y = _root_point(window, _details_label(window, "child"))
+
+        _fake_click(x, y)
+        _pump_seconds(0.4)
+        assert window._active_tab.path == tmp_path
+
+        _fake_click(x, y, count=2)
+        _pump_seconds(0.8)
+        assert window._active_tab.path == tmp_path / "child"
+        assert _path_label(window) == str(tmp_path / "child")
     finally:
         _close(window)

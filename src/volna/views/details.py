@@ -20,9 +20,17 @@ class Row(GObject.Object):
 
     __gtype_name__ = "VolnaRow"
 
-    def __init__(self, name: str, size_text: str, date_text: str, is_dir: bool) -> None:
+    def __init__(
+        self,
+        name: str,
+        path: str,
+        size_text: str,
+        date_text: str,
+        is_dir: bool,
+    ) -> None:
         super().__init__()
         self.name = name
+        self.path = path
         self.size_text = size_text
         self.date_text = date_text
         self.is_dir = is_dir
@@ -60,12 +68,14 @@ class _NameCell(Gtk.Box):
 class DetailsView:
     """A three-column table; ``render`` replaces the visible rows."""
 
-    def __init__(self) -> None:
+    def __init__(self, on_activate: Callable[[Row], None] | None = None) -> None:
+        self._on_activate = on_activate
         self.store = Gio.ListStore.new(Row)
         selection = Gtk.NoSelection(model=self.store)
         self._column_view = Gtk.ColumnView(model=selection)
         self._column_view.set_show_column_separators(True)
         self._column_view.set_show_row_separators(False)
+        self._column_view.connect("activate", self._activate_row)
 
         self._add_name_column("Имя")
         self._add_numeric_column("Размер", lambda row: row.size_text, width=px(96))
@@ -100,6 +110,13 @@ class DetailsView:
 
     def render(self, rows: list[Row]) -> None:
         self.store.splice(0, self.store.get_n_items(), rows)
+
+    def _activate_row(self, _view: Gtk.ColumnView, position: int) -> None:
+        if self._on_activate is None:
+            return
+        row = self.store.get_item(position)
+        if row is not None:
+            self._on_activate(row)
 
     def reset_scroll(self) -> None:
         adjustment = self.widget.get_vadjustment()

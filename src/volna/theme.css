@@ -46,8 +46,9 @@
   color: #dfe1e5;
 }
 
-.volna-icon.volna-disabled {
-  opacity: 0.42;
+/* GTK dims insensitive controls to 50 %: 0.84 * 0.5 is the design's 42 %. */
+.volna-icon:disabled {
+  opacity: 0.84;
 }
 
 .volna-win-close:hover {

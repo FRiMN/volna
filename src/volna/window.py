@@ -122,6 +122,24 @@ def icon_stub(
     return box
 
 
+def nav_button(
+    name: str,
+    tooltip: str,
+    callback: Callable[[], None],
+) -> Gtk.Button:
+    """Toolbar navigation button: a hit area around one glyph."""
+    button = Gtk.Button()
+    button.add_css_class("volna-icon")
+    button.set_size_request(px(24), px(24))
+    button.set_valign(Gtk.Align.CENTER)
+    button.set_tooltip_text(tooltip)
+    # Icon-only buttons need an accessible name: tooltips are not exposed as one.
+    button.update_property([Gtk.AccessibleProperty.LABEL], [tooltip])
+    button.set_child(icon(name, px(16)))
+    button.connect("clicked", lambda _button: callback())
+    return button
+
+
 class MainWindow(Gtk.ApplicationWindow):
     """Main Volna window: chrome, header band, empty panels."""
 
@@ -162,15 +180,12 @@ class MainWindow(Gtk.ApplicationWindow):
         bar.append(vertical_separator())
 
         navigation = hbox(px(2))
-        navigation.append(
-            icon_stub(
-                "back", tooltip="Назад — недоступно", extra_class="volna-disabled"
-            )
-        )
-        self._fwd_button = icon_stub("fwd", tooltip="Следующая вкладка")
-        make_clickable(self._fwd_button, self._activate_next_tab)
+        self._back_button = nav_button("back", "Назад", self._go_back)
+        self._fwd_button = nav_button("fwd", "Вперёд", self._go_forward)
+        self._up_button = nav_button("up", "В родительскую папку", self._go_up)
+        navigation.append(self._back_button)
         navigation.append(self._fwd_button)
-        navigation.append(icon_stub("up", tooltip="В родительскую папку"))
+        navigation.append(self._up_button)
         bar.append(navigation)
         bar.append(vertical_separator())
 
@@ -457,14 +472,38 @@ class MainWindow(Gtk.ApplicationWindow):
         if tab is None:
             return
         self._set_path_invalid(False)
-        if path == tab.path:
+        if not tab.navigate(path):
             self._path_label.set_text(str(tab.path))
-            return
 
-        tab.navigate(path)
+    def _go_back(self) -> None:
+        if self._active_tab is not None:
+            self._active_tab.go_back()
+
+    def _go_forward(self) -> None:
+        if self._active_tab is not None:
+            self._active_tab.go_forward()
+
+    def _go_up(self) -> None:
+        if self._active_tab is not None:
+            self._active_tab.go_up()
+
+    def _on_tab_navigated(self, tab: DirectoryTab) -> None:
+        """Mirror a tab's new location in the toolbar (back/forward/up too)."""
+        if tab is not self._active_tab:
+            return
+        if self._path_stack.get_visible_child_name() == "edit":
+            self._cancel_path_edit()
+        self._set_path_invalid(False)
         self._path_label.set_text(str(tab.path))
         self._refresh_tab_widget(tab)
+        self._update_nav_buttons()
         self._update_active_status()
+
+    def _update_nav_buttons(self) -> None:
+        tab = self._active_tab
+        self._back_button.set_sensitive(tab is not None and tab.can_go_back)
+        self._fwd_button.set_sensitive(tab is not None and tab.can_go_forward)
+        self._up_button.set_sensitive(tab is not None and tab.can_go_up)
 
     def _refresh_tab_widget(self, tab: DirectoryTab) -> None:
         title = self._tab_title_labels.get(tab)
@@ -949,7 +988,11 @@ class MainWindow(Gtk.ApplicationWindow):
         return Path.home()
 
     def _open_tab(self, path: Path) -> DirectoryTab:
-        tab = DirectoryTab(path, on_change=self._on_tab_change)
+        tab = DirectoryTab(
+            path,
+            on_change=self._on_tab_change,
+            on_navigate=self._on_tab_navigated,
+        )
         self._tabs.append(tab)
         self._stack.add_child(tab.widget)
 
@@ -977,6 +1020,7 @@ class MainWindow(Gtk.ApplicationWindow):
                 widget.remove_css_class("is-active")
         tab.ensure_loaded()
         self._update_active_status()
+        self._update_nav_buttons()
         self._reveal_tab(tab)
 
     def _reveal_tab(self, tab: DirectoryTab) -> None:
@@ -1010,12 +1054,6 @@ class MainWindow(Gtk.ApplicationWindow):
             adjustment.set_value(min(right - page, adjustment.get_upper() - page))
         return False
 
-    def _activate_next_tab(self) -> None:
-        if len(self._tabs) < 2 or self._active_tab is None:
-            return
-        index = self._tabs.index(self._active_tab)
-        self._activate(self._tabs[(index + 1) % len(self._tabs)])
-
     def _close_active_tab(self) -> None:
         if self._active_tab is not None:
             self._close_tab(self._active_tab)
@@ -1044,10 +1082,7 @@ class MainWindow(Gtk.ApplicationWindow):
             button.set_visible(can_close)
         self._close_action.set_enabled(can_close)
         self._close_menu_item.set_sensitive(can_close)
-        self._fwd_button.set_sensitive(can_close)
-        self._fwd_button.remove_css_class("volna-disabled")
-        if not can_close:
-            self._fwd_button.add_css_class("volna-disabled")
+        self._update_nav_buttons()
 
     def _on_tab_change(self, tab: DirectoryTab) -> None:
         if tab is not self._active_tab:

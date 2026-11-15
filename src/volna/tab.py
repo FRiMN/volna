@@ -12,7 +12,8 @@ from pathlib import Path
 from gi.repository import GLib
 
 from .controller import DirectoryController
-from .core import DirModel, Entry, Event
+from .core import DirModel, Entry, Event, ScanState
+from .history import NavigationHistory
 from .naming import tab_icon, tab_title
 from .views.details import DetailsView, Row
 from .views.format import format_date, format_size
@@ -26,12 +27,15 @@ class DirectoryTab:
         path: Path,
         *,
         on_change: Callable[[DirectoryTab], None],
+        on_navigate: Callable[[DirectoryTab], None],
     ) -> None:
         self.path = path
+        self._history = NavigationHistory(path)
         self.model = DirModel()
         self._on_change = on_change
+        self._on_navigate = on_navigate
         self._controller = DirectoryController(self.model, dispatch=GLib.idle_add)
-        self._view = DetailsView()
+        self._view = DetailsView(on_activate=self._on_row_activated)
         self.widget = self._view.widget
         self._loaded = False
         self._closed = False
@@ -39,7 +43,7 @@ class DirectoryTab:
 
         self.model.subscribe(Event.ITEM_BATCH, self._schedule_refresh)
         self.model.subscribe(Event.ORDER_CHANGED, self._schedule_refresh)
-        self.model.subscribe(Event.SCAN_STATE, self._changed)
+        self.model.subscribe(Event.SCAN_STATE, self._on_scan_state)
         self.model.subscribe(Event.COUNTERS_CHANGED, self._changed)
         self.model.subscribe(Event.ERROR, self._changed)
 
@@ -50,6 +54,18 @@ class DirectoryTab:
     @property
     def icon_name(self) -> str:
         return tab_icon(self.path)
+
+    @property
+    def can_go_back(self) -> bool:
+        return self._history.can_back
+
+    @property
+    def can_go_forward(self) -> bool:
+        return self._history.can_forward
+
+    @property
+    def can_go_up(self) -> bool:
+        return self._history.can_up
 
     def ensure_loaded(self) -> None:
         if self._closed or self._loaded:
@@ -63,16 +79,55 @@ class DirectoryTab:
         self._loaded = True
         self._controller.open(str(self.path))
 
-    def navigate(self, path: Path) -> None:
+    def navigate(self, path: Path) -> bool:
+        """Record ``path`` in the tab history and open it; False if unchanged."""
         if self._closed or path == self.path:
-            return
-        self.path = path
-        self.reload()
-        self._view.reset_scroll()
+            return False
+        self._history.visit(path)
+        self._load(path)
+        return True
+
+    def go_back(self) -> bool:
+        return self._go(self._history.back())
+
+    def go_forward(self) -> bool:
+        return self._go(self._history.forward())
+
+    def go_up(self) -> bool:
+        return self._go(self._history.up())
 
     def close(self) -> None:
         self._closed = True
         self._controller.close()
+
+    def _go(self, target: Path | None) -> bool:
+        """Open a history target; False when that direction is unavailable."""
+        if self._closed or target is None:
+            return False
+        self._load(target)
+        return True
+
+    def _load(self, path: Path) -> None:
+        self.path = path
+        self.reload()
+        self._view.reset_scroll()
+        self._on_navigate(self)
+
+    def _on_row_activated(self, row: Row) -> None:
+        if self._closed or not row.is_dir:
+            return
+        path = Path(row.path)
+        # A row from the previous listing must not navigate the new directory.
+        if path.parent != self.path:
+            return
+        self.navigate(path)
+
+    def _on_scan_state(self, state: ScanState, _generation: int) -> None:
+        if self._closed:
+            return
+        if state is ScanState.SCANNING:
+            self._view.render([])
+        self._on_change(self)
 
     def _changed(self, *_args: object) -> None:
         if self._closed:
@@ -96,6 +151,7 @@ class DirectoryTab:
     def _row(entry: Entry) -> Row:
         return Row(
             name=entry.name,
+            path=entry.path,
             size_text="—" if entry.is_dir else format_size(entry.size),
             date_text=format_date(entry.mtime),
             is_dir=entry.is_dir,

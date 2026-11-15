@@ -13,6 +13,7 @@ from gi.repository import GLib
 
 from .controller import DirectoryController
 from .core import DirModel, Entry, Event, ScanState
+from .display import V1_CAPABILITIES, ViewCapabilities, ViewSettings
 from .history import NavigationHistory
 from .naming import tab_icon, tab_title
 from .views.details import DetailsView, Row
@@ -28,10 +29,19 @@ class DirectoryTab:
         *,
         on_change: Callable[[DirectoryTab], None],
         on_navigate: Callable[[DirectoryTab], None],
+        view_settings: ViewSettings | None = None,
+        capabilities: ViewCapabilities = V1_CAPABILITIES,
     ) -> None:
         self.path = path
         self._history = NavigationHistory(path)
-        self.model = DirModel()
+        self._capabilities = capabilities
+        self._settings = (view_settings or ViewSettings()).normalized(capabilities)
+        self.model = DirModel(
+            sort_key=self._settings.sort_key,
+            reverse=self._settings.reverse,
+            folders_first=self._settings.folders_first,
+            show_hidden=self._settings.show_hidden,
+        )
         self._on_change = on_change
         self._on_navigate = on_navigate
         self._controller = DirectoryController(self.model, dispatch=GLib.idle_add)
@@ -66,6 +76,27 @@ class DirectoryTab:
     @property
     def can_go_up(self) -> bool:
         return self._history.can_up
+
+    @property
+    def view_settings(self) -> ViewSettings:
+        return self._settings
+
+    def update_view_settings(self, **changes: object) -> bool:
+        """Merge display changes into this tab and apply them in place.
+
+        Returns ``False`` when the snapshot did not change. Never rescans:
+        ordering and visibility are recomputed from the loaded entries.
+        """
+        settings = self._settings.merged(self._capabilities, **changes)
+        if settings == self._settings:
+            return False
+
+        self._settings = settings
+        self.model.set_folders_first(settings.folders_first)
+        self.model.set_show_hidden(settings.show_hidden)
+        self.model.set_order(sort_key=settings.sort_key, reverse=settings.reverse)
+        self._schedule_refresh()
+        return True
 
     def ensure_loaded(self) -> None:
         if self._closed or self._loaded:

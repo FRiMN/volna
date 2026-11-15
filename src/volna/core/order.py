@@ -35,18 +35,32 @@ BUCKET_ORDER = (
 _DAY = 86_400.0
 
 
-def sort_entries(entries: list[Entry], *, key: SortKey, reverse: bool = False) -> None:
-    """Sort in place: folders first, direction on the value, missing/zero last."""
+def sort_entries(
+    entries: list[Entry],
+    *,
+    key: SortKey,
+    reverse: bool = False,
+    folders_first: bool = True,
+) -> None:
+    """Sort in place: by key, optionally folders first, missing/zero last.
+
+    ``folders_first=False`` mixes folders and files in one order; the value key
+    decides their positions. Missing values still go last in both directions.
+    """
     if key is SortKey.NAME:
         entries.sort(key=lambda entry: entry.name_key, reverse=reverse)
-        entries.sort(key=_folder_rank)
+        if folders_first:
+            entries.sort(key=_folder_rank)
         return
 
     def numeric_key(entry: Entry) -> tuple[int, int, float]:
         present, value = _present_value(entry, key)
         if reverse:
             value = -value
-        return (_folder_rank(entry), 0 if present else 1, value)
+        if folders_first:
+            return (_folder_rank(entry), 0 if present else 1, value)
+
+        return (0 if present else 1, value)
 
     entries.sort(key=numeric_key)
 

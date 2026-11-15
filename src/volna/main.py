@@ -14,6 +14,13 @@ gi.require_version("Graphene", "1.0")
 
 from gi.repository import Gdk, GLib, Graphene, Gtk  # noqa: E402
 
+from .display import (  # noqa: E402
+    V1_CAPABILITIES,
+    SettingsPaths,
+    ViewSettings,
+    create_store,
+)
+
 APP_ID = "io.github.frimn.volna"
 
 
@@ -22,6 +29,13 @@ class VolnaApplication(Gtk.Application):
         super().__init__(application_id=APP_ID)
         self.screenshot = screenshot
         self.window = None
+
+        self._settings_store = create_store(SettingsPaths.default())
+        document = self._settings_store.load()
+        self._initial_settings = (document.view or ViewSettings()).normalized(
+            V1_CAPABILITIES
+        )
+        self._startup_issues = document.issues
         self.set_accels_for_action("win.new-tab", ["<Control>t"])
         self.set_accels_for_action("win.close-tab", ["<Control>w"])
         self.connect("startup", self._on_startup)
@@ -50,7 +64,12 @@ class VolnaApplication(Gtk.Application):
     def _on_activate(self, _application: Gtk.Application) -> None:
         from .window import MainWindow
 
-        self.window = MainWindow(application=self)
+        self.window = MainWindow(
+            application=self,
+            initial_settings=self._initial_settings,
+            settings_store=self._settings_store,
+            startup_issues=self._startup_issues,
+        )
         self.window.present()
         if self.screenshot:
             GLib.timeout_add(700, self._capture)

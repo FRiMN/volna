@@ -595,3 +595,237 @@ windowhandle {
 .volna-size-wide windowhandle {
   min-height: 50px;
 }
+
+/* ---- View panel (view_panel/) ---------------------------------------- */
+/* Trigger keeps the `.volna-view` anatomy inside a MenuButton; the menu-button
+   rules above already reset the internal button, so only focus/sizing here. */
+.volna-view-trigger {
+  min-height: 28px;
+}
+
+.volna-view-trigger > button:focus-visible {
+  outline: 1px solid #3574f0;
+  outline-offset: -1px;
+}
+
+/* Popover chrome: the trigger/popover width is fixed in panel.py. */
+popover.volna-view-popover {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+popover.volna-view-popover > contents {
+  background-color: #2b2d30;
+  border: 1px solid #393b40;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.volna-view-body {
+  min-width: 0;
+}
+
+.volna-view-section {
+  padding: 8px 0;
+}
+
+.volna-view-section:first-child {
+  padding-top: 0;
+}
+
+.volna-view-section-title {
+  color: #9da0a8;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-bottom: 4px;
+}
+
+.volna-view-separator {
+  background-color: #393b40;
+  min-height: 1px;
+}
+
+.volna-view-seg-row {
+  margin-top: 6px;
+}
+
+/* Radio and checkbox rows: the whole row is the native control. */
+.volna-radio,
+.volna-check {
+  padding: 0 4px;
+  min-height: 26px;
+  border-radius: 4px;
+  border-spacing: 8px;
+  color: #dfe1e5;
+  font-size: 14px;
+  outline: none;
+}
+
+.volna-radio:hover,
+.volna-check:hover {
+  background-color: #393b40;
+}
+
+.volna-radio:focus-visible,
+.volna-check:focus-visible {
+  outline: 1px solid #3574f0;
+  outline-offset: -1px;
+}
+
+/* A grouped CheckButton renders the `radio` node; a standalone one `check`. */
+.volna-radio > radio {
+  min-width: 14px;
+  min-height: 14px;
+  padding: 0;
+  border: 1.5px solid #6f737a;
+  border-radius: 50%;
+  background-image: none;
+  background-color: transparent;
+  box-shadow: none;
+  -gtk-icon-source: none;
+  color: transparent;
+}
+
+.volna-radio > radio:checked {
+  border-color: #3574f0;
+  background-color: #3574f0;
+  background-image: none;
+  -gtk-icon-source: none;
+  box-shadow: inset 0 0 0 3px #2b2d30;
+  color: transparent;
+}
+
+.volna-check > check {
+  min-width: 14px;
+  min-height: 14px;
+  padding: 0;
+  border: 1.5px solid #6f737a;
+  border-radius: 3px;
+  background-image: none;
+  background-color: transparent;
+  box-shadow: none;
+  color: transparent;
+}
+
+/* Keep the theme's white check glyph: only the box is restyled. */
+.volna-check > check:checked {
+  border-color: #3574f0;
+  background-color: #3574f0;
+  background-image: none;
+  box-shadow: none;
+  color: #ffffff;
+}
+
+/* Segmented direction control: a ToggleButton's CSS node is `button.toggle`. */
+.volna-seg {
+  background-color: #1e1f22;
+  border: 1px solid #393b40;
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.volna-seg button.toggle {
+  min-height: 24px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  background-image: none;
+  box-shadow: none;
+  color: #9da0a8;
+  font-size: 14px;
+  outline: none;
+}
+
+.volna-seg button.toggle:hover {
+  background-color: #2b2d30;
+  color: #dfe1e5;
+}
+
+.volna-seg button.toggle:checked {
+  background-color: #393b40;
+  background-image: none;
+  color: #dfe1e5;
+}
+
+.volna-seg button.toggle:focus-visible {
+  outline: 1px solid #3574f0;
+  outline-offset: -1px;
+}
+
+.volna-view-footer {
+  color: #6f737a;
+  font-size: 12px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid #393b40;
+}
+
+/* Compact density: only the details rows shrink (window class set by the lead). */
+.volna-density-compact .volna-dt-name {
+  font-size: 15px;
+}
+
+.volna-density-compact .volna-dt-num {
+  font-size: 12px;
+}
+
+/* Wide preset (125 %, default) counterparts of the View panel metrics. */
+.volna-size-wide .volna-view-trigger {
+  min-height: 35px;
+}
+
+.volna-size-wide popover.volna-view-popover > contents {
+  border-radius: 10px;
+  padding: 15px;
+}
+
+.volna-size-wide .volna-view-section {
+  padding: 10px 0;
+}
+
+.volna-size-wide .volna-view-section-title {
+  font-size: 15px;
+}
+
+.volna-size-wide .volna-view-seg-row {
+  margin-top: 8px;
+}
+
+.volna-size-wide .volna-radio,
+.volna-size-wide .volna-check {
+  min-height: 33px;
+  padding: 0 5px;
+  border-spacing: 10px;
+  font-size: 17.5px;
+}
+
+.volna-size-wide .volna-radio > radio,
+.volna-size-wide .volna-check > check {
+  min-width: 18px;
+  min-height: 18px;
+}
+
+.volna-size-wide .volna-radio > radio:checked {
+  box-shadow: inset 0 0 0 4px #2b2d30;
+}
+
+.volna-size-wide .volna-seg {
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.volna-size-wide .volna-seg button.toggle {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 17.5px;
+}
+
+.volna-size-wide .volna-view-footer {
+  font-size: 15px;
+  margin-top: 8px;
+  padding-top: 10px;
+}

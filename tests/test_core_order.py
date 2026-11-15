@@ -64,6 +64,39 @@ def test_sort_by_mtime_desc() -> None:
     assert [entry.name for entry in entries] == ["b", "a"]
 
 
+def test_sort_by_name_without_folders_first_mixes_kinds() -> None:
+    entries = [make("c.txt"), make("A", kind=Kind.DIR), make("b.txt")]
+
+    sort_entries(entries, key=SortKey.NAME, folders_first=False)
+
+    assert [entry.name for entry in entries] == ["A", "b.txt", "c.txt"]
+
+
+def test_sort_by_size_without_folders_first_mixes_kinds() -> None:
+    entries = [
+        make("docs", kind=Kind.DIR),
+        make("big", size=20),
+        make("small", size=10),
+    ]
+
+    sort_entries(entries, key=SortKey.SIZE, folders_first=False)
+
+    # A directory has no size, so it is missing and stays last in both directions.
+    assert [entry.name for entry in entries] == ["small", "big", "docs"]
+
+
+def test_sort_by_mtime_without_folders_first_mixes_kinds() -> None:
+    entries = [
+        make("dir", kind=Kind.DIR, mtime=200.0),
+        make("a", mtime=100.0),
+        make("c", mtime=300.0),
+    ]
+
+    sort_entries(entries, key=SortKey.MTIME, folders_first=False)
+
+    assert [entry.name for entry in entries] == ["a", "dir", "c"]
+
+
 def test_group_of_buckets() -> None:
     now = 1_700_000_000.0
     today = day_start(now)

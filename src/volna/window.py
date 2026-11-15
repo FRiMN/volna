@@ -15,6 +15,7 @@ numbers used below are scaled with size.px():
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Callable
 from pathlib import Path
@@ -28,13 +29,22 @@ gi.require_version("Pango", "1.0")
 from gi.repository import Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 
 from .core import ScanState  # noqa: E402
+from .display import (  # noqa: E402
+    V1_CAPABILITIES,
+    ViewCapabilities,
+    ViewSettings,
+    ViewSettingsStore,
+)
 from .geometry import edge_at as geometry_edge_at  # noqa: E402
 from .glyph import icon, icon_path  # noqa: E402
 from .size import SIZE_CLASS, px  # noqa: E402
 from .tab import DirectoryTab  # noqa: E402
+from .view_panel import ViewPanel  # noqa: E402
 from .views.format import format_size  # noqa: E402
 
 _POINTER_CURSOR = Gdk.Cursor.new_from_name("pointer", None)
+
+_LOG = logging.getLogger("volna.window")
 
 
 def _downloads_path() -> Path:
@@ -146,7 +156,16 @@ class MainWindow(Gtk.ApplicationWindow):
     _toolbar_height = px(40)
     _window_button_width = px(40)
 
-    def __init__(self, *, start_path: Path | None = None, **kwargs) -> None:
+    def __init__(
+        self,
+        *,
+        start_path: Path | None = None,
+        initial_settings: ViewSettings,
+        settings_store: ViewSettingsStore,
+        capabilities: ViewCapabilities = V1_CAPABILITIES,
+        startup_issues: tuple[str, ...] = (),
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         self.set_title("Волна")
         self.set_decorated(False)
@@ -163,6 +182,11 @@ class MainWindow(Gtk.ApplicationWindow):
         self._tab_icons: dict[DirectoryTab, Gtk.Image] = {}
         self._active_tab: DirectoryTab | None = None
         self._note_timeout: int | None = None
+        self._capabilities = capabilities
+        self._initial_settings = initial_settings.normalized(capabilities)
+        self._settings_store = settings_store
+        self._startup_issues = startup_issues
+        self._view_panel = self._create_view_panel()
 
         self._install_actions()
         self.set_child(self._content())
@@ -189,7 +213,7 @@ class MainWindow(Gtk.ApplicationWindow):
         bar.append(navigation)
         bar.append(vertical_separator())
 
-        bar.append(self._view_widget())
+        bar.append(self._view_panel.trigger())
         bar.append(self._path_widget())
 
         spacer = Gtk.Box()
@@ -264,16 +288,32 @@ class MainWindow(Gtk.ApplicationWindow):
         separator.set_size_request(-1, 1)
         return separator
 
-    def _view_widget(self) -> Gtk.Box:
-        button = hbox(px(6))
-        button.add_css_class("volna-view")
-        button.set_size_request(-1, px(28))
-        button.set_valign(Gtk.Align.CENTER)
-        button.set_tooltip_text("Вид")
-        button.append(icon("columns", px(16)))
-        button.append(label("Вид", "volna-view-label"))
-        button.append(icon("down", px(16), dim=True))
-        return button
+    def _create_view_panel(self) -> ViewPanel:
+        return ViewPanel(
+            settings=self._current_view_settings,
+            update=self._update_view_settings,
+            capabilities=self._capabilities,
+        )
+
+    def _current_view_settings(self) -> ViewSettings:
+        tab = self._active_tab
+        return tab.view_settings if tab is not None else self._initial_settings
+
+    def _update_view_settings(self, **changes: object) -> bool:
+        tab = self._active_tab
+        if tab is None:
+            return False
+
+        applied = tab.update_view_settings(**changes)
+        if applied:
+            self._apply_density(tab.view_settings.compact)
+        return applied
+
+    def _apply_density(self, compact: bool) -> None:
+        if compact:
+            self.add_css_class("volna-density-compact")
+        else:
+            self.remove_css_class("volna-density-compact")
 
     def _path_widget(self) -> Gtk.Box:
         wrapper = hbox(0)
@@ -988,10 +1028,16 @@ class MainWindow(Gtk.ApplicationWindow):
         return Path.home()
 
     def _open_tab(self, path: Path) -> DirectoryTab:
+        parent = self._active_tab
+        view_settings = (
+            parent.view_settings if parent is not None else self._initial_settings
+        )
         tab = DirectoryTab(
             path,
             on_change=self._on_tab_change,
             on_navigate=self._on_tab_navigated,
+            view_settings=view_settings,
+            capabilities=self._capabilities,
         )
         self._tabs.append(tab)
         self._stack.add_child(tab.widget)
@@ -1019,8 +1065,10 @@ class MainWindow(Gtk.ApplicationWindow):
             else:
                 widget.remove_css_class("is-active")
         tab.ensure_loaded()
+        self._apply_density(tab.view_settings.compact)
         self._update_active_status()
         self._update_nav_buttons()
+        self._view_panel.sync()
         self._reveal_tab(tab)
 
     def _reveal_tab(self, tab: DirectoryTab) -> None:
@@ -1093,20 +1141,39 @@ class MainWindow(Gtk.ApplicationWindow):
         tab = self._active_tab
         if tab is None:
             return
-        self._status_label.set_text(_status_text(tab.model.state))
         counters = tab.model.counters()
         self._counts_label.set_text(
             f"{counters.folders} папок · {counters.files} файлов "
             f"({format_size(counters.total_size)})"
         )
 
+        if tab.model.state is ScanState.READY and self._startup_issues:
+            note = self._startup_issues[0]
+            self._startup_issues = ()
+            self._show_status_note(note)
+            return
+
+        self._status_label.set_text(_status_text(tab.model.state))
+
     def _on_close_request(self, *_args: object) -> bool:
         if self._note_timeout is not None:
             GLib.source_remove(self._note_timeout)
             self._note_timeout = None
+
+        self._view_panel.close()
+        self._save_view_settings()
+
         for tab in self._tabs:
             tab.close()
         return False
+
+    def _save_view_settings(self) -> None:
+        tab = self._active_tab
+        if tab is None:
+            return
+
+        if not self._settings_store.save(tab.view_settings):
+            _LOG.warning("cannot save the last view; the session keeps it")
 
     def _hairline(self, *, strong: bool = False) -> Gtk.Box:
         line = Gtk.Box()

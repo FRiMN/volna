@@ -35,3 +35,8 @@ class Entry:
     @property
     def is_dir(self) -> bool:
         return self.kind is Kind.DIR
+
+    @property
+    def is_hidden(self) -> bool:
+        """Whether the name follows the hidden-entry (dotfile) convention."""
+        return self.name.startswith(".")

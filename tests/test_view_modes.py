@@ -385,3 +385,77 @@ def test_double_click_in_icons_mode_opens_a_folder(gtk_display, tmp_path: Path) 
         assert _pump_until(lambda: window._active_tab.path == tmp_path / "child")
     finally:
         _close(window)
+
+
+def _columns_view(window: object):
+    return window._active_tab._views[ViewMode.COLUMNS]
+
+
+def test_wheel_pans_columns_horizontally(gtk_display, tmp_path: Path) -> None:
+    """Either wheel axis pans the columns along their own (horizontal) axis."""
+    from volna.size import px
+
+    _make_listing(tmp_path)
+    window = _window(tmp_path)
+    try:
+        panel = _open_panel(window)
+        _wait_for_names(window, ViewMode.DETAILS, "alpha.txt")
+        _control(panel.popover, "Столбцы").set_active(True)
+        _wait_for_names(window, ViewMode.COLUMNS, "alpha.txt")
+
+        view = _columns_view(window)
+        controllers = view._scroller.observe_controllers()
+        attached = [
+            controllers.get_item(index) for index in range(controllers.get_n_items())
+        ]
+        assert view._wheel in attached, (
+            "the wheel controller must be attached to the columns scroller"
+        )
+        # Capture phase: the controller must see the wheel before the
+        # scrolled window's own handler consumes it.
+        import gi
+
+        gi.require_version("Gtk", "4.0")
+        from gi.repository import Gtk
+
+        assert view._wheel.get_propagation_phase() is Gtk.PropagationPhase.CAPTURE
+
+        adjustment = view._scroller.get_hadjustment()
+        assert adjustment is not None
+        vertical = view._scroller.get_vadjustment()
+        assert vertical is not None
+
+        # The widget tests run without theme.css, where the columns have no CSS
+        # min-width and therefore collapse; the range is pinned here instead, so
+        # the assertions describe the wheel mapping, not the stylesheet.
+        def pin_range() -> None:
+            adjustment.configure(0.0, 0.0, 1000.0, 10.0, 100.0, 100.0)
+
+        # A plain vertical wheel notch ("scrolling down", dy > 0) pans right.
+        pin_range()
+        assert view._wheel.emit("scroll", 0.0, 1.0) is True
+        assert adjustment.get_value() == px(100)
+
+        # Overshooting clamps at the far end, never past it.
+        pin_range()
+        view._wheel.emit("scroll", 0.0, 20.0)
+        assert adjustment.get_value() == 900.0
+
+        # A horizontal (tilt / SHIFT+wheel) delta pans the same way.
+        pin_range()
+        view._wheel.emit("scroll", 1.0, 0.0)
+        assert adjustment.get_value() == px(100)
+
+        # The opposite notch goes back and stops at the left edge.
+        pin_range()
+        view._wheel.emit("scroll", 0.0, -1.0)
+        assert adjustment.get_value() == 0.0
+
+        # Nothing to pan: the event is not consumed (it may bubble up).
+        adjustment.configure(0.0, 0.0, 100.0, 10.0, 100.0, 100.0)
+        assert view._wheel.emit("scroll", 0.0, 1.0) is False
+
+        # The vertical axis is never scrolled by the wheel in this mode.
+        assert vertical.get_value() == 0.0
+    finally:
+        _close(window)

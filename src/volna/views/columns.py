@@ -34,6 +34,10 @@ _MAX_NAME_CHARS = 28
 _COLUMN_ICON = px(48)
 _COLUMN_ICON_COMPACT = px(40)
 
+# A wheel/touchpad notch pans the columns by this much (the mockup's band is a
+# horizontally overflowing flex row, so any wheel axis is meant for it).
+_WHEEL_STEP = px(100)
+
 
 class ColumnGroup(GObject.Object):
     """One column: the items filling it top to bottom."""
@@ -70,6 +74,18 @@ class ColumnsView(ListingView):
         self._scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         self._scroller.set_child(self._list)
 
+        # Both wheel axes pan the columns horizontally: the listing flows
+        # left to right, so a plain vertical wheel (or SHIFT/tilt horizontal)
+        # must move it along its own axis instead of doing nothing. The capture
+        # phase matters: GtkScrolledWindow has its own wheel handling in the
+        # bubble phase, and without capturing first it would consume the event.
+        self._wheel = Gtk.EventControllerScroll.new(
+            Gtk.EventControllerScrollFlags.BOTH_AXES
+        )
+        self._wheel.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        self._wheel.connect("scroll", self._on_scroll)
+        self._scroller.add_controller(self._wheel)
+
     @property
     def widget(self) -> Gtk.Widget:
         return self._scroller
@@ -86,6 +102,33 @@ class ColumnsView(ListingView):
         adjustment = self._scroller.get_hadjustment()
         if adjustment is not None:
             adjustment.set_value(0.0)
+
+    def _on_scroll(
+        self, _controller: Gtk.EventControllerScroll, dx: float, dy: float
+    ) -> bool:
+        """Pan horizontally for either wheel axis; True consumes the event."""
+        adjustment = self._scroller.get_hadjustment()
+        if adjustment is None:
+            return False
+
+        # Wheel notches arrive as vertical deltas, tilted wheels and SHIFT+wheel
+        # as horizontal ones: the larger magnitude is the user's intent.
+        delta = dy if abs(dy) >= abs(dx) else dx
+        if delta == 0:
+            return False
+
+        lower = adjustment.get_lower()
+        upper = adjustment.get_upper()
+        page = adjustment.get_page_size()
+        last = max(lower, upper - page)
+        if last <= lower:
+            # Everything fits: nothing to pan, let the event bubble up.
+            return False
+
+        adjustment.set_value(
+            max(lower, min(adjustment.get_value() + delta * _WHEEL_STEP, last))
+        )
+        return True
 
     # -- factory -------------------------------------------------------
 

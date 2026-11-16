@@ -1,6 +1,49 @@
-# «Волна» — файловый менеджер · варианты дизайна
+# «Волна» — дизайн
 
-> **Implementation-grade спека выбранного направления:** [`design/spec/README.md`](spec/README.md). Канонический макет: [`design/artifacts/variant-c.html`](artifacts/variant-c.html).
+Раздел дизайна файлового менеджера «Волна»: три варианта направления, измеренные референсы, implementation-grade спека выбранного варианта и самодостаточные HTML-макеты.
+
+**Статус:** спецификация v1.5 (2026-11-15), направление — **C: Dolphin × JetBrains**.
+**Канонический макет:** [`design/artifacts/variant-c.html`](artifacts/variant-c.html) — открыть в браузере.
+
+![Сравнение вариантов](screens/compare.png)
+
+## Что внутри
+
+| Путь | Содержимое |
+|---|---|
+| [`spec/`](spec/README.md) | **Спецификация** направления C: продукт, токены, компоновка, компоненты, взаимодействия, реализация, решения, приёмка |
+| [`artifacts/`](artifacts/README.md) | Финальные макеты A/B/C (single-file HTML), C — канон |
+| [`screens/`](screens/) | Скриншоты состояний и сравнение `compare.png` |
+| [`reference/`](reference/) | Измеренные спеки референсов: Dolphin (398 строк) и JetBrains New UI (474 строки) |
+| [`content-spec.md`](content-spec.md) | Единый контент экрана (данные, подписи, счётчики) |
+| [`view-panel.md`](view-panel.md) | Проект и реализация панели «Вид»: решения, API, хранение, тесты, отложенное |
+| [`tools/`](tools/) | Скриншоты (`shot.sh`) и сравнительный коллаж (`build_compare.py`) |
+| [`backups/`](backups/) | Предыдущие версии макетов |
+| [`runtime-fix.md`](runtime-fix.md) | Локальный фикс runtime OpenDesign (free tier) |
+| [`../reference/`](../reference/) | Исходные скриншоты Dolphin от пользователя |
+
+## Быстрый старт
+
+```bash
+# посмотреть канонический макет
+cd design/artifacts && python3 -m http.server 8080
+# http://localhost:8080/variant-c.html
+# состояния: #view, #presets, #presets-save, #icons, #details, #ungrouped, #icons-ungrouped
+# размер интерфейса: по умолчанию широкий; ?size=compact — компактный
+```
+
+Пересобрать скриншоты и коллаж (окно 1920×1200 при масштабе 2 — PNG 3840×2400):
+
+```bash
+design/tools/shot.sh "http://127.0.0.1:8080/variant-a.html" design/screens/variant-a.png 1920 1200
+design/tools/shot.sh "http://127.0.0.1:8080/variant-b.html" design/screens/variant-b.png 1920 1200
+design/tools/shot.sh "http://127.0.0.1:8080/variant-c.html" design/screens/variant-c.png 1920 1200
+python3 design/tools/build_compare.py
+```
+
+---
+
+## Варианты
 
 Три варианта дизайна файлового менеджера «Волна» (рабочее название), подготовленные в OpenDesign по двум референсам:
 

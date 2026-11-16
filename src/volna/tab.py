@@ -1,7 +1,11 @@
-"""One directory tab: its own model, scanner and details view.
+"""One directory tab: its own model, scanner and view-mode dispatch.
 
-Tabs are independent so switching keeps that tab's listing and scroll position;
-the window only shows the active tab and mirrors its status/counters.
+Tabs are independent so switching keeps that tab's listing, scroll position
+and view mode; the window only shows the active tab and mirrors its status.
+
+The tab owns the mode dispatch (design/view-modes.md D4): it creates one
+:class:`ListingView` per available mode, keeps exactly one of them visible in
+its stack and renders the loaded listing into the active view only.
 """
 
 from __future__ import annotations
@@ -9,19 +13,21 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from gi.repository import GLib
+from gi.repository import GLib, Gtk
 
 from .controller import DirectoryController
 from .core import DirModel, Entry, Event, ScanState
-from .display import V1_CAPABILITIES, ViewCapabilities, ViewSettings
+from .display import DEFAULT_CAPABILITIES, ViewCapabilities, ViewMode, ViewSettings
 from .history import NavigationHistory
 from .naming import tab_icon, tab_title
-from .views.details import DetailsView, Row
+from .views.base import ListingView, Section
 from .views.format import format_date, format_size
+from .views.item import ListingItem
+from .views.registry import VIEWS_BY_MODE
 
 
 class DirectoryTab:
-    """Owns one listing: ``model`` + controller + view + scroll."""
+    """Owns one listing: ``model`` + controller + views + scroll."""
 
     def __init__(
         self,
@@ -30,7 +36,7 @@ class DirectoryTab:
         on_change: Callable[[DirectoryTab], None],
         on_navigate: Callable[[DirectoryTab], None],
         view_settings: ViewSettings | None = None,
-        capabilities: ViewCapabilities = V1_CAPABILITIES,
+        capabilities: ViewCapabilities = DEFAULT_CAPABILITIES,
     ) -> None:
         self.path = path
         self._history = NavigationHistory(path)
@@ -45,8 +51,22 @@ class DirectoryTab:
         self._on_change = on_change
         self._on_navigate = on_navigate
         self._controller = DirectoryController(self.model, dispatch=GLib.idle_add)
-        self._view = DetailsView(on_activate=self._on_row_activated)
-        self.widget = self._view.widget
+
+        # One view per available mode; the stack shows exactly one of them.
+        self._views: dict[ViewMode, ListingView] = {
+            mode: factory(on_activate=self._on_item_activated)
+            for mode, factory in VIEWS_BY_MODE.items()
+            if mode in capabilities.modes
+        }
+        self._stack = Gtk.Stack()
+        for mode, view in self._views.items():
+            self._stack.add_named(view.widget, mode.value)
+        self.widget = self._stack
+        self._active_view = self._views[self._settings.view_mode]
+        self._stack.set_visible_child_name(self._settings.view_mode.value)
+        for view in self._views.values():
+            view.apply(self._settings)
+
         self._loaded = False
         self._closed = False
         self._refresh_scheduled = False
@@ -81,20 +101,30 @@ class DirectoryTab:
     def view_settings(self) -> ViewSettings:
         return self._settings
 
+    @property
+    def view_mode(self) -> ViewMode:
+        return self._settings.view_mode
+
     def update_view_settings(self, **changes: object) -> bool:
         """Merge display changes into this tab and apply them in place.
 
         Returns ``False`` when the snapshot did not change. Never rescans:
-        ordering and visibility are recomputed from the loaded entries.
+        ordering, visibility and the view mode are recomputed from the loaded
+        entries.
         """
         settings = self._settings.merged(self._capabilities, **changes)
         if settings == self._settings:
             return False
 
+        if settings.view_mode != self._settings.view_mode:
+            self._switch_view(settings.view_mode)
         self._settings = settings
+
         self.model.set_folders_first(settings.folders_first)
         self.model.set_show_hidden(settings.show_hidden)
         self.model.set_order(sort_key=settings.sort_key, reverse=settings.reverse)
+
+        self._active_view.apply(settings)
         self._schedule_refresh()
         return True
 
@@ -131,6 +161,13 @@ class DirectoryTab:
         self._closed = True
         self._controller.close()
 
+    def _switch_view(self, mode: ViewMode) -> None:
+        """Show ``mode``'s widget: clear the outgoing view, reset the new one."""
+        self._active_view.render(())
+        self._active_view = self._views[mode]
+        self._stack.set_visible_child_name(mode.value)
+        self._active_view.reset_scroll()
+
     def _go(self, target: Path | None) -> bool:
         """Open a history target; False when that direction is unavailable."""
         if self._closed or target is None:
@@ -141,14 +178,14 @@ class DirectoryTab:
     def _load(self, path: Path) -> None:
         self.path = path
         self.reload()
-        self._view.reset_scroll()
+        self._active_view.reset_scroll()
         self._on_navigate(self)
 
-    def _on_row_activated(self, row: Row) -> None:
-        if self._closed or not row.is_dir:
+    def _on_item_activated(self, item: ListingItem) -> None:
+        if self._closed or not item.is_dir:
             return
-        path = Path(row.path)
-        # A row from the previous listing must not navigate the new directory.
+        path = Path(item.path)
+        # An item from the previous listing must not navigate the new directory.
         if path.parent != self.path:
             return
         self.navigate(path)
@@ -157,7 +194,7 @@ class DirectoryTab:
         if self._closed:
             return
         if state is ScanState.SCANNING:
-            self._view.render([])
+            self._active_view.render(())
         self._on_change(self)
 
     def _changed(self, *_args: object) -> None:
@@ -175,15 +212,16 @@ class DirectoryTab:
         self._refresh_scheduled = False
         if self._closed:
             return False
-        self._view.render([self._row(entry) for entry in self.model.entries()])
+        items = tuple(self._item(entry) for entry in self.model.entries())
+        self._active_view.render((Section(items=items),))
         return False
 
     @staticmethod
-    def _row(entry: Entry) -> Row:
-        return Row(
-            name=entry.name,
-            path=entry.path,
-            size_text="—" if entry.is_dir else format_size(entry.size),
-            date_text=format_date(entry.mtime),
-            is_dir=entry.is_dir,
+    def _item(entry: Entry) -> ListingItem:
+        return ListingItem(
+            entry.name,
+            entry.path,
+            "—" if entry.is_dir else format_size(entry.size),
+            format_date(entry.mtime),
+            entry.is_dir,
         )

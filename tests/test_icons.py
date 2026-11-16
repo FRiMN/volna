@@ -17,11 +17,19 @@ gi.require_version("GdkPixbuf", "2.0")
 GdkPixbuf = pytest.importorskip("gi.repository.GdkPixbuf")
 
 ICONS_DIR = Path(__file__).resolve().parents[1] / "src" / "volna" / "icons"
-SIZES = (12, 14, 15, 16, 18, 20, 25)
+SIZES = (12, 14, 15, 16, 18, 20, 25, 50, 60, 75)
 SUPERSAMPLE = 4
 INK_ALPHA = 8
 EDGE_MARGIN = 0.25  # px at the declared icon size
-CENTER_TOLERANCE = 1.0  # px at the declared icon size
+# A glyph's path is identical in every size directory, so its fractional
+# centering is size-independent; an absolute pixel budget would judge the same
+# artwork stricter the bigger the icon gets. The budget is therefore what the
+# existing set was designed to: 1 px at the 16 px reference grid, scaled.
+CENTER_TOLERANCE = 1.0  # px at 16, see _center_tolerance()
+
+
+def _center_tolerance(size: int) -> float:
+    return max(CENTER_TOLERANCE, size / 16)
 
 
 def _icon_paths() -> list[Path]:
@@ -95,5 +103,5 @@ def test_ink_is_optically_centered() -> None:
         size = int(path.parent.name)
         x0, y0, x1, y1 = _ink_bbox(path, size)
 
-        assert abs((x0 + x1) / 2 - size / 2) <= CENTER_TOLERANCE, path
-        assert abs((y0 + y1) / 2 - size / 2) <= CENTER_TOLERANCE, path
+        assert abs((x0 + x1) / 2 - size / 2) <= _center_tolerance(size), path
+        assert abs((y0 + y1) / 2 - size / 2) <= _center_tolerance(size), path

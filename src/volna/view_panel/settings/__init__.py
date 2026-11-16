@@ -11,8 +11,12 @@ from .folders_first import FoldersFirstSetting
 from .show_hidden import ShowHiddenSetting
 from .sort_direction import SortDirectionSetting
 from .sort_key import SortKeySetting
+from .view_mode import ViewModeSetting
 
+# Order defines the section order in the popover: «Режим просмотра» first,
+# then «Сортировка», then «Параметры» (first-seen grouping in panel.py).
 SETTING_FEATURES: tuple[type[SettingFeature], ...] = (
+    ViewModeSetting,
     SortKeySetting,
     SortDirectionSetting,
     FoldersFirstSetting,
@@ -28,4 +32,5 @@ __all__ = [
     "ShowHiddenSetting",
     "SortDirectionSetting",
     "SortKeySetting",
+    "ViewModeSetting",
 ]

@@ -94,12 +94,12 @@ class _Harness:
         sync_on_update: bool = False,
         setting_features: object | None = None,
     ) -> None:
-        from volna.display import V1_CAPABILITIES, ViewSettings
+        from volna.display import DEFAULT_CAPABILITIES, ViewSettings
         from volna.view_panel import ViewPanel
 
         self._sync_on_update = sync_on_update
         self.capabilities = (
-            capabilities if capabilities is not None else V1_CAPABILITIES
+            capabilities if capabilities is not None else DEFAULT_CAPABILITIES
         )
         self.settings = settings if settings is not None else ViewSettings()
         self.calls: list[dict[str, object]] = []
@@ -306,16 +306,24 @@ def test_popover_geometry_contract(panel) -> None:
     assert scroller.get_propagate_natural_height()
 
 
-def test_popover_has_only_live_v1_sections(panel) -> None:
+def test_popover_has_only_live_sections(panel) -> None:
     harness = panel()
 
     assert _texts(harness.window, "volna-view-section-title") == [
+        "Режим просмотра",
         "Сортировка",
         "Параметры",
     ]
     assert [
         widget.get_label() for widget in _by_class(harness.window, "volna-radio")
-    ] == ["Дата изменения", "Размер", "Имя"]
+    ] == [
+        "Значки",
+        "Столбцы",
+        "Подробности",
+        "Дата изменения",
+        "Размер",
+        "Имя",
+    ]
     assert [
         widget.get_label() for widget in _by_class(harness.window, "volna-check")
     ] == ["Папки перед файлами", "Показывать скрытые файлы", "Плотная раскладка"]
@@ -329,13 +337,13 @@ def test_popover_has_only_live_v1_sections(panel) -> None:
         "Изменения применяются сразу"
     ]
 
-    # Deferred V1 sections must not be rendered at all (no dead controls).
+    # Deferred sections must not be rendered at all (no dead controls).
     labels = [
         widget.get_text()
         for widget in _walk(harness.window)
         if hasattr(widget, "get_text")
     ]
-    for deferred in ("Пресеты", "Группировка", "Режим просмотра", "Масштаб"):
+    for deferred in ("Пресеты", "Группировка", "Масштаб"):
         assert deferred not in labels
 
 
@@ -366,6 +374,7 @@ def test_setting_features_are_separate_classes_and_modules() -> None:
     ids = [feature.id for feature in SETTING_FEATURES]
     assert len(set(ids)) == len(ids), f"duplicate setting ids: {ids}"
     assert [feature.section for feature in SETTING_FEATURES] == [
+        "Режим просмотра",
         "Сортировка",
         "Сортировка",
         "Сортировка",

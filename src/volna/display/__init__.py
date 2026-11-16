@@ -2,8 +2,9 @@
 
 from ..core import SortKey
 from .settings import (
+    DEFAULT_CAPABILITIES,
     DEFAULT_VIEW_SETTINGS,
-    V1_CAPABILITIES,
+    MODE_ORDER,
     Grouping,
     ViewCapabilities,
     ViewMode,
@@ -20,9 +21,10 @@ from .store import (
 )
 
 __all__ = [
+    "DEFAULT_CAPABILITIES",
     "DEFAULT_VIEW_SETTINGS",
+    "MODE_ORDER",
     "SCHEMA_VERSION",
-    "V1_CAPABILITIES",
     "Grouping",
     "JsonViewSettingsStore",
     "MemoryViewSettingsStore",

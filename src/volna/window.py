@@ -30,7 +30,7 @@ from gi.repository import Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 
 from .core import ScanState  # noqa: E402
 from .display import (  # noqa: E402
-    V1_CAPABILITIES,
+    DEFAULT_CAPABILITIES,
     ViewCapabilities,
     ViewSettings,
     ViewSettingsStore,
@@ -162,7 +162,7 @@ class MainWindow(Gtk.ApplicationWindow):
         start_path: Path | None = None,
         initial_settings: ViewSettings,
         settings_store: ViewSettingsStore,
-        capabilities: ViewCapabilities = V1_CAPABILITIES,
+        capabilities: ViewCapabilities = DEFAULT_CAPABILITIES,
         startup_issues: tuple[str, ...] = (),
         **kwargs,
     ) -> None:

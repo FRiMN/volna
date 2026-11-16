@@ -15,11 +15,31 @@ from ..core import SortKey
 
 
 class ViewMode(StrEnum):
-    """Listing renderer; only DETAILS exists in the app today."""
+    """Listing renderer; each mode is one module in ``volna.views``."""
 
     DETAILS = "details"
     COLUMNS = "columns"
     ICONS = "icons"
+
+    @property
+    def label(self) -> str:
+        """Display name for controls (the View panel radio group)."""
+        return _MODE_LABELS[self]
+
+
+_MODE_LABELS: dict[ViewMode, str] = {
+    ViewMode.DETAILS: "Подробности",
+    ViewMode.COLUMNS: "Столбцы",
+    ViewMode.ICONS: "Значки",
+}
+
+# Presentation order for controls: the mockup lists modes «Значки / Столбцы /
+# Подробности»; the enum order reflects nothing user-facing.
+MODE_ORDER: tuple[ViewMode, ...] = (
+    ViewMode.ICONS,
+    ViewMode.COLUMNS,
+    ViewMode.DETAILS,
+)
 
 
 class Grouping(StrEnum):
@@ -47,8 +67,8 @@ class ViewCapabilities:
         return ViewMode.DETAILS
 
 
-V1_CAPABILITIES = ViewCapabilities(
-    modes=frozenset({ViewMode.DETAILS}),
+DEFAULT_CAPABILITIES = ViewCapabilities(
+    modes=frozenset(MODE_ORDER),
     grouping=False,
     density=True,
     zoom_modes=frozenset(),

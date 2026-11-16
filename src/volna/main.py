@@ -15,7 +15,7 @@ gi.require_version("Graphene", "1.0")
 from gi.repository import Gdk, GLib, Graphene, Gtk  # noqa: E402
 
 from .display import (  # noqa: E402
-    V1_CAPABILITIES,
+    DEFAULT_CAPABILITIES,
     SettingsPaths,
     ViewSettings,
     create_store,
@@ -33,7 +33,7 @@ class VolnaApplication(Gtk.Application):
         self._settings_store = create_store(SettingsPaths.default())
         document = self._settings_store.load()
         self._initial_settings = (document.view or ViewSettings()).normalized(
-            V1_CAPABILITIES
+            DEFAULT_CAPABILITIES
         )
         self._startup_issues = document.issues
         self.set_accels_for_action("win.new-tab", ["<Control>t"])

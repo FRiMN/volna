@@ -9,8 +9,8 @@ import pytest
 
 from volna.core import SortKey
 from volna.display import (
+    DEFAULT_CAPABILITIES,
     DEFAULT_VIEW_SETTINGS,
-    V1_CAPABILITIES,
     Grouping,
     ViewCapabilities,
     ViewMode,
@@ -25,6 +25,12 @@ ONLY_ICONS = ViewCapabilities(
     modes=frozenset({ViewMode.ICONS}),
     grouping=False,
     density=False,
+    zoom_modes=frozenset(),
+)
+DETAILS_ONLY = ViewCapabilities(
+    modes=frozenset({ViewMode.DETAILS}),
+    grouping=False,
+    density=True,
     zoom_modes=frozenset(),
 )
 
@@ -202,9 +208,13 @@ def test_bool_fields_fall_back_on_junk(raw: object, expected: bool) -> None:
 @pytest.mark.parametrize(
     ("capabilities", "stored", "expected"),
     [
-        (V1_CAPABILITIES, ViewMode.DETAILS, ViewMode.DETAILS),
-        (V1_CAPABILITIES, ViewMode.ICONS, ViewMode.DETAILS),
-        (V1_CAPABILITIES, ViewMode.COLUMNS, ViewMode.DETAILS),
+        # The default build renders all three modes, so a stored mode survives.
+        (DEFAULT_CAPABILITIES, ViewMode.DETAILS, ViewMode.DETAILS),
+        (DEFAULT_CAPABILITIES, ViewMode.ICONS, ViewMode.ICONS),
+        (DEFAULT_CAPABILITIES, ViewMode.COLUMNS, ViewMode.COLUMNS),
+        # A build with fewer modes falls back to its preferred mode.
+        (DETAILS_ONLY, ViewMode.ICONS, ViewMode.DETAILS),
+        (DETAILS_ONLY, ViewMode.COLUMNS, ViewMode.DETAILS),
         (ONLY_ICONS, ViewMode.DETAILS, ViewMode.ICONS),
         (
             ViewCapabilities(
@@ -231,7 +241,7 @@ def test_normalized_maps_mode_to_what_the_build_can_render(
 
 def test_normalized_forces_ungrouped_when_grouping_is_unavailable() -> None:
     assert ViewSettings(grouping=Grouping.DATE).normalized(
-        V1_CAPABILITIES
+        DEFAULT_CAPABILITIES
     ).grouping is (Grouping.NONE)
 
 
@@ -245,7 +255,7 @@ def test_normalized_keeps_grouping_when_available() -> None:
 def test_normalized_clamps_zoom(raw: int, expected: int) -> None:
     settings = ViewSettings(zoom=raw)
 
-    assert settings.normalized(V1_CAPABILITIES).zoom == expected
+    assert settings.normalized(DEFAULT_CAPABILITIES).zoom == expected
 
 
 def test_normalized_preserves_fields_it_does_not_own() -> None:
@@ -260,14 +270,14 @@ def test_normalized_preserves_fields_it_does_not_own() -> None:
         zoom=70,
     )
 
-    normalized = settings.normalized(V1_CAPABILITIES)
+    normalized = settings.normalized(DEFAULT_CAPABILITIES)
 
     assert normalized.sort_key is SortKey.NAME
     assert normalized.reverse is False
     assert normalized.folders_first is False
     assert normalized.show_hidden is True
     assert normalized.compact is True
-    assert normalized.view_mode is ViewMode.DETAILS
+    assert normalized.view_mode is ViewMode.COLUMNS
     assert normalized.grouping is Grouping.NONE
     assert normalized.zoom == 70
 
@@ -276,7 +286,7 @@ def test_merged_applies_changes_and_normalizes() -> None:
     base = ViewSettings()
 
     merged = base.merged(
-        V1_CAPABILITIES,
+        DEFAULT_CAPABILITIES,
         view_mode=ViewMode.ICONS,
         grouping=Grouping.DATE,
         sort_key=SortKey.NAME,
@@ -287,7 +297,7 @@ def test_merged_applies_changes_and_normalizes() -> None:
     )
 
     assert merged == ViewSettings(
-        view_mode=ViewMode.DETAILS,
+        view_mode=ViewMode.ICONS,
         grouping=Grouping.NONE,
         sort_key=SortKey.NAME,
         reverse=False,
@@ -301,7 +311,7 @@ def test_merged_applies_changes_and_normalizes() -> None:
 def test_merged_without_changes_is_normalized() -> None:
     base = ViewSettings(view_mode=ViewMode.ICONS, grouping=Grouping.DATE)
 
-    assert base.merged(V1_CAPABILITIES) == base.normalized(V1_CAPABILITIES)
+    assert base.merged(DEFAULT_CAPABILITIES) == base.normalized(DEFAULT_CAPABILITIES)
 
 
 def test_settings_are_frozen() -> None:

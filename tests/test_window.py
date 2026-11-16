@@ -37,6 +37,13 @@ def _tabs(window: object) -> list[object]:
     return _by_class(window, "volna-tab")
 
 
+def _details_view(window: object):
+    """The details-mode view of the active tab (the dispatcher owns all modes)."""
+    from volna.display import ViewMode
+
+    return window._active_tab._views[ViewMode.DETAILS]
+
+
 def _active_tabs(window: object) -> list[object]:
     return [tab for tab in _tabs(window) if tab.has_css_class("is-active")]
 
@@ -270,7 +277,7 @@ def test_directory_row_activation_opens_the_directory(
     window = _main_window(tmp_path)
     try:
         window.present()
-        assert not window._active_tab._view._column_view.get_single_click_activate()
+        assert not _details_view(window)._column_view.get_single_click_activate()
         _activate_listed_row(window, "child")
 
         assert window._active_tab.path == child
@@ -696,10 +703,11 @@ def test_row_glyph_accessible_name_tracks_the_bound_kind(
         label_kinds.append(is_dir)
         return "Папка" if is_dir else "Файл"
 
-    import volna.views.details as details
+    # The glyph names live on ListingItem, which the details view binds.
+    import volna.views.item as item_module
 
-    monkeypatch.setattr(details, "content_icon", icon_spy)
-    monkeypatch.setattr(details, "content_icon_label", label_spy)
+    monkeypatch.setattr(item_module, "content_icon", icon_spy)
+    monkeypatch.setattr(item_module, "content_icon_label", label_spy)
 
     window = _main_window(tmp_path)
     try:
@@ -718,7 +726,7 @@ def test_row_glyph_accessible_name_tracks_the_bound_kind(
 
 
 def _listed_names(window: object) -> list[str]:
-    store = window._active_tab._view.store
+    store = _details_view(window).store
     return [store.get_item(index).name for index in range(store.get_n_items())]
 
 
@@ -730,14 +738,14 @@ def _wait_for_listing(window: object, *names: str) -> None:
 
 def _activate_listed_row(window: object, name: str) -> None:
     """Emit the ColumnView activation GTK sends for a double click / Enter."""
-    store = window._active_tab._view.store
+    store = _details_view(window).store
     _wait_for_listing(window, name)
     position = next(
         index
         for index in range(store.get_n_items())
         if store.get_item(index).name == name
     )
-    window._active_tab._view._column_view.emit("activate", position)
+    _details_view(window)._column_view.emit("activate", position)
 
 
 def test_navigation_clears_the_old_listing(gtk_display, tmp_path: Path) -> None:
@@ -749,7 +757,7 @@ def test_navigation_clears_the_old_listing(gtk_display, tmp_path: Path) -> None:
     try:
         window.present()
         _wait_for_listing(window, "child")
-        view = window._active_tab._view
+        view = _details_view(window)
         assert view.store.get_n_items() > 0
 
         window._navigate_active_tab(child)
@@ -772,7 +780,7 @@ def test_activation_of_a_row_from_the_previous_listing_is_ignored(
     try:
         window.present()
         _wait_for_listing(window, "beta")
-        store = window._active_tab._view.store
+        store = _details_view(window).store
         stale = next(
             store.get_item(index)
             for index in range(store.get_n_items())
@@ -780,7 +788,7 @@ def test_activation_of_a_row_from_the_previous_listing_is_ignored(
         )
 
         window._navigate_active_tab(alpha)
-        window._active_tab._on_row_activated(stale)
+        window._active_tab._on_item_activated(stale)
 
         assert window._active_tab.path == alpha
     finally:

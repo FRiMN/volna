@@ -354,6 +354,72 @@ popover.volna-menu > contents {
   font-size: 13px;
 }
 
+/* The band is a scrolled list/grid: without this the scrolled window falls
+   back to the default (light) theme background under the tab content. */
+scrolledwindow {
+  background-color: #1e1f22;
+}
+
+/* mode «Значки»: tiles follow the mockup's icon-grid (design 04 §6.2) */
+.volna-icons-tile {
+  min-width: 150px;
+  min-height: 150px;
+  padding: 10px 8px 8px;
+  /* GtkGridView has no gap: an 8px edge reproduces the mockup's grid gap */
+  margin: 0 6px 6px 0;
+  border-radius: 6px;
+  background-color: transparent;
+}
+
+.volna-icons-tile:hover {
+  background-color: #393b40;
+}
+
+.volna-icons-name {
+  color: #dfe1e5;
+  font-size: 16px;
+  /* two-line reservation, so metadata rows line up across tiles */
+  min-height: 35px;
+}
+
+.volna-icons-meta {
+  color: #9da0a8;
+  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+  font-size: 13px;
+}
+
+/* mode «Столбцы»: flat columns over the ordered listing */
+/* GTK CSS has no max-width: the column's natural width is capped by the
+   name label's character budget (volna.views.columns), keeping columns in
+   the design's 190..300 range. */
+.volna-col {
+  min-width: 190px;
+  padding: 4px;
+  border-right: 1px solid #393b40;
+}
+
+.volna-col-item {
+  min-height: 66px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.volna-col-item:hover {
+  background-color: #393b40;
+}
+
+.volna-col-name {
+  color: #dfe1e5;
+  font-size: 16px;
+}
+
+.volna-col-meta {
+  color: #9da0a8;
+  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+  font-size: 13px;
+}
+
 /* ---- bottom window (band 7) ----------------------------------------- */
 .volna-bottom {
   background-color: #1e1f22;
@@ -563,6 +629,42 @@ windowhandle {
   font-size: 16px;
 }
 
+.volna-size-wide .volna-icons-tile {
+  min-width: 188px;
+  min-height: 188px;
+  padding: 12px 10px 10px;
+  margin: 0 8px 8px 0;
+}
+
+.volna-size-wide .volna-icons-name {
+  font-size: 17.5px;
+  min-height: 44px;
+}
+
+.volna-size-wide .volna-icons-meta {
+  font-size: 16px;
+}
+
+.volna-size-wide .volna-col {
+  /* must fit the row's natural width: 60 icon + 13 gap + 160 date/size
+     text + 2x10 padding = 253, else the labels ellipsize needlessly */
+  min-width: 255px;
+  padding: 5px;
+}
+
+.volna-size-wide .volna-col-item {
+  min-height: 82px;
+  padding: 8px 10px;
+}
+
+.volna-size-wide .volna-col-name {
+  font-size: 17.5px;
+}
+
+.volna-size-wide .volna-col-meta {
+  font-size: 16px;
+}
+
 .volna-size-wide .volna-tab-close {
   min-width: 20px;
   min-height: 20px;
@@ -769,12 +871,40 @@ popover.volna-view-popover > contents {
   border-top: 1px solid #393b40;
 }
 
-/* Compact density: only the details rows shrink (window class set by the lead). */
+/* Compact density (window class set by the tab): details rows and mode cells shrink. */
 .volna-density-compact .volna-dt-name {
   font-size: 15px;
 }
 
 .volna-density-compact .volna-dt-num {
+  font-size: 12px;
+}
+
+/* …and the mode views: cells shrink like the mockup's compact metrics */
+.volna-density-compact .volna-icons-tile {
+  min-height: 165px;
+  padding: 8px 8px 6px;
+}
+
+.volna-density-compact .volna-icons-name {
+  font-size: 15px;
+  min-height: 40px;
+}
+
+.volna-density-compact .volna-icons-meta {
+  font-size: 12px;
+}
+
+.volna-density-compact .volna-col-item {
+  min-height: 68px;
+  padding: 4px 8px;
+}
+
+.volna-density-compact .volna-col-name {
+  font-size: 15px;
+}
+
+.volna-density-compact .volna-col-meta {
   font-size: 12px;
 }
 

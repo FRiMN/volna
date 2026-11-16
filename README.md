@@ -72,6 +72,7 @@ uv run ruff format  # форматирование
 - [design/README.md](design/README.md) — раздел дизайна: варианты, спека, макеты, референсы.
 - [design/spec/README.md](design/spec/README.md) — implementation-grade спека направления C.
 - [design/view-panel.md](design/view-panel.md) — проект и реализация панели «Вид».
+- [design/view-modes.md](design/view-modes.md) — проект режимов просмотра: «Подробности», «Столбцы», «Значки».
 - [AGENTS.md](AGENTS.md) — правила работы над проектом.
 
 ## Лицензия

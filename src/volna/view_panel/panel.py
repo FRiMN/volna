@@ -129,6 +129,11 @@ class ViewPanel:
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         content.add_css_class("volna-view-body")
+        # Both orders come from the registry tuple (settings/__init__.py):
+        # the position of a class in SETTING_FEATURES is its row position
+        # inside its section, and a section appears when its first feature
+        # does (first-seen grouping in _sections()). The enum's member order
+        # is documentation only and does not affect the layout.
         for title, features in self._sections():
             container, body = section(title)
             for feature in features:

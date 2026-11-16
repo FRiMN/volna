@@ -14,12 +14,12 @@ from gi.repository import Gtk  # noqa: E402
 
 from ...display import MODE_ORDER, ViewCapabilities, ViewMode, ViewSettings  # noqa: E402
 from ..controls import radio_row  # noqa: E402
-from .base import ChangeCallback, SettingFeature  # noqa: E402
+from .base import ChangeCallback, SettingFeature, SettingsSection  # noqa: E402
 
 
 class ViewModeSetting(SettingFeature):
     id = "view-mode"
-    section = "Режим просмотра"
+    section = SettingsSection.view_mode
 
     def __init__(self, on_change: ChangeCallback) -> None:
         super().__init__(on_change)

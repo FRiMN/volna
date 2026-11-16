@@ -22,7 +22,7 @@ from ..glyph import icon  # noqa: E402
 from ..size import px  # noqa: E402
 from .controls import footer, section, separator  # noqa: E402
 from .settings import SETTING_FEATURES  # noqa: E402
-from .settings.base import SettingFeature  # noqa: E402
+from .settings.base import SettingFeature, SettingsSection  # noqa: E402
 
 # The popover hangs 4 px below the trigger and starts at its left edge.
 # GTK positions the popup when it is presented, so both values belong to the
@@ -146,9 +146,9 @@ class ViewPanel:
 
         return popover
 
-    def _sections(self) -> list[tuple[str, list[SettingFeature]]]:
-        """Group features by section title, in first-seen order."""
-        grouped: dict[str, list[SettingFeature]] = {}
+    def _sections(self) -> list[tuple[SettingsSection | str, list[SettingFeature]]]:
+        """Group features by section, in first-seen order; the section is the title."""
+        grouped: dict[SettingsSection | str, list[SettingFeature]] = {}
         for feature in self._settings_features:
             grouped.setdefault(feature.section, []).append(feature)
 

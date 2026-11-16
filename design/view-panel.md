@@ -109,7 +109,7 @@ V1: `ViewCapabilities(modes={DETAILS}, grouping=False, density=True, zoom_modes=
 
 Поведение ядра «сначала папки» стало явной настройкой `folders_first`, а не жёстким правилом: по умолчанию она **включена** и сохраняет прежний вид, выключение смешивает папки и файлы в общем порядке выбранного ключа (при отсутствии значения — например, размера у каталога — элемент уходит в конец, как и раньше).
 
-Механизм: `sort_entries(..., folders_first=bool)` в [core/order.py](../src/volna/core/order.py), `DirModel.folders_first` + `set_folders_first()` (re-sort в памяти, `ORDER_CHANGED`, без рескана) и поле в `ViewSettings`. UI — отдельная фича-настройка `view_panel/settings/folders_first.py` (чекбокс в секции «Сортировка»), добавленная в реестр без правок панели — это и проверка декомпозиции на практике.
+Механизм: `sort_entries(..., folders_first=bool)` в [core/order.py](../src/volna/core/order.py), `DirModel.folders_first` + `set_folders_first()` (re-sort в памяти, `ORDER_CHANGED`, без рескана) и поле в `ViewSettings`. UI — отдельная фича-настройка `view_panel/settings/folders_first.py` (чекбокс в секции «Параметры»), добавленная в реестр без правок панели — это и проверка декомпозиции на практике.
 
 Отличие от макета: спека такого контрола не содержит; это продуктовое расширение по запросу, дефолт совместим с прежним поведением.
 

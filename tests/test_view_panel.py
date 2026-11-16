@@ -368,18 +368,18 @@ def test_density_checkbox_requires_the_capability(panel) -> None:
 
 def test_setting_features_are_separate_classes_and_modules() -> None:
     from volna.view_panel.settings import SETTING_FEATURES
-    from volna.view_panel.settings.base import SettingFeature
+    from volna.view_panel.settings.base import SettingFeature, SettingsSection
 
     assert all(issubclass(feature, SettingFeature) for feature in SETTING_FEATURES)
     ids = [feature.id for feature in SETTING_FEATURES]
     assert len(set(ids)) == len(ids), f"duplicate setting ids: {ids}"
     assert [feature.section for feature in SETTING_FEATURES] == [
-        "Режим просмотра",
-        "Сортировка",
-        "Сортировка",
-        "Сортировка",
-        "Параметры",
-        "Параметры",
+        SettingsSection.view_mode,
+        SettingsSection.sorting,
+        SettingsSection.sorting,
+        SettingsSection.params,
+        SettingsSection.params,
+        SettingsSection.params,
     ]
     modules = {feature.__module__ for feature in SETTING_FEATURES}
     assert len(modules) == len(SETTING_FEATURES), "each setting must own its module"

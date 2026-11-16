@@ -1,4 +1,4 @@
-"""«Сортировка» section: folders before files."""
+"""«Параметры» section: folders before files."""
 
 from __future__ import annotations
 
@@ -10,12 +10,12 @@ from gi.repository import Gtk  # noqa: E402
 
 from ...display import ViewSettings  # noqa: E402
 from ..controls import checkbox_row  # noqa: E402
-from .base import ChangeCallback, SettingFeature  # noqa: E402
+from .base import ChangeCallback, SettingFeature, SettingsSection  # noqa: E402
 
 
 class FoldersFirstSetting(SettingFeature):
     id = "folders-first"
-    section = "Сортировка"
+    section = SettingsSection.params
 
     def __init__(self, on_change: ChangeCallback) -> None:
         super().__init__(on_change)

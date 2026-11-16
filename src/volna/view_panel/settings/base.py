@@ -14,6 +14,7 @@ package's ``__init__``. No edits to ``panel.py`` are needed.
 from __future__ import annotations
 
 from collections.abc import Callable
+from enum import StrEnum
 from typing import ClassVar
 
 import gi
@@ -27,11 +28,24 @@ from ...display import ViewCapabilities, ViewSettings  # noqa: E402
 ChangeCallback = Callable[[dict[str, object]], None]
 
 
+class SettingsSection(StrEnum):
+    """Popover sections, in design order; the value is the visible title.
+
+    A ``str`` mixin so the panel can hand a section straight to
+    ``controls.section(title)`` and tests can compare it against titles;
+    injected features may still declare a custom section title.
+    """
+
+    view_mode = "Режим просмотра"
+    sorting = "Сортировка"
+    params = "Параметры"
+
+
 class SettingFeature:
     """One setting's row(s): build a widget, sync it, report declarative changes."""
 
     id: ClassVar[str]
-    section: ClassVar[str]
+    section: ClassVar[SettingsSection | str]
 
     def __init__(self, on_change: ChangeCallback) -> None:
         self._on_change = on_change

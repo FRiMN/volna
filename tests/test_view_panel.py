@@ -45,6 +45,15 @@ def _glib():
     return GLib
 
 
+def _gdk():
+    import gi
+
+    gi.require_version("Gdk", "4.0")
+    from gi.repository import Gdk
+
+    return Gdk
+
+
 def _walk(widget: object) -> Iterator[object]:
     child = widget.get_first_child()
     while child is not None:
@@ -151,6 +160,39 @@ class _Harness:
                 return widget
         raise AssertionError(f"{css_class} row {label!r} is not rendered")
 
+    # -- geometry (X11 root coordinates) ------------------------------
+
+    def trigger_root_rect(self) -> tuple[int, int, int, int]:
+        """The trigger's box on the screen."""
+        return _widget_root_rect(self.window, self.trigger)
+
+    def surface_root_rect(self) -> tuple[int, int, int, int]:
+        """The popup surface's box on the screen (it includes the shadow)."""
+        native = self.popover.get_native()
+        if native is None:
+            return (0, 0, 0, 0)
+        surface = native.get_surface()
+        if surface is None:
+            return (0, 0, 0, 0)
+        origin = _surface_origin(surface)
+        if origin is None:
+            return (0, 0, 0, 0)
+        return (
+            origin[0],
+            origin[1],
+            self.popover.get_width(),
+            self.popover.get_height(),
+        )
+
+    def shadow_inset(self) -> int:
+        """How far the popup surface reaches beyond the panel's card.
+
+        GTK builds the surface around the card: the drop shadow of the theme
+        becomes a transparent margin of the surface.
+        """
+        surface = self.surface_root_rect()
+        return (surface[2] - self.popover.get_size_request()[0]) // 2
+
     def destroy(self) -> None:
         self.panel.popover.popdown()
         _pump(0.1)
@@ -158,8 +200,30 @@ class _Harness:
         _pump(0.05)
 
 
+@pytest.fixture(scope="session")
+def project_theme(gtk_display) -> Iterator[None]:
+    """Load the project theme: the popup geometry depends on its CSS.
+
+    GTK builds the popup surface around the drop shadow of ``theme.css``, so
+    the geometry assertions are only meaningful with the real stylesheet.
+    """
+    Gdk = _gdk()
+    Gtk = _gtk()
+
+    provider = Gtk.CssProvider()
+    provider.load_from_string(_theme_css_path().read_text(encoding="utf-8"))
+    display = Gdk.Display.get_default()
+    if display is None:
+        pytest.skip("no display")
+
+    Gtk.StyleContext.add_provider_for_display(
+        display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+    )
+    yield
+
+
 @pytest.fixture
-def panel(gtk_display) -> Iterator[object]:
+def panel(gtk_display, project_theme) -> Iterator[object]:
     created: list[_Harness] = []
 
     def factory(**kwargs: object) -> _Harness:
@@ -491,16 +555,61 @@ def test_toggling_the_active_radio_off_reports_nothing(panel) -> None:
 
 
 def test_popover_is_left_aligned_with_the_trigger(panel) -> None:
+    """The panel starts at the trigger's left edge and hangs 4 px below it."""
     harness = panel()
     harness.open()
 
+    # The layout is part of the popup geometry and never changes while the
+    # panel is open: GTK centres the popup on its anchor otherwise.
+    assert harness.popover.get_halign() == _gtk().Align.START
     offset = harness.popover.get_offset()
-    expected_x = (_px(_POPOVER_WIDTH_BASE) - harness.trigger.get_width()) // 2
+    assert offset.x_offset == 0
     assert offset.y_offset == 4
-    assert offset.x_offset == expected_x
 
-    harness.close()
-    assert harness.popover.get_offset().x_offset == 0
+    trigger = harness.trigger_root_rect()
+    surface = harness.surface_root_rect()
+    card_left = surface[0] + harness.shadow_inset()
+    assert abs(card_left - trigger[0]) <= 1, "the card must start at the trigger"
+
+
+def test_the_popover_surface_does_not_cover_the_trigger(panel) -> None:
+    """The popup surface must not reach the trigger.
+
+    GTK builds the popup surface around the panel's drop shadow: the shadow
+    margin becomes part of the surface and swallows the clicks aimed at the
+    trigger, so the panel eats every second click (the user has to click twice
+    to open it again). The surface therefore has to start at the trigger's
+    bottom edge, and the panel may not hang lower than its 4 px gap.
+    """
+    harness = panel()
+    harness.open()
+
+    trigger = harness.trigger_root_rect()
+    surface = harness.surface_root_rect()
+    bottom = trigger[1] + trigger[3]
+    assert bottom <= surface[1] <= bottom + 4, (
+        f"the popup surface does not fit between the trigger and the gap: "
+        f"{surface} vs {trigger}"
+    )
+
+
+def test_the_panel_is_not_moved_after_it_is_shown(panel) -> None:
+    """The panel appears where it stays: no re-positioning after the show.
+
+    A geometry change while the popover is open makes GTK present the popup
+    again, and the panel jumps under the cursor (a visible flicker).
+    """
+    harness = panel()
+    shown_at: list[tuple[int, int]] = []
+
+    def on_show(*_args: object) -> None:
+        shown_at.append(harness.surface_root_rect()[:2])
+
+    harness.popover.connect("show", on_show)
+    harness.open()
+
+    assert shown_at, "the popover was not shown"
+    assert harness.surface_root_rect()[:2] == shown_at[0]
 
 
 def test_tooltip_is_dropped_while_the_popover_is_open(panel) -> None:
@@ -511,6 +620,18 @@ def test_tooltip_is_dropped_while_the_popover_is_open(panel) -> None:
 
     harness.close()
     assert harness.trigger.get_tooltip_text() == "Вид"
+
+
+def test_the_trigger_state_follows_the_panel(panel) -> None:
+    """`active` describes the panel, not the other way round."""
+    harness = panel()
+
+    harness.open()
+    assert harness.trigger.get_active()
+
+    harness.close()
+    assert not harness.trigger.get_active()
+    assert not harness.popover.get_visible()
 
 
 # -- keyboard ----------------------------------------------------------------
@@ -540,6 +661,18 @@ def _x11_libraries():
     x11.XKeysymToKeycode.restype = ctypes.c_ubyte
     x11.XKeysymToKeycode.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
     x11.XFlush.argtypes = [ctypes.c_void_p]
+    x11.XDefaultRootWindow.restype = ctypes.c_ulong
+    x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+    x11.XTranslateCoordinates.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_ulong,
+        ctypes.c_ulong,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_ulong),
+    ]
     xtst.XTestFakeKeyEvent.argtypes = [
         ctypes.c_void_p,
         ctypes.c_uint,
@@ -549,6 +682,57 @@ def _x11_libraries():
 
     _X11_LIBRARIES = (x11, xtst)
     return _X11_LIBRARIES
+
+
+def _surface_origin(surface) -> tuple[int, int] | None:
+    """The origin of a GdkSurface in X11 root coordinates."""
+    import gi
+
+    gi.require_version("GdkX11", "4.0")
+    from gi.repository import GdkX11
+
+    x11, _ = _x11_libraries()
+    display = x11.XOpenDisplay(None)
+    if not display:
+        pytest.skip("cannot open the X display")
+
+    try:
+        xid = GdkX11.X11Surface.get_xid(surface)
+        ox, oy, child = ctypes.c_int(), ctypes.c_int(), ctypes.c_ulong()
+        ok = x11.XTranslateCoordinates(
+            display,
+            xid,
+            x11.XDefaultRootWindow(display),
+            0,
+            0,
+            ctypes.byref(ox),
+            ctypes.byref(oy),
+            ctypes.byref(child),
+        )
+        return (ox.value, oy.value) if ok else None
+    finally:
+        x11.XCloseDisplay(display)
+
+
+def _widget_root_rect(window, widget) -> tuple[int, int, int, int]:
+    """The widget's box in X11 root coordinates."""
+    native = window.get_native()
+    surface = native.get_surface() if native is not None else None
+    origin = _surface_origin(surface) if surface is not None else None
+    if origin is None:
+        pytest.skip("cannot locate the window on the X display")
+
+    ok, bounds = widget.compute_bounds(window)
+    if not ok:
+        pytest.skip("the widget has no bounds yet")
+
+    shift_x, shift_y = native.get_surface_transform()
+    return (
+        origin[0] + int(shift_x + bounds.get_x()),
+        origin[1] + int(shift_y + bounds.get_y()),
+        int(bounds.get_width()),
+        int(bounds.get_height()),
+    )
 
 
 def _fake_key(name: str) -> None:

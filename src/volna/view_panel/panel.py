@@ -24,10 +24,11 @@ from .controls import footer, section, separator  # noqa: E402
 from .settings import SETTING_FEATURES  # noqa: E402
 from .settings.base import SettingFeature  # noqa: E402
 
-# The popover surface also carries transparent CSS-shadow margins (visible as
-# black in Xvfb without a compositor); the *content* box is exactly the requested
-# width, so positioning must use the request and not the surface allocation.
-# A vertical offset of 4 px yields the design's 4 px gap below the trigger.
+# The popover hangs 4 px below the trigger and starts at its left edge.
+# GTK positions the popup when it is presented, so both values belong to the
+# layout *before* the first show: a later change makes GTK re-present the open
+# popup and the panel visibly jumps (design 02 §8: the popover appears at once,
+# without a size animation).
 _POPOVER_GAP = 4
 _MAX_CONTENT_HEIGHT = 820
 
@@ -119,6 +120,12 @@ class ViewPanel:
         popover.add_css_class("volna-view-popover")
         popover.set_has_arrow(False)
         popover.set_size_request(px(320), -1)
+        # Left-align the content box with the trigger (GTK centres the popup on
+        # its anchor otherwise) and keep the design's 4 px gap below it. Both
+        # are part of the popup layout and stay constant, so the panel is
+        # presented once, in its final place.
+        popover.set_halign(Gtk.Align.START)
+        popover.set_offset(0, _POPOVER_GAP)
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         content.add_css_class("volna-view-body")
@@ -152,15 +159,15 @@ class ViewPanel:
     def _on_show(self, *_args: object) -> None:
         # The tooltip would hang over the open panel (same as the main menu).
         self._button.set_tooltip_text(None)
-        # Left-align with the trigger: GTK centres the popover content on its
-        # anchor, and the offset has to be set before the position is computed.
-        width = self._popover.get_size_request()[0]
-        self._popover.set_offset((width - self._button.get_width()) // 2, _POPOVER_GAP)
         self.sync()
 
     def _on_closed(self, *_args: object) -> None:
-        self._popover.set_offset(0, 0)
         self._button.set_tooltip_text("Вид")
+        # The panel can dismiss itself (a click outside it) and the trigger
+        # keeps its pressed state until the next click — that click then only
+        # clears the button instead of opening the panel. The trigger's state
+        # follows the panel (design 05 §2: "active синхронизируется").
+        self._button.set_active(False)
 
     # -- user input -----------------------------------------------------
 

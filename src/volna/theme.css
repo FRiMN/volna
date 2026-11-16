@@ -620,7 +620,12 @@ popover.volna-view-popover > contents {
   border: 1px solid #393b40;
   border-radius: 8px;
   padding: 12px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  /* GTK builds the popup surface around the shadow: the blur becomes a
+     transparent margin of the panel surface, and that margin swallows the
+     clicks aimed at the trigger (the panel would eat every second click).
+     The blur therefore stays inside the 4 px gap, so the surface starts at
+     the trigger's bottom edge and the trigger stays fully clickable. */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
 }
 
 .volna-view-body {

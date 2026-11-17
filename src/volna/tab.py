@@ -17,7 +17,14 @@ from gi.repository import GLib, Gtk
 
 from .controller import DirectoryController
 from .core import DirModel, Entry, Event, ScanState
-from .display import DEFAULT_CAPABILITIES, ViewCapabilities, ViewMode, ViewSettings
+from .display import (
+    DEFAULT_CAPABILITIES,
+    Grouping,
+    ViewCapabilities,
+    ViewMode,
+    ViewSettings,
+    group_label,
+)
 from .history import NavigationHistory
 from .naming import tab_icon, tab_title
 from .views.base import ListingView, Section
@@ -212,9 +219,27 @@ class DirectoryTab:
         self._refresh_scheduled = False
         if self._closed:
             return False
-        items = tuple(self._item(entry) for entry in self.model.entries())
-        self._active_view.render((Section(items=items),))
+        self._active_view.render(self._sections())
         return False
+
+    def _sections(self) -> tuple[Section, ...]:
+        """The loaded listing as view sections: date groups or one flat chunk.
+
+        Grouping is a display policy over the loaded model, so this never
+        touches the scanner (design/grouping.md D3, D8): the model already has
+        the entries and their order.
+        """
+        if self._settings.grouping is Grouping.NONE:
+            items = tuple(self._item(entry) for entry in self.model.entries())
+            return (Section(items=items),)
+
+        return tuple(
+            Section(
+                items=tuple(self._item(entry) for entry in group.entries),
+                header=group_label(group),
+            )
+            for group in self.model.groups()
+        )
 
     @staticmethod
     def _item(entry: Entry) -> ListingItem:

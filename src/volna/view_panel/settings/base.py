@@ -37,6 +37,7 @@ class SettingsSection(StrEnum):
     """
 
     view_mode = "Режим просмотра"
+    grouping = "Группировка"
     sorting = "Сортировка"
     params = "Параметры"
 

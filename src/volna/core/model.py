@@ -19,7 +19,14 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .entry import Entry, Kind
-from .order import BUCKET_ORDER, GroupBucket, SortKey, group_of, sort_entries
+from .order import (
+    BUCKET_ORDER,
+    GroupBucket,
+    SortKey,
+    day_start,
+    group_of,
+    sort_entries,
+)
 from .scanner import Batch, DirScanner, Phase
 from .statpool import StatPool
 
@@ -50,8 +57,24 @@ class Counters:
 
 @dataclass(slots=True, frozen=True)
 class Group:
+    """One date group: a coarse bucket, its entries and (for THIS_WEEK) its day.
+
+    ``THIS_WEEK`` is split into one group per local calendar day because the
+    design labels those groups with weekday names (design/grouping.md D2);
+    ``day`` is that day's local midnight, and ``None`` for the coarse buckets.
+    """
+
     bucket: GroupBucket
     entries: list[Entry]
+    day: float | None = None
+
+
+def _group_order(
+    item: tuple[tuple[GroupBucket, float | None], list[Entry]],
+) -> tuple[int, float]:
+    """Bucket order, then newest day first inside THIS_WEEK."""
+    (bucket, day), _entries = item
+    return BUCKET_ORDER.index(bucket), -(day or 0.0)
 
 
 class DirModel:
@@ -259,17 +282,25 @@ class DirModel:
         return self._counters
 
     def groups(self) -> list[Group]:
+        """Visible entries by date bucket, newest first; within a bucket — the sort order.
+
+        Sorting stays global (``_flush_order``): bucketing preserves the loaded
+        order, so the current sort key/``folders_first`` apply inside every
+        group without a second sort (design/grouping.md D3). ``THIS_WEEK`` is
+        split per local calendar day (D2).
+        """
         now = self._now()
-        buckets: dict[GroupBucket, list[Entry]] = defaultdict(list)
+        buckets: dict[tuple[GroupBucket, float | None], list[Entry]] = defaultdict(list)
         for entry in self._entries:
             if not self._visible(entry):
                 continue
-            buckets[group_of(entry.mtime, now=now)].append(entry)
+            bucket = group_of(entry.mtime, now=now)
+            day = day_start(entry.mtime) if bucket is GroupBucket.THIS_WEEK else None
+            buckets[(bucket, day)].append(entry)
 
         return [
-            Group(bucket, buckets[bucket])
-            for bucket in BUCKET_ORDER
-            if bucket in buckets
+            Group(bucket, entries, day)
+            for (bucket, day), entries in sorted(buckets.items(), key=_group_order)
         ]
 
     @property

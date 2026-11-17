@@ -1,9 +1,11 @@
 """Display settings and their last-view storage (pure, no GTK)."""
 
 from ..core import SortKey
+from .grouping import group_label
 from .settings import (
     DEFAULT_CAPABILITIES,
     DEFAULT_VIEW_SETTINGS,
+    GROUPING_ORDER,
     MODE_ORDER,
     Grouping,
     ViewCapabilities,
@@ -23,6 +25,7 @@ from .store import (
 __all__ = [
     "DEFAULT_CAPABILITIES",
     "DEFAULT_VIEW_SETTINGS",
+    "GROUPING_ORDER",
     "MODE_ORDER",
     "SCHEMA_VERSION",
     "Grouping",
@@ -36,4 +39,5 @@ __all__ = [
     "ViewSettings",
     "ViewSettingsStore",
     "create_store",
+    "group_label",
 ]

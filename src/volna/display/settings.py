@@ -43,8 +43,24 @@ MODE_ORDER: tuple[ViewMode, ...] = (
 
 
 class Grouping(StrEnum):
+    """How the listing is split into date groups (panel radio group)."""
+
     DATE = "date"
     NONE = "none"
+
+    @property
+    def label(self) -> str:
+        """Display name for controls (the View panel radio group)."""
+        return _GROUPING_LABELS[self]
+
+
+_GROUPING_LABELS: dict[Grouping, str] = {
+    Grouping.DATE: "По дате изменения",
+    Grouping.NONE: "Без группировки",
+}
+
+# Presentation order for controls: grouped (the design default) first.
+GROUPING_ORDER: tuple[Grouping, ...] = (Grouping.DATE, Grouping.NONE)
 
 
 # Preference order used when a stored mode is not available in this build.
@@ -69,7 +85,7 @@ class ViewCapabilities:
 
 DEFAULT_CAPABILITIES = ViewCapabilities(
     modes=frozenset(MODE_ORDER),
-    grouping=False,
+    grouping=True,
     density=True,
     zoom_modes=frozenset(),
 )

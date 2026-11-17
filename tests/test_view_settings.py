@@ -11,6 +11,7 @@ from volna.core import SortKey
 from volna.display import (
     DEFAULT_CAPABILITIES,
     DEFAULT_VIEW_SETTINGS,
+    GROUPING_ORDER,
     Grouping,
     ViewCapabilities,
     ViewMode,
@@ -20,6 +21,9 @@ from volna.display import (
 ALL_MODES = frozenset({ViewMode.DETAILS, ViewMode.COLUMNS, ViewMode.ICONS})
 ALL_CAPABILITIES = ViewCapabilities(
     modes=ALL_MODES, grouping=True, density=True, zoom_modes=ALL_MODES
+)
+UNGROUPED_CAPABILITIES = ViewCapabilities(
+    modes=ALL_MODES, grouping=False, density=True, zoom_modes=ALL_MODES
 )
 ONLY_ICONS = ViewCapabilities(
     modes=frozenset({ViewMode.ICONS}),
@@ -239,9 +243,21 @@ def test_normalized_maps_mode_to_what_the_build_can_render(
     assert settings.normalized(capabilities).view_mode is expected
 
 
+def test_default_capabilities_enable_grouping() -> None:
+    assert DEFAULT_CAPABILITIES.grouping is True
+
+
+def test_grouping_labels_and_order_follow_the_mockup() -> None:
+    assert [grouping.label for grouping in GROUPING_ORDER] == [
+        "По дате изменения",
+        "Без группировки",
+    ]
+    assert GROUPING_ORDER == (Grouping.DATE, Grouping.NONE)
+
+
 def test_normalized_forces_ungrouped_when_grouping_is_unavailable() -> None:
     assert ViewSettings(grouping=Grouping.DATE).normalized(
-        DEFAULT_CAPABILITIES
+        UNGROUPED_CAPABILITIES
     ).grouping is (Grouping.NONE)
 
 
@@ -270,7 +286,7 @@ def test_normalized_preserves_fields_it_does_not_own() -> None:
         zoom=70,
     )
 
-    normalized = settings.normalized(DEFAULT_CAPABILITIES)
+    normalized = settings.normalized(UNGROUPED_CAPABILITIES)
 
     assert normalized.sort_key is SortKey.NAME
     assert normalized.reverse is False
@@ -298,7 +314,7 @@ def test_merged_applies_changes_and_normalizes() -> None:
 
     assert merged == ViewSettings(
         view_mode=ViewMode.ICONS,
-        grouping=Grouping.NONE,
+        grouping=Grouping.DATE,
         sort_key=SortKey.NAME,
         reverse=False,
         show_hidden=True,

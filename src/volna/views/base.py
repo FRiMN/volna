@@ -24,10 +24,11 @@ from .item import ListingItem  # noqa: E402
 
 @dataclass(frozen=True, slots=True)
 class Section:
-    """A part of the listing under an optional header (future date groups).
+    """A part of the listing under an optional header (a date group).
 
-    Today the tab always builds one unnamed section (``header=None``); date
-    grouping later turns it into several named ones without touching the views.
+    The tab builds one unnamed section (``header=None``) for an ungrouped
+    listing and one named section per date group otherwise; the header's item
+    count is ``len(items)`` (design/grouping.md D4).
     """
 
     items: tuple[ListingItem, ...]

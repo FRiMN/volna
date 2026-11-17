@@ -8,15 +8,18 @@ module next to the others plus one line here — ``panel.py`` stays untouched.
 from .base import SettingFeature
 from .density import DensitySetting
 from .folders_first import FoldersFirstSetting
+from .grouping import GroupingSetting
 from .show_hidden import ShowHiddenSetting
 from .sort_direction import SortDirectionSetting
 from .sort_key import SortKeySetting
 from .view_mode import ViewModeSetting
 
-# Order defines the section order in the popover: «Режим просмотра» first,
-# then «Сортировка», then «Параметры» (first-seen grouping in panel.py).
+# Order defines the section order in the popover: «Режим просмотра», then
+# «Группировка», then «Сортировка», then «Параметры» (first-seen grouping in
+# panel.py; design/spec/03-layout.md §8).
 SETTING_FEATURES: tuple[type[SettingFeature], ...] = (
     ViewModeSetting,
+    GroupingSetting,
     SortKeySetting,
     SortDirectionSetting,
     FoldersFirstSetting,
@@ -28,6 +31,7 @@ __all__ = [
     "SETTING_FEATURES",
     "DensitySetting",
     "FoldersFirstSetting",
+    "GroupingSetting",
     "SettingFeature",
     "ShowHiddenSetting",
     "SortDirectionSetting",

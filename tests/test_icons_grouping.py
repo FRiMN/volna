@@ -1,0 +1,494 @@
+"""Grouped «Значки»: date captions over virtualized tile rows.
+
+Widget-level tests of :class:`~volna.views.icons.IconsView` (design/grouping.md
+D6): a grouped render builds caption rows plus tile bands, the band size follows
+the allocated width, resizing re-chunks the rows, and the flat listing keeps the
+old ``GtkGridView`` path. The view is driven directly here — the tab wiring is
+covered by the system tests in ``tests/test_view_modes.py`` — under the shared
+Xvfb display from ``tests/conftest.py``.
+
+GTK and ``volna.views`` are imported inside the tests, not at module level: the
+display is set up by the session fixture (see ``tests/test_view_modes.py``).
+"""
+
+from __future__ import annotations
+
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Any
+
+import pytest
+
+pytest.importorskip("gi")
+
+from volna.size import px  # noqa: E402
+
+# The metric contract from design/grouping.md D6: tiles are ``px(150)`` wide
+# with a ``px(6)`` gap, and a band holds as many as fit.
+_TILE_MIN = px(150)
+_GAP = px(6)
+
+
+def _walk(widget: Any) -> Iterator[Any]:
+    child = widget.get_first_child()
+    while child is not None:
+        yield child
+        yield from _walk(child)
+        child = child.get_next_sibling()
+
+
+def _by_class(root: Any, name: str) -> list[Any]:
+    return [widget for widget in _walk(root) if widget.has_css_class(name)]
+
+
+def _texts(root: Any, name: str) -> list[str]:
+    return [label.get_text() for label in _by_class(root, name)]
+
+
+def _pump(seconds: float = 0.2) -> None:
+    import gi
+
+    gi.require_version("GLib", "2.0")
+    from gi.repository import GLib
+
+    context = GLib.MainContext.default()
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        while context.pending():
+            context.iteration(False)
+        time.sleep(0.01)
+
+
+def _pump_until(condition, timeout: float = 5.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if condition():
+            return True
+        _pump(0.02)
+
+    return False
+
+
+def _items(count: int, prefix: str = "file") -> tuple[Any, ...]:
+    from volna.views.item import ListingItem
+
+    return tuple(
+        ListingItem(
+            f"{prefix}{index:03d}.txt",
+            f"/tmp/{prefix}{index:03d}.txt",
+            "1 КиБ",
+            "01.01.2026 00:00",
+            False,
+        )
+        for index in range(count)
+    )
+
+
+def _band_count(width: int) -> int:
+    """Tiles per band: the metric contract, restated as a packing invariant."""
+    return max(1, (width + _GAP) // (_TILE_MIN + _GAP))
+
+
+def _fits(width: int, count: int) -> bool:
+    """``count`` tiles fit into ``width`` and one more tile does not."""
+    step = _TILE_MIN + _GAP
+    return count * step <= width + _GAP < (count + 1) * step
+
+
+def _rows(view: Any) -> list[Any]:
+    return [view.store.get_item(index) for index in range(view.store.get_n_items())]
+
+
+def _captions(view: Any) -> list[Any]:
+    from volna.views.icons import HeaderRow
+
+    return [row for row in _rows(view) if isinstance(row, HeaderRow)]
+
+
+def _bands(view: Any) -> list[Any]:
+    from volna.views.icons import TileRow
+
+    return [row for row in _rows(view) if isinstance(row, TileRow)]
+
+
+def _tile_named(view: Any, name: str) -> Any:
+    for tile in _by_class(view.widget, "volna-icons-tile"):
+        if _texts(tile, "volna-icons-name") == [name]:
+            return tile
+
+    raise AssertionError(f"tile {name!r} is not on screen")
+
+
+def _settle(view: Any) -> None:
+    """Let GTK allocate the visible presentation and run width re-chunking."""
+    _pump_until(
+        lambda: view._list.get_width() > 0 or view._scroller.get_child() is view._grid
+    )
+    _pump(0.4)
+
+
+@dataclass
+class _Harness:
+    window: Any
+    view: Any
+    activated: list[Any] = field(default_factory=list)
+
+    def render(self, sections: tuple[Any, ...]) -> None:
+        self.view.render(sections)
+        _settle(self.view)
+
+    def resize(self, width: int, height: int = 600) -> None:
+        self.window.set_default_size(width, height)
+        _pump(0.5)
+
+    def close(self) -> None:
+        self.window.destroy()
+
+
+@contextmanager
+def _opened_view(*, width: int = 900, height: int = 900) -> Iterator[_Harness]:
+    """A presented ``IconsView``; GTK objects never outlive the session Xvfb."""
+    from gi.repository import Gtk
+
+    from volna.views.icons import IconsView
+
+    window = Gtk.Window()
+    window.set_default_size(width, height)
+    activated: list[Any] = []
+    view = IconsView(on_activate=activated.append)
+    window.set_child(view.widget)
+    window.present()
+    _pump(0.3)
+
+    harness = _Harness(window=window, view=view, activated=activated)
+    try:
+        yield harness
+    finally:
+        harness.close()
+
+
+@contextmanager
+def _project_theme() -> Iterator[None]:
+    """Load ``theme.css`` for one test and take it off the display afterwards.
+
+    The grouped band is width-driven only because the theme relaxes the tile's
+    ``min-width`` inside ``.volna-icons-band`` (design/grouping.md D6/D9); this
+    test file is the place that guards that contract.
+    """
+    from pathlib import Path
+
+    from gi.repository import Gdk, Gtk
+
+    css = (Path(__file__).resolve().parents[1] / "src/volna/theme.css").read_text(
+        encoding="utf-8"
+    )
+    provider = Gtk.CssProvider()
+    provider.load_from_string(css)
+    display = Gdk.Display.get_default()
+    Gtk.StyleContext.add_provider_for_display(
+        display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+    )
+    try:
+        yield
+    finally:
+        Gtk.StyleContext.remove_provider_for_display(display, provider)
+
+
+# -- grouped structure --------------------------------------------------------
+
+
+def test_grouped_render_builds_caption_rows_and_tile_bands(gtk_display) -> None:
+    from volna.views.base import Section
+
+    first = _items(7, "today")
+    second = _items(2, "yday")
+
+    with _opened_view() as harness:
+        harness.render(
+            (
+                Section(items=first, header="Сегодня"),
+                Section(items=second, header="Вчера"),
+            )
+        )
+
+        captions = _captions(harness.view)
+        bands = _bands(harness.view)
+        assert [caption.label for caption in captions] == ["Сегодня", "Вчера"]
+        assert [caption.count for caption in captions] == [7, 2]
+        assert [item.name for band in bands for item in band.items] == [
+            item.name for item in (*first, *second)
+        ]
+
+        # What the user sees: one caption per section, with the title and count.
+        _pump_until(lambda: _texts(harness.view.widget, "volna-group-title") != [])
+        assert _texts(harness.view.widget, "volna-group-title") == ["Сегодня", "Вчера"]
+        assert _texts(harness.view.widget, "volna-group-count") == ["7", "2"]
+        assert len(_by_class(harness.view.widget, "volna-icons-head")) == 2
+        assert "today000.txt" in _texts(harness.view.widget, "volna-icons-name")
+
+
+def test_caption_count_equals_the_section_size(gtk_display) -> None:
+    from volna.views.base import Section
+
+    sizes = (2, 1)
+
+    with _opened_view() as harness:
+        harness.render(
+            tuple(
+                Section(items=_items(size, f"g{index}"), header=f"Группа {index}")
+                for index, size in enumerate(sizes)
+            )
+        )
+
+        _pump_until(lambda: _texts(harness.view.widget, "volna-group-count") != [])
+        assert _texts(harness.view.widget, "volna-group-count") == [
+            str(size) for size in sizes
+        ]
+        assert [caption.count for caption in _captions(harness.view)] == list(sizes)
+
+
+def test_tiles_per_band_follow_the_band_width(gtk_display) -> None:
+    from volna.views.base import Section
+
+    with _opened_view() as harness:
+        harness.render((Section(items=_items(30), header="Сегодня"),))
+
+        width = harness.view._list.get_width()
+        count = _band_count(width)
+        assert _fits(width, count)
+
+        bands = _bands(harness.view)
+        assert len(bands) == -(-30 // count)
+        assert all(1 <= len(band.items) <= count for band in bands)
+
+
+def test_a_short_band_keeps_the_design_tile_width(gtk_display) -> None:
+    """A band with fewer tiles than fits must not stretch them across the band.
+
+    The mockup's grid columns are 150..178 px and the leftover width stays to
+    the right; stretching two tiles over a 1400 px band would not read as the
+    design's icon grid (design/grouping.md D6).
+    """
+    from volna.size import px
+    from volna.views.base import Section
+
+    with _opened_view(width=1400) as harness:
+        harness.render((Section(items=_items(2), header="Сегодня"),))
+
+        def laid_out() -> bool:
+            tiles = _by_class(harness.view.widget, "volna-icons-tile")
+            return len(tiles) == 2 and all(tile.get_width() > 0 for tile in tiles)
+
+        assert _pump_until(laid_out)
+        tiles = _by_class(harness.view.widget, "volna-icons-tile")
+        widths = [tile.get_width() for tile in tiles]
+
+        assert all(px(150) - 1 <= width <= px(178) for width in widths), widths
+        assert sum(widths) + _GAP < harness.view._list.get_width(), (
+            "a two-tile band filled the whole width instead of keeping tile width"
+        )
+
+
+def test_narrower_band_rechunks_the_tile_rows(gtk_display) -> None:
+    from volna.views.base import Section
+
+    with _opened_view() as harness:
+        harness.render((Section(items=_items(30), header="Сегодня"),))
+
+        wide = harness.view._list.get_width()
+        wide_count = _band_count(wide)
+        wide_bands = len(_bands(harness.view))
+
+        harness.resize(420)
+
+        def rechunked() -> bool:
+            width = harness.view._list.get_width()
+            return 0 < width < wide and _band_count(width) < wide_count
+
+        assert _pump_until(rechunked)
+        narrow = harness.view._list.get_width()
+        narrow_count = _band_count(narrow)
+        assert _fits(narrow, narrow_count)
+        assert narrow_count < wide_count
+        assert len(_bands(harness.view)) == -(-30 // narrow_count)
+        assert len(_bands(harness.view)) > wide_bands
+        assert all(len(band.items) <= narrow_count for band in _bands(harness.view))
+
+
+def test_large_listing_stays_row_level(gtk_display) -> None:
+    """Virtualization is per tile band: the store holds rows, not 2000 tiles."""
+    from volna.views.base import Section
+
+    with _opened_view() as harness:
+        harness.render((Section(items=_items(2000), header="Сегодня"),))
+
+        width = harness.view._list.get_width()
+        count = _band_count(width)
+        expected_rows = 1 + -(-2000 // count)
+        assert harness.view.store.get_n_items() == expected_rows
+        assert expected_rows < 2000
+
+
+# -- flat listing -------------------------------------------------------------
+
+
+def test_flat_section_keeps_the_grid_view(gtk_display) -> None:
+    from volna.views.base import Section
+
+    items = _items(4)
+
+    with _opened_view() as harness:
+        harness.render((Section(items=items),))
+
+        assert harness.view._scroller.get_child() is harness.view._grid
+        assert _rows(harness.view) == list(items)
+        _pump_until(
+            lambda: (
+                _texts(harness.view.widget, "volna-icons-name")
+                == [item.name for item in items]
+            )
+        )
+        assert _texts(harness.view.widget, "volna-icons-name") == [
+            item.name for item in items
+        ]
+        assert _texts(harness.view.widget, "volna-group-title") == []
+
+
+def test_flat_after_grouped_drops_the_captions(gtk_display) -> None:
+    from volna.views.base import Section
+
+    with _opened_view() as harness:
+        harness.render((Section(items=_items(3, "grouped"), header="Сегодня"),))
+        harness.render((Section(items=_items(2, "flat")),))
+
+        assert harness.view._scroller.get_child() is harness.view._grid
+        assert _captions(harness.view) == []
+        _pump_until(
+            lambda: (
+                _texts(harness.view.widget, "volna-icons-name")
+                == ["flat000.txt", "flat001.txt"]
+            )
+        )
+        assert _texts(harness.view.widget, "volna-icons-name") == [
+            "flat000.txt",
+            "flat001.txt",
+        ]
+        assert _texts(harness.view.widget, "volna-group-title") == []
+
+
+# -- activation and scroll ----------------------------------------------------
+
+
+def test_double_click_on_a_tile_opens_its_item(gtk_display) -> None:
+    from gi.repository import Gtk
+
+    from volna.views.base import Section
+
+    items = _items(5)
+
+    with _opened_view() as harness:
+        harness.render((Section(items=items, header="Сегодня"),))
+
+        tile = _tile_named(harness.view, items[2].name)
+        controllers = tile.observe_controllers()
+        clicks = [
+            controllers.get_item(index)
+            for index in range(controllers.get_n_items())
+            if isinstance(controllers.get_item(index), Gtk.GestureClick)
+        ]
+        assert len(clicks) == 1, "a tile must carry the double-click handler"
+
+        clicks[0].emit("pressed", 2, 0.0, 0.0)
+
+        assert harness.activated == [items[2]]
+
+
+def test_reading_position_survives_a_rechunk(gtk_display) -> None:
+    from volna.views.base import Section
+
+    items = _items(400)
+
+    with _opened_view() as harness:
+        harness.render((Section(items=items, header="Сегодня"),))
+
+        adjustment = harness.view._scroller.get_vadjustment()
+        adjustment.set_value(3000)
+        _pump(0.3)
+        anchor = harness.view._first_visible_item()
+        assert anchor is not None
+        assert anchor is not items[0]
+
+        harness.resize(420)
+
+        def rechunked() -> bool:
+            width = harness.view._list.get_width()
+            if not width > 0:
+                return False
+
+            expected = 1 + -(-len(items) // _band_count(width))
+            return harness.view.store.get_n_items() == expected
+
+        assert _pump_until(rechunked)
+        assert _pump_until(lambda: harness.view._first_visible_item() is anchor)
+        assert adjustment.get_value() > 0
+
+
+def test_theme_lets_the_window_shrink_and_rechunk_the_bands(gtk_display) -> None:
+    """The grouped band must not freeze the window's minimum width.
+
+    A tile carries ``.volna-icons-tile`` with a design min-width; if it counted
+    towards the row's minimum, the ``ListView`` (and the window) would stop
+    shrinking at the current band, so the width-driven re-chunk would never run
+    on a narrower window. ``theme.css`` relaxes it inside ``.volna-icons-band``.
+    """
+    from volna.size import SIZE_CLASS
+    from volna.views.base import Section
+
+    items = _items(40)
+
+    with _project_theme(), _opened_view(width=1240, height=800) as harness:
+        harness.window.add_css_class(SIZE_CLASS)
+        harness.render((Section(items=items, header="Сегодня"),))
+
+        wide_width = harness.view._list.get_width()
+        wide_columns = _band_count(wide_width)
+        wide_bands = len(_bands(harness.view))
+
+        # The minimum width follows the chunks, so narrow like a drag: each
+        # step re-chunks and lowers the minimum for the next step.
+        for _ in range(3):
+            harness.window.set_default_size(520, 800)
+            _pump(0.8)
+
+        narrow_width = harness.view._list.get_width()
+        assert narrow_width < wide_width, "the window did not shrink"
+        assert _band_count(narrow_width) < wide_columns, "the bands did not re-chunk"
+        assert len(_bands(harness.view)) > wide_bands
+        assert len(_bands(harness.view)) == -(-len(items) // _band_count(narrow_width))
+
+
+def test_grouped_render_before_the_window_is_shown_still_chunks(gtk_display) -> None:
+    """A render before the first allocation must not keep single-tile bands."""
+    from gi.repository import Gtk
+
+    from volna.views.base import Section
+    from volna.views.icons import IconsView
+
+    items = _items(12)
+    view = IconsView(on_activate=lambda item: None)
+    view.render((Section(items=items, header="Сегодня"),))
+    assert [len(band.items) for band in _bands(view)] == [1] * len(items)
+
+    window = Gtk.Window()
+    window.set_default_size(900, 900)
+    window.set_child(view.widget)
+    window.present()
+    try:
+        assert _pump_until(lambda: view.store.get_n_items() < len(items) + 1)
+        width = view._list.get_width()
+        assert len(_bands(view)) == -(-len(items) // _band_count(width))
+        assert len(_bands(view)[0].items) > 1
+    finally:
+        window.destroy()

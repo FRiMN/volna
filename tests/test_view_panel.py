@@ -802,6 +802,27 @@ def test_theme_stylesheet_parses() -> None:
     assert errors == []
 
 
+def test_theme_is_a_single_em_grid() -> None:
+    """One compact grid in em: the root font size is the only size knob.
+
+    ``size.py`` resolves the desktop scale into a root font (14 px at 100 %,
+    17.5 px at 125 %); every metric has to be relative to it, or a second
+    hardcoded preset sneaks back in.
+    """
+    css = _theme_css_path().read_text(encoding="utf-8")
+
+    assert ".volna-size-wide" not in css
+    root = re.search(r"(?ms)^\.volna-window\s*\{(.*?)^\}", css)
+    assert root is not None
+    assert "font-size" not in root.group(1), "the root size comes from size.py"
+    assert "font-family" not in root.group(1), "the UI font comes from the system"
+
+    sizes = re.findall(r"font-size:\s*([^;]+);", css)
+    assert sizes
+    for value in sizes:
+        assert value.strip().endswith(("em", "%", "inherit")), value
+
+
 def test_theme_stylesheet_has_a_view_panel_block() -> None:
     """theme.css is shipped as package data; guard the CSS contract classes."""
     css = _theme_css_path().read_text(encoding="utf-8")

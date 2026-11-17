@@ -4,13 +4,16 @@ The window owns dynamic directory tabs and the toolbar: main menu, navigation,
 display mode stub and the path widget (dropdown + inline editing). The right
 panel from the design is temporarily hidden in the app.
 
-Geometry follows the size preset from design/spec/02-design-tokens.md §10:
-the «wide» preset is the default (125 % of the compact grid), so the compact
-numbers used below are scaled with size.px():
+Geometry follows the interface scale from design/spec/02-design-tokens.md §10:
+the compact grid (100 %) is the base and size.px() scales it to the desktop's
+UI scale, so the numbers below are the compact ones:
 
-    50 toolbar + 1 hairline + app body + 1 hairline + 35 status = 1125
-    app body = 50 header band + 1 strong line + workspace + 1 line + 225 bottom
-    workspace = 350 left panel + flex editor (the design's 375 right panel is hidden)
+    40 toolbar + 1 hairline + app body + 1 hairline + 28 status = 900
+    app body = 40 header band + 1 strong line + workspace + 1 line + 180 bottom
+    workspace = 280 left panel + flex editor (the design's 300 right panel is hidden)
+
+On a 125 % desktop the same numbers render as the design's «wide» preset
+(50 / 350 / 225 / 1125) without a second stylesheet.
 """
 
 from __future__ import annotations
@@ -37,7 +40,7 @@ from .display import (  # noqa: E402
 )
 from .geometry import edge_at as geometry_edge_at  # noqa: E402
 from .glyph import icon, icon_path  # noqa: E402
-from .size import SIZE_CLASS, px  # noqa: E402
+from .size import px  # noqa: E402
 from .tab import DirectoryTab  # noqa: E402
 from .view_panel import ViewPanel  # noqa: E402
 from .views.format import format_counters  # noqa: E402
@@ -173,7 +176,6 @@ class MainWindow(Gtk.ApplicationWindow):
         self.set_size_request(px(900), px(600))
         self.set_resizable(True)
         self.add_css_class("volna-window")
-        self.add_css_class(SIZE_CLASS)
 
         self._tabs: list[DirectoryTab] = []
         self._tab_widgets: dict[DirectoryTab, Gtk.Box] = {}

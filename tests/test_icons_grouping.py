@@ -416,6 +416,7 @@ def test_double_click_on_a_tile_opens_its_item(gtk_display) -> None:
 
 def test_reading_position_survives_a_rechunk(gtk_display) -> None:
     from volna.views.base import Section
+    from volna.views.icons import TileRow
 
     items = _items(400)
 
@@ -440,7 +441,18 @@ def test_reading_position_survives_a_rechunk(gtk_display) -> None:
             return harness.view.store.get_n_items() == expected
 
         assert _pump_until(rechunked)
-        assert _pump_until(lambda: harness.view._first_visible_item() is anchor)
+
+        # Re-chunking changes the packing, so the anchor can stop being the
+        # first tile of its row; the contract is that its row becomes the top
+        # row of the viewport instead of the scroll jumping elsewhere.
+        anchor_row = harness.view._row_position(anchor)
+
+        def anchored() -> bool:
+            row = harness.view._top_row()
+            return isinstance(row, TileRow) and row.position == anchor_row
+
+        assert _pump_until(anchored), "the reading position was not preserved"
+        assert anchor in harness.view._top_row().items
         assert adjustment.get_value() > 0
 
 
@@ -452,13 +464,11 @@ def test_theme_lets_the_window_shrink_and_rechunk_the_bands(gtk_display) -> None
     shrinking at the current band, so the width-driven re-chunk would never run
     on a narrower window. ``theme.css`` relaxes it inside ``.volna-icons-band``.
     """
-    from volna.size import SIZE_CLASS
     from volna.views.base import Section
 
     items = _items(40)
 
     with _project_theme(), _opened_view(width=1240, height=800) as harness:
-        harness.window.add_css_class(SIZE_CLASS)
         harness.render((Section(items=items, header="Сегодня"),))
 
         wide_width = harness.view._list.get_width()

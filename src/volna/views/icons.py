@@ -265,9 +265,11 @@ class IconsView(ListingView):
     def _render_grouped(self) -> None:
         """Named sections: one caption row plus tile bands per date group."""
         self._grouped = True
-        # The first grouped layout is driven by the widget width becoming known;
+        # Without an allocated width the first band layout is still unknown:
         # keeping a reading position there would scroll the first caption away.
-        self._fresh_layout = True
+        # A re-render in a sized window knows its width, so later re-chunks keep
+        # the anchor instead of being treated as the first layout forever.
+        self._fresh_layout = self._band_width() <= 0
         self.store = self._rows
         # The flat tiles would keep every item alive while unused.
         self._grid_store.splice(0, self._grid_store.get_n_items(), [])

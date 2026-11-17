@@ -1,19 +1,23 @@
 /* Волна — design direction C (Dolphin × JetBrains), dark theme.
-   Tokens: design/spec/tokens.json; chrome rhythm 40/24/28. */
+   Tokens: design/spec/tokens.json.
+
+   Метрики — компактная сетка дизайна (100 %) в em: 1em = 14 px при системном
+   кегле 10 pt. Корневой кегль задаёт size.py по настройкам рабочего стола
+   (14 px на 100 %, 17.5 px на 125 %), поэтому «широкий» пресет получается сам,
+   без второго набора правил. 1px-линии и радиусы не масштабируются
+   (design/spec/02 §10). */
 
 .volna-window {
   background-color: #1e1f22;
   color: #dfe1e5;
-  font-family: "Inter", "Cantarell", "Ubuntu", "Noto Sans", sans-serif;
-  font-size: 14px;
 }
 
 /* ---- toolbar (band 1) ------------------------------------------------ */
 .volna-toolbar {
   background-color: #2b2d30;
-  padding-left: 4px;
-  padding-right: 4px;
-  min-height: 40px;
+  padding-left: 0.2857em;
+  padding-right: 0.2857em;
+  min-height: 2.8571em;
 }
 
 .volna-sep {
@@ -63,13 +67,13 @@
 
 /* view widget */
 .volna-view {
-  padding: 0 8px;
-  min-height: 28px;
+  padding: 0 0.5714em;
+  min-height: 2em;
 }
 
 .volna-view-label {
   color: #dfe1e5;
-  font-size: 16px;
+  font-size: 1em;
 }
 
 /* path widget */
@@ -77,7 +81,7 @@
   background-color: #26282d;
   border: 1px solid #393b40;
   border-radius: 4px;
-  min-height: 28px;
+  min-height: 2em;
   transition: background-color 280ms ease, border-color 280ms ease;
 }
 
@@ -87,8 +91,8 @@
 }
 
 .volna-path-btn {
-  padding: 0 6px;
-  min-height: 24px;
+  padding: 0 0.4571em;
+  min-height: 1.7143em;
   border-radius: 4px;
 }
 
@@ -98,7 +102,7 @@
 
 .volna-path-label {
   color: #dfe1e5;
-  font-size: 16px;
+  font-size: 1em;
 }
 
 .volna-path-menu > button {
@@ -106,8 +110,8 @@
   background-image: none;
   border: none;
   box-shadow: none;
-  padding: 0 4px;
-  min-height: 24px;
+  padding: 0 0.2857em;
+  min-height: 1.7143em;
   border-radius: 4px;
 }
 
@@ -120,10 +124,10 @@
   background-image: none;
   border: none;
   box-shadow: none;
-  padding: 0 6px;
+  padding: 0 0.4571em;
   min-height: 0;
   color: #dfe1e5;
-  font-size: 16px;
+  font-size: 1em;
   caret-color: #3574f0;
 }
 
@@ -134,24 +138,24 @@
 }
 
 .volna-path-menu-box {
-  min-width: 240px;
+  min-width: 17.1429em;
 }
 
 /* ---- header band (band 3) ------------------------------------------- */
 .volna-panel-header {
   background-color: #2b2d30;
-  padding: 0 8px;
-  min-height: 40px;
+  padding: 0 0.5714em;
+  min-height: 2.8571em;
 }
 
 .volna-panel-title {
-  padding: 0 2px;
-  min-height: 28px;
+  padding: 0 0.1714em;
+  min-height: 2em;
 }
 
 .volna-panel-title-label {
   color: #dfe1e5;
-  font-size: 16px;
+  font-size: 1em;
   font-weight: 600;
 }
 
@@ -164,11 +168,11 @@
 }
 
 .volna-tab {
-  padding: 0 10px;
-  min-height: 40px;
+  padding: 0 0.6857em;
+  min-height: 2.8571em;
   border-radius: 0;
   color: #9da0a8;
-  font-size: 16px;
+  font-size: 1em;
 }
 
 .volna-tab:hover {
@@ -184,7 +188,7 @@
 
 .volna-tab-label {
   color: inherit;
-  font-size: 16px;
+  font-size: 1em;
 }
 
 .volna-tab-scroll,
@@ -200,8 +204,8 @@
   border: none;
   box-shadow: none;
   padding: 0;
-  min-width: 16px;
-  min-height: 16px;
+  min-width: 1.1429em;
+  min-height: 1.1429em;
   border-radius: 4px;
   opacity: 0;
 }
@@ -226,12 +230,12 @@ popover.volna-menu > contents {
   background-color: #2b2d30;
   border: 1px solid #393b40;
   border-radius: 8px;
-  padding: 4px;
+  padding: 0.2857em;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
 .volna-menu-box {
-  min-width: 190px;
+  min-width: 13.6em;
 }
 
 .volna-menu-item {
@@ -239,11 +243,11 @@ popover.volna-menu > contents {
   background-image: none;
   border: none;
   box-shadow: none;
-  padding: 0 8px;
-  min-height: 24px;
+  padding: 0 0.5714em;
+  min-height: 1.7143em;
   border-radius: 4px;
   color: #dfe1e5;
-  font-size: 14px;
+  font-size: 1em;
 }
 
 .volna-menu-item:hover {
@@ -262,7 +266,7 @@ popover.volna-menu > contents {
 
 .volna-menu-shortcut {
   color: #9da0a8;
-  font-size: 12px;
+  font-size: 0.8571em;
 }
 
 .volna-menu-item:disabled .volna-menu-shortcut {
@@ -272,7 +276,7 @@ popover.volna-menu > contents {
 .volna-menu-sep {
   background-color: #393b40;
   min-height: 1px;
-  margin: 4px 6px;
+  margin: 0.2857em 0.4571em;
 }
 
 .volna-menu-button > button {
@@ -301,19 +305,19 @@ popover.volna-menu > contents {
 /* ---- body: rails, panels, editor ------------------------------------ */
 .volna-rail {
   background-color: #2b2d30;
-  padding: 4px 0;
+  padding: 0.2857em 0;
 }
 
 .volna-rail-btn {
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 2.2857em;
+  min-height: 2.2857em;
 }
 
 .volna-rail-sep {
   background-color: #393b40;
-  min-width: 20px;
+  min-width: 1.4286em;
   min-height: 1px;
-  margin: 4px 0;
+  margin: 0.2857em 0;
 }
 
 .volna-panel {
@@ -321,11 +325,11 @@ popover.volna-menu > contents {
 }
 
 .volna-panel-left {
-  min-width: 280px;
+  min-width: 20em;
 }
 
 .volna-panel-right {
-  min-width: 300px;
+  min-width: 21.4286em;
 }
 
 .volna-editor {
@@ -334,24 +338,24 @@ popover.volna-menu > contents {
 
 .volna-editor-header {
   background-color: #2b2d30;
-  min-height: 32px;
+  min-height: 2.2857em;
 }
 
 .volna-editor-counts {
   color: #9da0a8;
-  font-size: 13px;
+  font-size: 0.8em;
 }
 
 /* details table: name 14 primary, size/date mono 13 secondary (design rev. 6) */
 .volna-dt-name {
   color: #dfe1e5;
-  font-size: 16px;
+  font-size: 1em;
 }
 
 .volna-dt-num {
   color: #9da0a8;
   font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
-  font-size: 13px;
+  font-size: 0.8em;
 }
 
 /* The listing is a scrolled list/grid: the scrolled window has to paint the
@@ -365,11 +369,11 @@ popover.volna-menu > contents {
 
 /* mode «Значки»: tiles follow the mockup's icon-grid (design 04 §6.2) */
 .volna-icons-tile {
-  min-width: 150px;
-  min-height: 150px;
-  padding: 10px 8px 8px;
+  min-width: 10.7429em;
+  min-height: 10.7429em;
+  padding: 0.6857em 0.5714em 0.5714em;
   /* GtkGridView has no gap: an 8px edge reproduces the mockup's grid gap */
-  margin: 0 6px 6px 0;
+  margin: 0 0.4571em 0.4571em 0;
   border-radius: 6px;
   background-color: transparent;
 }
@@ -380,15 +384,15 @@ popover.volna-menu > contents {
 
 .volna-icons-name {
   color: #dfe1e5;
-  font-size: 16px;
+  font-size: 1em;
   /* two-line reservation, so metadata rows line up across tiles */
-  min-height: 35px;
+  min-height: 2.5143em;
 }
 
 .volna-icons-meta {
   color: #9da0a8;
   font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
-  font-size: 13px;
+  font-size: 0.8em;
 }
 
 /* mode «Столбцы»: flat columns over the ordered listing */
@@ -396,14 +400,14 @@ popover.volna-menu > contents {
    name label's character budget (volna.views.columns), keeping columns in
    the design's 190..300 range. */
 .volna-col {
-  min-width: 190px;
-  padding: 4px;
+  min-width: 14.5714em;
+  padding: 0.2857em;
   border-right: 1px solid #393b40;
 }
 
 .volna-col-item {
-  min-height: 66px;
-  padding: 6px 8px;
+  min-height: 4.6857em;
+  padding: 0.4571em 0.5714em;
   border-radius: 4px;
   background-color: transparent;
 }
@@ -414,32 +418,32 @@ popover.volna-menu > contents {
 
 .volna-col-name {
   color: #dfe1e5;
-  font-size: 16px;
+  font-size: 1em;
 }
 
 .volna-col-meta {
   color: #9da0a8;
   font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
-  font-size: 13px;
+  font-size: 0.8em;
 }
 
 /* ---- bottom window (band 7) ----------------------------------------- */
 .volna-bottom {
   background-color: #1e1f22;
-  min-height: 180px;
+  min-height: 12.8571em;
 }
 
 .volna-bottom-header {
   background-color: #2b2d30;
-  min-height: 40px;
+  min-height: 2.8571em;
 }
 
 .volna-bottom-tab {
-  padding: 0 12px;
-  min-height: 40px;
+  padding: 0 0.8571em;
+  min-height: 2.8571em;
   border-radius: 0;
   color: #9da0a8;
-  font-size: 16px;
+  font-size: 1em;
 }
 
 .volna-bottom-tab:hover {
@@ -453,30 +457,30 @@ popover.volna-menu > contents {
 }
 
 .volna-bottom-content {
-  min-height: 120px;
-  padding: 10px 12px;
+  min-height: 10em;
+  padding: 0.6857em 0.8571em;
 }
 
 /* ---- status bar (band 9) -------------------------------------------- */
 .volna-statusbar {
   background-color: #2b2d30;
-  min-height: 28px;
-  padding: 0 8px;
+  min-height: 2em;
+  padding: 0 0.5714em;
 }
 
 .volna-status {
   color: #9da0a8;
-  font-size: 13px;
+  font-size: 0.8em;
 }
 
 .volna-status-item {
   color: #9da0a8;
-  font-size: 13px;
+  font-size: 0.8em;
 }
 
 .volna-status-sep {
   color: #6f737a;
-  font-size: 13px;
+  font-size: 0.8em;
 }
 
 .volna-status-item.volna-mono {
@@ -494,218 +498,15 @@ popover.volna-menu > contents {
 
 /* give the drag handle exactly the toolbar height (theme pads it) */
 windowhandle {
-  min-height: 40px;
+  min-height: 2.8571em;
   padding: 0;
-}
-
-/* ---- interface size preset: «широкий» (125 %, default) -----------------
-   Base styles above are the compact 100 % grid (design/spec/02 §10).
-   The wide preset is applied by MainWindow (size.SIZE_CLASS); the compact
-   preset will be switchable in settings later. */
-.volna-size-wide {
-  font-size: 17.5px;
-}
-
-.volna-size-wide .volna-toolbar {
-  min-height: 50px;
-  padding-left: 5px;
-  padding-right: 5px;
-}
-
-.volna-size-wide .volna-view {
-  min-height: 35px;
-  padding: 0 10px;
-}
-
-.volna-size-wide .volna-view-label,
-.volna-size-wide .volna-path-label,
-.volna-size-wide .volna-panel-title-label,
-.volna-size-wide .volna-tab,
-.volna-size-wide .volna-tab-label,
-.volna-size-wide .volna-bottom-tab {
-  font-size: 17.5px;
-}
-
-.volna-size-wide .volna-path {
-  min-height: 35px;
-}
-
-.volna-size-wide .volna-path-btn {
-  min-height: 30px;
-  padding: 0 8px;
-}
-
-.volna-size-wide .volna-path-menu > button {
-  min-height: 30px;
-  padding: 0 5px;
-}
-
-.volna-size-wide .volna-path-entry {
-  padding: 0 8px;
-  min-height: 0;
-  font-size: 17.5px;
-}
-
-.volna-size-wide .volna-path-menu-box {
-  min-width: 300px;
-}
-
-.volna-size-wide .volna-panel-header {
-  min-height: 50px;
-  padding: 0 10px;
-}
-
-.volna-size-wide .volna-panel-title {
-  min-height: 35px;
-  padding: 0 3px;
-}
-
-.volna-size-wide .volna-tab {
-  min-height: 50px;
-  padding: 0 12px;
-}
-
-.volna-size-wide .volna-rail {
-  padding: 5px 0;
-}
-
-.volna-size-wide .volna-rail-btn {
-  min-width: 40px;
-  min-height: 40px;
-}
-
-.volna-size-wide .volna-rail-sep {
-  min-width: 25px;
-  margin: 5px 0;
-}
-
-.volna-size-wide .volna-panel-left {
-  min-width: 350px;
-}
-
-.volna-size-wide .volna-panel-right {
-  min-width: 375px;
-}
-
-.volna-size-wide .volna-editor-header {
-  min-height: 40px;
-}
-
-.volna-size-wide .volna-editor-counts {
-  font-size: 16px;
-}
-
-.volna-size-wide .volna-bottom {
-  min-height: 225px;
-}
-
-.volna-size-wide .volna-bottom-header {
-  min-height: 50px;
-}
-
-.volna-size-wide .volna-bottom-tab {
-  min-height: 50px;
-  padding: 0 15px;
-}
-
-.volna-size-wide .volna-bottom-content {
-  min-height: 175px;
-  padding: 12px 15px;
-}
-
-.volna-size-wide .volna-statusbar {
-  min-height: 35px;
-  padding: 0 10px;
-}
-
-.volna-size-wide .volna-status,
-.volna-size-wide .volna-status-item,
-.volna-size-wide .volna-status-sep {
-  font-size: 16px;
-}
-
-.volna-size-wide .volna-dt-name {
-  font-size: 17.5px;
-}
-
-.volna-size-wide .volna-dt-num {
-  font-size: 16px;
-}
-
-.volna-size-wide .volna-icons-tile {
-  min-width: 188px;
-  min-height: 188px;
-  padding: 12px 10px 10px;
-  margin: 0 8px 8px 0;
-}
-
-.volna-size-wide .volna-icons-name {
-  font-size: 17.5px;
-  min-height: 44px;
-}
-
-.volna-size-wide .volna-icons-meta {
-  font-size: 16px;
-}
-
-.volna-size-wide .volna-col {
-  /* must fit the row's natural width: 60 icon + 13 gap + 160 date/size
-     text + 2x10 padding = 253, else the labels ellipsize needlessly */
-  min-width: 255px;
-  padding: 5px;
-}
-
-.volna-size-wide .volna-col-item {
-  min-height: 82px;
-  padding: 8px 10px;
-}
-
-.volna-size-wide .volna-col-name {
-  font-size: 17.5px;
-}
-
-.volna-size-wide .volna-col-meta {
-  font-size: 16px;
-}
-
-.volna-size-wide .volna-tab-close {
-  min-width: 20px;
-  min-height: 20px;
-  border-radius: 5px;
-}
-
-.volna-size-wide .volna-menu-box {
-  min-width: 238px;
-}
-
-.volna-size-wide .volna-menu-item {
-  min-height: 30px;
-  padding: 0 10px;
-  font-size: 17.5px;
-}
-
-.volna-size-wide .volna-menu-shortcut {
-  font-size: 15px;
-}
-
-.volna-size-wide .volna-menu-sep {
-  margin: 5px 8px;
-}
-
-.volna-size-wide popover.volna-menu > contents {
-  border-radius: 10px;
-  padding: 5px;
-}
-
-.volna-size-wide windowhandle {
-  min-height: 50px;
 }
 
 /* ---- View panel (view_panel/) ---------------------------------------- */
 /* Trigger keeps the `.volna-view` anatomy inside a MenuButton; the menu-button
    rules above already reset the internal button, so only focus/sizing here. */
 .volna-view-trigger {
-  min-height: 28px;
+  min-height: 2em;
 }
 
 .volna-view-trigger > button:focus-visible {
@@ -724,7 +525,7 @@ popover.volna-view-popover > contents {
   background-color: #2b2d30;
   border: 1px solid #393b40;
   border-radius: 8px;
-  padding: 12px;
+  padding: 0.8571em;
   /* GTK builds the popup surface around the shadow: the blur becomes a
      transparent margin of the panel surface, and that margin swallows the
      clicks aimed at the trigger (the panel would eat every second click).
@@ -746,7 +547,7 @@ popover.volna-view-popover > contents > scrolledwindow {
 }
 
 .volna-view-section {
-  padding: 8px 0;
+  padding: 0.5714em 0;
 }
 
 .volna-view-section:first-child {
@@ -755,10 +556,10 @@ popover.volna-view-popover > contents > scrolledwindow {
 
 .volna-view-section-title {
   color: #9da0a8;
-  font-size: 12px;
+  font-size: 0.8571em;
   font-weight: 600;
   letter-spacing: 0.02em;
-  margin-bottom: 4px;
+  margin-bottom: 0.2286em;
 }
 
 .volna-view-separator {
@@ -767,18 +568,18 @@ popover.volna-view-popover > contents > scrolledwindow {
 }
 
 .volna-view-seg-row {
-  margin-top: 6px;
+  margin-top: 0.4571em;
 }
 
 /* Radio and checkbox rows: the whole row is the native control. */
 .volna-radio,
 .volna-check {
-  padding: 0 4px;
-  min-height: 26px;
+  padding: 0 0.2286em;
+  min-height: 1.4857em;
   border-radius: 4px;
-  border-spacing: 8px;
+  border-spacing: 0.4571em;
   color: #dfe1e5;
-  font-size: 14px;
+  font-size: 0.8em;
   outline: none;
 }
 
@@ -795,8 +596,8 @@ popover.volna-view-popover > contents > scrolledwindow {
 
 /* A grouped CheckButton renders the `radio` node; a standalone one `check`. */
 .volna-radio > radio {
-  min-width: 14px;
-  min-height: 14px;
+  min-width: 1.0286em;
+  min-height: 1.0286em;
   padding: 0;
   border: 1.5px solid #6f737a;
   border-radius: 50%;
@@ -817,8 +618,8 @@ popover.volna-view-popover > contents > scrolledwindow {
 }
 
 .volna-check > check {
-  min-width: 14px;
-  min-height: 14px;
+  min-width: 1.0286em;
+  min-height: 1.0286em;
   padding: 0;
   border: 1.5px solid #6f737a;
   border-radius: 3px;
@@ -842,19 +643,19 @@ popover.volna-view-popover > contents > scrolledwindow {
   background-color: #1e1f22;
   border: 1px solid #393b40;
   border-radius: 6px;
-  padding: 2px;
+  padding: 0.1714em;
 }
 
 .volna-seg button.toggle {
-  min-height: 24px;
-  padding: 0 8px;
+  min-height: 1.7143em;
+  padding: 0 0.5714em;
   border: none;
   border-radius: 4px;
   background: transparent;
   background-image: none;
   box-shadow: none;
   color: #9da0a8;
-  font-size: 14px;
+  font-size: 1em;
   outline: none;
 }
 
@@ -876,104 +677,47 @@ popover.volna-view-popover > contents > scrolledwindow {
 
 .volna-view-footer {
   color: #6f737a;
-  font-size: 12px;
-  margin-top: 6px;
-  padding-top: 8px;
+  font-size: 0.8571em;
+  margin-top: 0.4571em;
+  padding-top: 0.5714em;
   border-top: 1px solid #393b40;
 }
 
 /* Compact density (window class set by the tab): details rows and mode cells shrink. */
 .volna-density-compact .volna-dt-name {
-  font-size: 15px;
+  font-size: 0.8571em;
 }
 
 .volna-density-compact .volna-dt-num {
-  font-size: 12px;
+  font-size: 0.6857em;
 }
 
 /* …and the mode views: cells shrink like the mockup's compact metrics */
 .volna-density-compact .volna-icons-tile {
-  min-height: 165px;
-  padding: 8px 8px 6px;
+  min-height: 9.4286em;
+  padding: 0.4571em 0.4571em 0.3429em;
 }
 
 .volna-density-compact .volna-icons-name {
-  font-size: 15px;
-  min-height: 40px;
+  font-size: 0.8571em;
+  min-height: 2.2857em;
 }
 
 .volna-density-compact .volna-icons-meta {
-  font-size: 12px;
+  font-size: 0.6857em;
 }
 
 .volna-density-compact .volna-col-item {
-  min-height: 68px;
-  padding: 4px 8px;
+  min-height: 3.8857em;
+  padding: 0.2286em 0.4571em;
 }
 
 .volna-density-compact .volna-col-name {
-  font-size: 15px;
+  font-size: 0.8571em;
 }
 
 .volna-density-compact .volna-col-meta {
-  font-size: 12px;
-}
-
-/* Wide preset (125 %, default) counterparts of the View panel metrics. */
-.volna-size-wide .volna-view-trigger {
-  min-height: 35px;
-}
-
-.volna-size-wide popover.volna-view-popover > contents {
-  border-radius: 10px;
-  padding: 15px;
-}
-
-.volna-size-wide .volna-view-section {
-  padding: 10px 0;
-}
-
-.volna-size-wide .volna-view-section-title {
-  font-size: 15px;
-}
-
-.volna-size-wide .volna-view-seg-row {
-  margin-top: 8px;
-}
-
-.volna-size-wide .volna-radio,
-.volna-size-wide .volna-check {
-  min-height: 33px;
-  padding: 0 5px;
-  border-spacing: 10px;
-  font-size: 17.5px;
-}
-
-.volna-size-wide .volna-radio > radio,
-.volna-size-wide .volna-check > check {
-  min-width: 18px;
-  min-height: 18px;
-}
-
-.volna-size-wide .volna-radio > radio:checked {
-  box-shadow: inset 0 0 0 4px #2b2d30;
-}
-
-.volna-size-wide .volna-seg {
-  border-radius: 8px;
-  padding: 3px;
-}
-
-.volna-size-wide .volna-seg button.toggle {
-  min-height: 30px;
-  padding: 0 10px;
-  font-size: 17.5px;
-}
-
-.volna-size-wide .volna-view-footer {
-  font-size: 15px;
-  margin-top: 8px;
-  padding-top: 10px;
+  font-size: 0.6857em;
 }
 
 /* ---- date groups (design/grouping.md D9) ---------------------------- */
@@ -981,13 +725,13 @@ popover.volna-view-popover > contents > scrolledwindow {
    widget serves «Значки» and «Столбцы»; each mode only adds its own padding
    and background (mode classes below). */
 .volna-group-header {
-  min-height: 28px;
+  min-height: 2em;
   border-bottom: 1px solid #393b40;
 }
 
 .volna-group-title {
   color: #9da0a8;
-  font-size: 13px;
+  font-size: 0.8em;
   font-weight: 600;
 }
 
@@ -995,7 +739,7 @@ popover.volna-view-popover > contents > scrolledwindow {
    scoped to one date group. */
 .volna-group-stats {
   color: #9da0a8;
-  font-size: 13px;
+  font-size: 0.8em;
 }
 
 /* «Столбцы» keep the compact count: a column caption is too narrow for the
@@ -1003,19 +747,19 @@ popover.volna-view-popover > contents > scrolledwindow {
 .volna-group-count {
   color: #6f737a;
   font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
-  font-size: 12px;
+  font-size: 0.8571em;
 }
 
 /* «Значки»: section caption with the grid right below it (design 04 §6.2). */
 .volna-icons-head {
-  padding: 0 4px;
-  margin-bottom: 8px;
+  padding: 0 0.2857em;
+  margin-bottom: 0.5714em;
 }
 
 /* «Столбцы»: column caption over the column's items; the column divider line
    starts at the caption, so the caption sits on the canvas colour. */
 .volna-col-head {
-  padding: 0 8px;
+  padding: 0 0.5714em;
   background-color: #1e1f22;
 }
 
@@ -1023,7 +767,7 @@ popover.volna-view-popover > contents > scrolledwindow {
    column cell gets the same background/borders so the strip is continuous;
    the name cell carries the title and count. */
 .volna-dt-group {
-  min-height: 28px;
+  min-height: 2em;
   background-color: #26282d;
   border-top: 1px solid #393b40;
   border-bottom: 1px solid #393b40;
@@ -1035,77 +779,33 @@ popover.volna-view-popover > contents > scrolledwindow {
 }
 
 .volna-dt-group-content {
-  padding: 0 12px;
+  padding: 0 0.8571em;
 }
 
 /* Compact layout: the design keeps group captions at 28 px, only cell
    paddings shrink (02 §9). */
 .volna-density-compact .volna-col-head {
-  padding: 0 6px;
-}
-
-.volna-size-wide .volna-group-header {
-  min-height: 35px;
-}
-
-.volna-size-wide .volna-group-title {
-  font-size: 16px;
-}
-
-.volna-size-wide .volna-group-stats {
-  font-size: 16px;
-}
-
-.volna-size-wide .volna-group-count {
-  font-size: 15px;
-}
-
-.volna-size-wide .volna-icons-head {
-  padding: 0 5px;
-  margin-bottom: 10px;
-}
-
-.volna-size-wide .volna-col-head {
-  padding: 0 10px;
-}
-
-.volna-size-wide .volna-dt-group {
-  min-height: 35px;
-}
-
-.volna-size-wide .volna-dt-group-content {
-  padding: 0 15px;
+  padding: 0 0.3429em;
 }
 
 /* «Значки», grouped: a band is one ListView row of equal-width tiles. The
    tile's design min-width must not become the *window* minimum: the band is
    width-driven and re-chunks on resize (design/grouping.md D6). Flat GridView
-   tiles are not inside `.volna-icons-band` and keep their min-width. */
+   tiles are not inside `.volna-icons-band` and keep their min-width. The tile
+   margin exists for the flat GridView's gap; a band already spaces its tiles,
+   so only the vertical margin (band gap) stays. */
 .volna-icons-band .volna-icons-tile {
   min-width: 0;
-}
-
-.volna-size-wide .volna-icons-band .volna-icons-tile {
-  min-width: 0;
-}
-
-/* «Значки», grouped: the tile margin exists for the flat GridView's gap; a band
-   already spaces its tiles, so only the vertical margin (band gap) stays. */
-.volna-icons-band .volna-icons-tile {
-  margin: 0 0 6px 0;
-}
-
-.volna-size-wide .volna-icons-band .volna-icons-tile {
-  margin: 0 0 8px 0;
+  margin: 0 0 0.4571em 0;
 }
 
 /* ---- group collapse (design/grouping.md §12) ------------------------ */
 /* Chevron button in an interactive group header: focus ring from the
    toolkit, rotation shows the state (collapsed = pointing right). */
 .volna-group-chevron {
-  min-width: 24px;
-  min-height: 24px;
-  padding: 0 2px;
+  min-width: 1.3714em;
+  min-height: 1.3714em;
+  padding: 0 0.1143em;
   margin: 0;
   background: transparent;
   background-image: none;

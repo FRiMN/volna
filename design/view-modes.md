@@ -555,4 +555,4 @@ AGENTS §2: сначала эксперимент, потом решение. П
 - Макет: [`design/artifacts/variant-c.html`](artifacts/variant-c.html) — «Значки» (`#icons`), «Столбцы» без группировки (`#ungrouped-columns`), «Подробности» (`#details`).
 - Экраны: [`design/screens/variant-c-icons.png`](screens/variant-c-icons.png), [`design/screens/variant-c.png`](screens/variant-c.png).
 - Метрики: [02-design-tokens](spec/02-design-tokens.md) (шрифты, цвета, плотности), [04-components §6.2](spec/04-components.md) (раскладка полосы).
-- Токены приложения — [theme.css](../src/volna/theme.css); метрики переводятся через `px()` ([size.py](../src/volna/size.py)): значения спеки — это базовая сетка, `px()` умножает их на 1.25 (широкий пресет).
+- Токены приложения — [theme.css](../src/volna/theme.css); метрики переводятся через `px()` ([size.py](../src/volna/size.py)): значения спеки — это базовая сетка, `px()` умножает их на масштаб интерфейса (1 на 100 %-десктопе, 1.25 на 125 %; см. spec/02 §10).

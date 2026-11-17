@@ -14,6 +14,8 @@ import pytest
 
 pytest.importorskip("gi")
 
+from volna.size import px  # noqa: E402
+
 
 def _walk(widget: object) -> Iterator[object]:
     child = widget.get_first_child()
@@ -645,6 +647,7 @@ def _name_cell_rows(window: object) -> dict[str, str]:
     """Map a visible row label to the file name of its type glyph."""
     import gi
 
+    from volna.glyph import nearest_icon_size
     from volna.size import px
 
     gi.require_version("Gtk", "4.0")
@@ -664,7 +667,9 @@ def _name_cell_rows(window: object) -> dict[str, str]:
         glyph = image.get_property("file")
         assert glyph is not None, "the row glyph was not loaded from a file"
         path = Path(glyph if isinstance(glyph, str) else glyph.get_path())
-        assert path.parent.name == str(px(16))
+        # Glyphs are SVG: the file comes from the nearest shipped set and is
+        # painted at the requested pixel size.
+        assert path.parent.name == str(nearest_icon_size(px(16)))
         rows[name] = path.name
 
     return rows
@@ -995,3 +1000,57 @@ def test_real_double_click_opens_a_directory(gtk_display, tmp_path: Path) -> Non
         assert _path_label(window) == str(tmp_path / "child")
     finally:
         _close(window)
+
+
+# -- interface scale ----------------------------------------------------------
+
+_THEME_PX = 14.0  # the compact grid at 100 % (design/spec/02 §10)
+
+
+def _load_theme(font_px: float):
+    """Load ``theme.css`` plus the root font size the app sets at startup."""
+    from gi.repository import Gdk, Gtk
+
+    theme = Path(__file__).resolve().parents[1] / "src" / "volna" / "theme.css"
+    providers = []
+    for css in (
+        theme.read_text(encoding="utf-8"),
+        f".volna-window {{ font-size: {font_px}px; }}",
+    ):
+        provider = Gtk.CssProvider()
+        provider.load_from_string(css)
+        providers.append(provider)
+
+    display = Gdk.Display.get_default()
+    for provider in providers:
+        Gtk.StyleContext.add_provider_for_display(
+            display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+    return display, providers
+
+
+def _toolbar_height(tmp_path: Path, font_px: float) -> int:
+    from gi.repository import Gtk
+
+    display, providers = _load_theme(font_px)
+    window = _main_window(tmp_path)
+    try:
+        window.present()
+        toolbar = _by_class(window, "volna-toolbar")[0]
+        assert _pump_until(lambda: toolbar.get_height() > 0)
+        return toolbar.get_height()
+    finally:
+        _close(window)
+        for provider in providers:
+            Gtk.StyleContext.remove_provider_for_display(display, provider)
+
+
+def test_interface_scale_comes_from_the_root_font(gtk_display, tmp_path: Path) -> None:
+    """The stylesheet is one compact em grid; the root font selects the preset.
+
+    ``main`` resolves the desktop scale into a root font size (14 px on a
+    100 % desktop, 17.5 px on 125 %), so the same rules must render the compact
+    and the design's wide chrome from that value alone.
+    """
+    assert _toolbar_height(tmp_path, _THEME_PX) == px(40)
+    assert _toolbar_height(tmp_path, 17.5) == round(px(40) * 1.25)

@@ -14,6 +14,7 @@ gi.require_version("Graphene", "1.0")
 
 from gi.repository import Gdk, GLib, Graphene, Gtk  # noqa: E402
 
+from . import size  # noqa: E402
 from .display import (  # noqa: E402
     DEFAULT_CAPABILITIES,
     SettingsPaths,
@@ -46,6 +47,10 @@ class VolnaApplication(Gtk.Application):
         if settings is not None:
             settings.set_property("gtk-application-prefer-dark-theme", True)
 
+        # Desktop settings are readable only now, and every later px()/CSS
+        # metric derives from the scale resolved here.
+        size.configure()
+
         css = resources.files("volna").joinpath("theme.css").read_text(encoding="utf-8")
         provider = Gtk.CssProvider()
         try:
@@ -53,13 +58,21 @@ class VolnaApplication(Gtk.Application):
         except AttributeError:  # GTK < 4.12
             provider.load_from_data(css.encode("utf-8"))
 
+        # The stylesheet is the compact grid in em; this provider sets the root
+        # font size the grid scales against. Added after the theme so it wins.
+        root = Gtk.CssProvider()
+        root.load_from_string(
+            f".volna-window {{ font-size: {size.base_font_px():.4f}px; }}"
+        )
+
         display = Gdk.Display.get_default()
         if display is not None:
-            Gtk.StyleContext.add_provider_for_display(
-                display,
-                provider,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-            )
+            for css_provider in (provider, root):
+                Gtk.StyleContext.add_provider_for_display(
+                    display,
+                    css_provider,
+                    Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+                )
 
     def _on_activate(self, _application: Gtk.Application) -> None:
         from .window import MainWindow

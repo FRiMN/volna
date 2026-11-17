@@ -212,6 +212,57 @@ def test_header_menu_opens_with_state_sensitive_items(gtk_display) -> None:
     window.destroy()
 
 
+def test_header_menu_is_a_plain_popover(gtk_display) -> None:
+    """The caption menu must not re-use GtkPopoverMenu's child internals.
+
+    ``Gtk.PopoverMenu`` builds a ScrolledWindow → Viewport → Stack chain for
+    its menu model APIs; replacing its child with custom buttons left that
+    chain missing, so every open/close logged GTK_IS_SCROLLED_WINDOW /
+    GTK_IS_VIEWPORT / GTK_IS_STACK criticals. The menu is a plain popover now:
+    opening it must not emit a GTK critical.
+    """
+    import gi
+
+    gi.require_version("GLib", "2.0")
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import GLib, Gtk
+
+    from volna.views.group_header import GroupHeader
+
+    header = GroupHeader("today")
+    header.set_caption("Сегодня", "1 папок · 2 файлов (5 Б)")
+    header.set_action(lambda key, action: None)
+
+    window = Gtk.Window()
+    window.set_child(header)
+    window.present()
+    _pump(0.2)
+
+    assert not isinstance(header._menu, Gtk.PopoverMenu)
+
+    criticals: list[str] = []
+
+    def on_critical(_domain: str, _level: int, message: str, _data) -> None:
+        criticals.append(message)
+
+    handler = GLib.log_set_handler(
+        "Gtk", GLib.LogLevelFlags.LEVEL_CRITICAL, on_critical, None
+    )
+    try:
+        header.open_menu()
+        _pump(0.1)
+        header._menu.popdown()
+        _pump(0.1)
+        header.open_menu()
+        _pump(0.1)
+    finally:
+        header._menu.popdown()
+        GLib.log_remove_handler("Gtk", handler)
+        window.destroy()
+
+    assert criticals == []
+
+
 # -- view rendering (D13) --------------------------------------------------------
 
 

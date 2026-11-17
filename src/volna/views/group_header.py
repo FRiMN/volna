@@ -175,8 +175,13 @@ class GroupHeader(Gtk.Box):
         else:
             self.remove_css_class("volna-group-collapsed")
 
-    def _build_menu(self) -> Gtk.PopoverMenu:
-        menu = Gtk.PopoverMenu()
+    def _build_menu(self) -> Gtk.Popover:
+        # A plain popover, not a GtkPopoverMenu: the items are custom buttons,
+        # and replacing a popover menu's child breaks the ScrolledWindow ->
+        # Viewport -> Stack structure its menu APIs rely on (GTK then logs
+        # GTK_IS_SCROLLED_WINDOW/GTK_IS_VIEWPORT/GTK_IS_STACK criticals on
+        # open/close).
+        menu = Gtk.Popover()
         menu.add_css_class("volna-menu")
 
         items = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=px(2))

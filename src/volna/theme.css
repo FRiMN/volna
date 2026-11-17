@@ -491,6 +491,47 @@ popover.volna-menu > contents {
   opacity: 0.72;
 }
 
+/* ---- scrollbars ------------------------------------------------------
+   The design's --scrollbar token: an 8 px overlay thumb in the chrome grey.
+   Styled here instead of relying on the system theme: on a GTK 4.14 desktop
+   the old Breeze 5.27 theme computes a negative slider minimum and GTK logs
+   "GtkGizmo (slider) reported min width -2" for every scrolled window. The
+   theme-wrapped indicators stay untouched, so overlay fading is still the
+   theme's business. */
+scrollbar {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+scrollbar trough {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  margin: 0;
+  min-width: 0.5714em;
+  min-height: 0.5714em;
+}
+
+scrollbar slider {
+  background-color: #5b5d5f;
+  background-image: none;
+  border: none;
+  border-radius: 0.2857em;
+  margin: 0.1429em;
+  min-width: 0.2857em;
+  min-height: 1.7143em;
+}
+
+scrollbar.horizontal slider {
+  min-width: 1.7143em;
+  min-height: 0.2857em;
+}
+
+scrollbar slider:hover {
+  background-color: #6f737a;
+}
+
 /* ---- borderless window resize edges --------------------------------- */
 .volna-resize {
   background: transparent;

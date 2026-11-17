@@ -12,7 +12,9 @@ import ctypes.util
 import os
 import shutil
 import subprocess
+import sys
 import time
+from array import array
 from collections import Counter
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -179,21 +181,29 @@ def x11_pixels(gtk_display) -> Iterator[Callable[[object], Counter[Colour]]]:
             red_shift = shift(header.red_mask)
             green_shift = shift(header.green_mask)
             blue_shift = shift(header.blue_mask)
-            step = header.bits_per_pixel // 8
+            if header.bits_per_pixel != 32:
+                pytest.skip(
+                    f"unsupported pixel format: {header.bits_per_pixel} bits per pixel"
+                )
 
-            colours: Counter[tuple[int, int, int]] = Counter()
+            # The pixels are words in the order of the image; the machine may
+            # read them the other way round.
+            pixels = array("I")
             for y in range(header.height):
-                row = raw[y * header.bytes_per_line :]
-                for x in range(header.width):
-                    offset = x * step
-                    pixel = int.from_bytes(row[offset : offset + step], "little")
-                    colours[
-                        (
-                            (pixel & header.red_mask) >> red_shift,
-                            (pixel & header.green_mask) >> green_shift,
-                            (pixel & header.blue_mask) >> blue_shift,
-                        )
-                    ] += 1
+                start = y * header.bytes_per_line
+                pixels.frombytes(raw[start : start + header.width * 4])
+            if (header.byte_order == 0) != (sys.byteorder == "little"):
+                pixels.byteswap()
+
+            colours: Counter[Colour] = Counter()
+            for pixel in pixels:
+                colours[
+                    (
+                        (pixel & header.red_mask) >> red_shift,
+                        (pixel & header.green_mask) >> green_shift,
+                        (pixel & header.blue_mask) >> blue_shift,
+                    )
+                ] += 1
             return colours
         finally:
             x11.XCloseDisplay(display)

@@ -824,13 +824,22 @@ def test_theme_stylesheet_has_a_view_panel_block() -> None:
 _PANEL_COLOUR = (0x2B, 0x2D, 0x30)
 
 
-def test_the_panel_is_one_solid_surface(panel, x11_pixels) -> None:
-    """The «Вид» panel is a single card of the panel colour (issue #3).
+def _hex(colour: tuple[int, int, int]) -> str:
+    return f"#{colour[0]:02x}{colour[1]:02x}{colour[2]:02x}"
+
+
+def test_the_panel_card_is_not_repainted_with_the_canvas_colour(
+    panel, x11_pixels
+) -> None:
+    """The «Вид» panel is a card of the panel colour (issue #3).
 
     The panel scrolls its content, but it is not the listing: its scrolled
     window stays transparent, so the card shows through it. The check reads
     the pixels of the presented popover, so it sees the whole cascade and not
     one line of the stylesheet.
+
+    The card is the dominant colour of the popover, not the only one: the
+    segmented control is a deliberate dark inset of the panel.
     """
     harness = panel()
     harness.open()
@@ -839,7 +848,7 @@ def test_the_panel_is_one_solid_surface(panel, x11_pixels) -> None:
     native = harness.popover.get_native()
     surface = native.get_surface() if native is not None else None
     if surface is None:
-        pytest.skip("the popover has no surface yet")
+        pytest.fail("the presented popover has no surface to read")
 
     colours = x11_pixels(surface)
     dominant = colours.most_common(1)[0][0]
@@ -851,19 +860,17 @@ def test_the_panel_is_one_solid_surface(panel, x11_pixels) -> None:
 
 
 def test_the_canvas_colour_is_scoped_to_the_listing() -> None:
-    """A bare ``scrolledwindow`` rule paints every scrolled window (issue #3).
+    """A stylesheet lint: no bare ``scrolledwindow`` rule (issue #3).
 
-    The listing canvas belongs to the listing: without the scope the panel
-    repaints itself with the canvas colour (the rule reached the scrolled
-    window of the «Вид» panel).
+    The listing canvas belongs to the listing. A rule that names the element
+    alone paints every scrolled window in the app — the scrolled window of the
+    «Вид» panel included, which repainted the panel with the canvas colour.
+    The behaviour is checked by the pixel test above; this one keeps the
+    stylesheet from growing the rule again.
     """
     css = _theme_css_path().read_text(encoding="utf-8")
 
-    assert not re.search(r"(?m)^\s*scrolledwindow\s*\{", css), (
+    assert not re.search(r"(?m)^\s*scrolledwindow\s*(,|\{)", css), (
         "a bare `scrolledwindow` rule paints every scrolled window in the app"
     )
     assert ".volna-editor scrolledwindow" in css
-
-
-def _hex(colour: tuple[int, int, int]) -> str:
-    return f"#{colour[0]:02x}{colour[1]:02x}{colour[2]:02x}"

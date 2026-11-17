@@ -354,11 +354,11 @@ popover.volna-menu > contents {
   font-size: 13px;
 }
 
-/* The listing is a scrolled list/grid: without this the scrolled window falls
-   back to the default (light) theme background under the tab content. The rule
-   is scoped to the editor on purpose: a bare `scrolledwindow` selector matches
-   every scrolled window in the app, and the «Вид» panel painted the listing
-   canvas over its own card (issue #3). */
+/* The listing is a scrolled list/grid: the scrolled window has to paint the
+   canvas itself, or the background of the GTK theme shows under the rows. The
+   rule is scoped to the editor on purpose: a bare `scrolledwindow` selector
+   matches every scrolled window in the app, and the «Вид» panel painted the
+   listing canvas over its own card (issue #3). */
 .volna-editor scrolledwindow {
   background-color: #1e1f22;
 }
@@ -734,8 +734,9 @@ popover.volna-view-popover > contents {
 }
 
 /* The panel scrolls its own content, but it is a panel, not the listing: the
-   scroller stays transparent so the card above shows through it. Without this
-   rule any canvas-coloured scrolled window would repaint the panel (issue #3). */
+   scroller is transparent, so the card shows through it. The scoped canvas
+   rule above already leaves it unpainted; the explicit rule keeps it that way
+   even if a canvas-coloured scrolled window appears again (issue #3). */
 popover.volna-view-popover > contents > scrolledwindow {
   background-color: transparent;
 }

@@ -512,22 +512,22 @@ def test_details_grouped_sections_interleave_group_rows(gtk_display) -> None:
 
     view.render(
         (
-            Section(items=(alpha, beta), header="Сегодня"),
-            Section(items=(gamma,), header="Вчера"),
+            Section(items=(alpha, beta), header="Сегодня", stats="2 файлов (2 Б)"),
+            Section(items=(gamma,), header="Вчера", stats="1 файлов (1 Б)"),
         )
     )
 
     rows = _rows(view)
     assert isinstance(rows[0], GroupRow)
-    assert (rows[0].label, rows[0].count) == ("Сегодня", 2)
+    assert (rows[0].label, rows[0].stats) == ("Сегодня", "2 файлов (2 Б)")
     assert [row.name for row in rows[1:3]] == ["alpha.txt", "beta.txt"]
     assert isinstance(rows[3], GroupRow)
-    assert (rows[3].label, rows[3].count) == ("Вчера", 1)
+    assert (rows[3].label, rows[3].stats) == ("Вчера", "1 файлов (1 Б)")
     assert isinstance(rows[4], ListingItem)
     assert rows[4].name == "gamma.txt"
 
 
-def test_details_group_row_renders_caption_count_and_strip(gtk_display) -> None:
+def test_details_group_row_renders_caption_summary_and_strip(gtk_display) -> None:
     import gi
 
     gi.require_version("Gtk", "4.0")
@@ -537,7 +537,13 @@ def test_details_group_row_renders_caption_count_and_strip(gtk_display) -> None:
 
     view, _activated = _details()
     view.render(
-        (Section(items=(_item("alpha.txt"), _item("beta.txt")), header="Сегодня"),)
+        (
+            Section(
+                items=(_item("alpha.txt"), _item("beta.txt")),
+                header="Сегодня",
+                stats="2 файлов (2 Б)",
+            ),
+        )
     )
 
     window = Gtk.Window()
@@ -549,7 +555,7 @@ def test_details_group_row_renders_caption_count_and_strip(gtk_display) -> None:
             lambda: _labels(view.widget, "volna-group-title") == ["Сегодня"]
         ), "the group caption never appeared"
 
-        assert _labels(view.widget, "volna-group-count") == ["2"]
+        assert _labels(view.widget, "volna-group-stats") == ["2 файлов (2 Б)"]
         assert _labels(view.widget, "volna-dt-name") == ["alpha.txt", "beta.txt"]
 
         stripped = _by_class(view.widget, "volna-dt-group")
@@ -599,7 +605,13 @@ def test_details_switching_to_flat_clears_the_group_strips(gtk_display) -> None:
 
     view, _activated = _details()
     view.render(
-        (Section(items=(_item("alpha.txt"), _item("beta.txt")), header="Сегодня"),)
+        (
+            Section(
+                items=(_item("alpha.txt"), _item("beta.txt")),
+                header="Сегодня",
+                stats="2 файлов (2 Б)",
+            ),
+        )
     )
 
     window = Gtk.Window()
@@ -618,6 +630,6 @@ def test_details_switching_to_flat_clears_the_group_strips(gtk_display) -> None:
         )
         assert _by_class(view.widget, "volna-dt-group") == []
         assert _labels(view.widget, "volna-group-title") == []
-        assert _labels(view.widget, "volna-group-count") == []
+        assert _labels(view.widget, "volna-group-stats") == []
     finally:
         window.destroy()

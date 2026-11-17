@@ -40,7 +40,7 @@ from .glyph import icon, icon_path  # noqa: E402
 from .size import SIZE_CLASS, px  # noqa: E402
 from .tab import DirectoryTab  # noqa: E402
 from .view_panel import ViewPanel  # noqa: E402
-from .views.format import format_size  # noqa: E402
+from .views.format import format_counters  # noqa: E402
 
 _POINTER_CURSOR = Gdk.Cursor.new_from_name("pointer", None)
 
@@ -1141,11 +1141,7 @@ class MainWindow(Gtk.ApplicationWindow):
         tab = self._active_tab
         if tab is None:
             return
-        counters = tab.model.counters()
-        self._counts_label.set_text(
-            f"{counters.folders} папок · {counters.files} файлов "
-            f"({format_size(counters.total_size)})"
-        )
+        self._counts_label.set_text(format_counters(tab.model.counters()))
 
         if tab.model.state is ScanState.READY and self._startup_issues:
             note = self._startup_issues[0]

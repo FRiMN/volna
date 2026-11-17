@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import time
 
+from ..core import Counters
+
 _UNITS = ("Б", "КиБ", "МиБ", "ГиБ", "ТиБ")
 _EMPTY = "—"
 
@@ -21,6 +23,14 @@ def format_size(size: int | None) -> str:
         value /= 1024
 
     return f"{size} Б"
+
+
+def format_counters(counters: Counters) -> str:
+    """The listing summary: the editor header and every group caption share it."""
+    return (
+        f"{counters.folders} папок · {counters.files} файлов "
+        f"({format_size(counters.total_size)})"
+    )
 
 
 def format_date(mtime: float | None) -> str:

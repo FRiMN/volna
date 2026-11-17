@@ -16,7 +16,7 @@ from pathlib import Path
 from gi.repository import GLib, Gtk
 
 from .controller import DirectoryController
-from .core import DirModel, Entry, Event, ScanState
+from .core import DirModel, Entry, Event, ScanState, counters_of
 from .display import (
     COLLAPSE_MODES,
     DEFAULT_CAPABILITIES,
@@ -31,7 +31,7 @@ from .display import (
 from .history import NavigationHistory
 from .naming import tab_icon, tab_title
 from .views.base import ListingView, Section
-from .views.format import format_date, format_size
+from .views.format import format_counters, format_date, format_size
 from .views.item import ListingItem
 from .views.registry import VIEWS_BY_MODE
 
@@ -252,6 +252,7 @@ class DirectoryTab:
                 header=group_label(group),
                 key=group_key(group),
                 collapsed=(collapsible and group_key(group) in self._collapsed_groups),
+                stats=format_counters(counters_of(group.entries)),
             )
             for group in self.model.groups()
         )

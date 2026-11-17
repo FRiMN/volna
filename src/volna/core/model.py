@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -67,6 +67,18 @@ class Group:
     bucket: GroupBucket
     entries: list[Entry]
     day: float | None = None
+
+
+def counters_of(entries: Iterable[Entry]) -> Counters:
+    """Fold the model's own counting rule over ``entries`` (see ``_count_*``)."""
+    folders = files = total = 0
+    for entry in entries:
+        if entry.kind is Kind.DIR:
+            folders += 1
+        else:
+            files += 1
+            total += entry.size or 0
+    return Counters(folders, files, total)
 
 
 def _group_order(

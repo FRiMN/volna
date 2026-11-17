@@ -208,45 +208,52 @@ def test_grouped_render_builds_caption_rows_and_tile_bands(gtk_display) -> None:
     with _opened_view() as harness:
         harness.render(
             (
-                Section(items=first, header="Сегодня"),
-                Section(items=second, header="Вчера"),
+                Section(items=first, header="Сегодня", stats="7 файлов (7 Б)"),
+                Section(items=second, header="Вчера", stats="2 файлов (2 Б)"),
             )
         )
 
         captions = _captions(harness.view)
         bands = _bands(harness.view)
         assert [caption.label for caption in captions] == ["Сегодня", "Вчера"]
-        assert [caption.count for caption in captions] == [7, 2]
+        assert [caption.stats for caption in captions] == [
+            "7 файлов (7 Б)",
+            "2 файлов (2 Б)",
+        ]
         assert [item.name for band in bands for item in band.items] == [
             item.name for item in (*first, *second)
         ]
 
-        # What the user sees: one caption per section, with the title and count.
+        # What the user sees: one caption per section, with the title and the
+        # group summary (folder/file counts and size, like the editor header).
         _pump_until(lambda: _texts(harness.view.widget, "volna-group-title") != [])
         assert _texts(harness.view.widget, "volna-group-title") == ["Сегодня", "Вчера"]
-        assert _texts(harness.view.widget, "volna-group-count") == ["7", "2"]
+        assert _texts(harness.view.widget, "volna-group-stats") == [
+            "7 файлов (7 Б)",
+            "2 файлов (2 Б)",
+        ]
         assert len(_by_class(harness.view.widget, "volna-icons-head")) == 2
         assert "today000.txt" in _texts(harness.view.widget, "volna-icons-name")
 
 
-def test_caption_count_equals_the_section_size(gtk_display) -> None:
+def test_caption_summary_comes_from_the_section(gtk_display) -> None:
     from volna.views.base import Section
 
-    sizes = (2, 1)
+    summaries = ("2 файлов (2 Б)", "3 папок · 1 файлов (9 Б)")
 
     with _opened_view() as harness:
         harness.render(
             tuple(
-                Section(items=_items(size, f"g{index}"), header=f"Группа {index}")
-                for index, size in enumerate(sizes)
+                Section(
+                    items=_items(2, f"g{index}"), header=f"Группа {index}", stats=text
+                )
+                for index, text in enumerate(summaries)
             )
         )
 
-        _pump_until(lambda: _texts(harness.view.widget, "volna-group-count") != [])
-        assert _texts(harness.view.widget, "volna-group-count") == [
-            str(size) for size in sizes
-        ]
-        assert [caption.count for caption in _captions(harness.view)] == list(sizes)
+        _pump_until(lambda: _texts(harness.view.widget, "volna-group-stats") != [])
+        assert _texts(harness.view.widget, "volna-group-stats") == list(summaries)
+        assert [caption.stats for caption in _captions(harness.view)] == list(summaries)
 
 
 def test_tiles_per_band_follow_the_band_width(gtk_display) -> None:

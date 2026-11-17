@@ -178,11 +178,12 @@ def _group_headers(window: object) -> list[tuple[str, str]]:
         caption = title.get_text()
         if not caption:
             continue
-        count = title.get_next_sibling()
-        assert count is not None and count.has_css_class("volna-group-count"), (
-            f"the caption {caption!r} has no count next to it"
-        )
-        headers.append((caption, count.get_text()))
+        trailing = title.get_next_sibling()
+        assert trailing is not None and (
+            trailing.has_css_class("volna-group-stats")
+            or trailing.has_css_class("volna-group-count")
+        ), f"the caption {caption!r} has no summary next to it"
+        headers.append((caption, trailing.get_text()))
 
     return headers
 
@@ -310,6 +311,8 @@ def _touch(path: Path, mtime: float) -> None:
     os.utime(path, (mtime, mtime))
 
 
+_DATED_GROUP_SIZES = [2, 1, 2, 1, 2]
+
 _DATED_FILES = (
     # (file name, days ago, seconds within the day)
     ("today-new.txt", 0, 120),
@@ -328,13 +331,33 @@ def _make_dated_listing(root: Path) -> None:
         _touch(root / name, _day_start(days_ago) + 12 * 3_600 + offset)
 
 
+def _files_in_summaries(headers: list[tuple[str, str]]) -> int:
+    """The file counts the captions report, summed over the groups."""
+    return sum(int(summary.split(" · ")[1].split()[0]) for _caption, summary in headers)
+
+
+def _summary(files: int) -> str:
+    """The caption summary for ``files`` single-byte entries in one group."""
+    return f"0 папок · {files} файлов ({files} Б)"
+
+
+def _column_captions() -> list[tuple[str, str]]:
+    """«Столбцы» keep the compact count instead of the full summary."""
+    return [
+        (caption, str(size))
+        for (caption, _summary), size in zip(
+            _dated_captions(), _DATED_GROUP_SIZES, strict=True
+        )
+    ]
+
+
 def _dated_captions() -> list[tuple[str, str]]:
     return [
-        ("Сегодня", "2"),
-        ("Вчера", "1"),
-        (_weekday(2), "2"),
-        (_weekday(3), "1"),
-        ("Неделю назад", "2"),
+        ("Сегодня", _summary(2)),
+        ("Вчера", _summary(1)),
+        (_weekday(2), _summary(2)),
+        (_weekday(3), _summary(1)),
+        ("Неделю назад", _summary(2)),
     ]
 
 
@@ -399,11 +422,9 @@ def test_details_shows_design_captions_in_order_with_counts(
         _wait_for_names(window, ViewMode.DETAILS, *_dated_names())
 
         assert _group_headers(window) == expected
-        # The count is the number of rows under the caption: the whole listing
-        # is visible by default (no hidden files in this fixture).
-        assert sum(int(count) for _caption, count in expected) == len(
-            _names(window, ViewMode.DETAILS)
-        )
+        # The summary counts exactly the rows under the captions: the whole
+        # listing is visible by default (no hidden files in this fixture).
+        assert _files_in_summaries(expected) == len(_names(window, ViewMode.DETAILS))
 
         # «Без группировки»: one flat list, not a single caption.
         _control(panel.popover, "Без группировки").set_active(True)
@@ -425,11 +446,11 @@ def test_reference_content_set_matches_the_design_counts(
     """
     _make_reference_listing(tmp_path)
     expected = [
-        ("Сегодня", "3"),
-        ("Вчера", "6"),
-        (_weekday(2), "2"),
-        (_weekday(3), "1"),
-        ("Неделю назад", "2"),
+        ("Сегодня", _summary(3)),
+        ("Вчера", _summary(6)),
+        (_weekday(2), _summary(2)),
+        (_weekday(3), _summary(1)),
+        ("Неделю назад", _summary(2)),
     ]
 
     window = _window(tmp_path)
@@ -463,14 +484,16 @@ def test_every_mode_renders_and_drops_the_same_groups(
 
         for mode in (ViewMode.DETAILS, ViewMode.ICONS, ViewMode.COLUMNS):
             _control(panel.popover, mode.label).set_active(True)
-            _wait_for_mode_listing(window, mode, expected, _dated_names())
+            headers = _column_captions() if mode is ViewMode.COLUMNS else expected
+            _wait_for_mode_listing(window, mode, headers, _dated_names())
             assert window._active_tab.view_mode is mode
 
             _control(panel.popover, "Без группировки").set_active(True)
             _wait_for_mode_listing(window, mode, [], _dated_names())
 
             _control(panel.popover, "По дате изменения").set_active(True)
-            _wait_for_mode_listing(window, mode, expected, _dated_names())
+            headers = _column_captions() if mode is ViewMode.COLUMNS else expected
+            _wait_for_mode_listing(window, mode, headers, _dated_names())
     finally:
         _close(window)
 
@@ -488,7 +511,9 @@ def test_switching_mode_keeps_the_grouping(gtk_display, tmp_path: Path) -> None:
         _control(panel.popover, "Значки").set_active(True)
         _wait_for_mode_listing(window, ViewMode.ICONS, expected, _dated_names())
         _control(panel.popover, "Столбцы").set_active(True)
-        _wait_for_mode_listing(window, ViewMode.COLUMNS, expected, _dated_names())
+        _wait_for_mode_listing(
+            window, ViewMode.COLUMNS, _column_captions(), _dated_names()
+        )
 
         assert window._active_tab.view_settings.grouping is Grouping.DATE
     finally:
@@ -709,7 +734,7 @@ def test_sort_key_changes_item_order_inside_groups_but_not_the_groups(
     gtk_display, tmp_path: Path
 ) -> None:
     _make_sorting_listing(tmp_path)
-    today_only = [("Сегодня", "3")]
+    today_only = [("Сегодня", "1 папок · 2 файлов (11 Б)")]
 
     window = _window(tmp_path)
     try:
@@ -743,7 +768,7 @@ def test_sort_key_changes_item_order_inside_groups_but_not_the_groups(
 
 def test_folders_first_applies_inside_a_group(gtk_display, tmp_path: Path) -> None:
     _make_sorting_listing(tmp_path)
-    today_only = [("Сегодня", "3")]
+    today_only = [("Сегодня", "1 папок · 2 файлов (11 Б)")]
 
     window = _window(tmp_path)
     try:
@@ -777,20 +802,19 @@ def test_group_counts_follow_the_hidden_files_setting(
     try:
         panel = _open_panel(window)
         _ready(window)
-        _wait_for_headers(window, [("Сегодня", "1"), ("Вчера", "1")])
+        _wait_for_headers(window, [("Сегодня", _summary(1)), ("Вчера", _summary(1))])
         _wait_for_names(window, ViewMode.DETAILS, "shown.txt", "older.txt")
         assert ".hidden.txt" not in _names(window, ViewMode.DETAILS)
 
         _control(panel.popover, "Показывать скрытые файлы").set_active(True)
-        _wait_for_headers(window, [("Сегодня", "2"), ("Вчера", "1")])
+        _wait_for_headers(window, [("Сегодня", _summary(2)), ("Вчера", _summary(1))])
         _wait_for_names(window, ViewMode.DETAILS, ".hidden.txt")
-        names = _names(window, ViewMode.DETAILS)
-        assert sum(int(count) for _caption, count in _group_headers(window)) == len(
-            names
-        ), "each caption's count must equal the rows rendered under it"
+        assert _files_in_summaries(_group_headers(window)) == len(
+            _names(window, ViewMode.DETAILS)
+        ), "each caption's file count must equal the rows rendered under it"
 
         _control(panel.popover, "Показывать скрытые файлы").set_active(False)
-        _wait_for_headers(window, [("Сегодня", "1"), ("Вчера", "1")])
+        _wait_for_headers(window, [("Сегодня", _summary(1)), ("Вчера", _summary(1))])
         assert _pump_until(
             lambda: ".hidden.txt" not in _names(window, ViewMode.DETAILS)
         ), "the hidden file must disappear with its count"

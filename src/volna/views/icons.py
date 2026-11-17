@@ -51,15 +51,15 @@ class IconsRow(GObject.Object):
 
 
 class HeaderRow(IconsRow):
-    """A group caption row: the date title and the item count (28 px)."""
+    """A group caption row: the date title and the group summary (28 px)."""
 
     __gtype_name__ = "VolnaIconsHeaderRow"
 
-    def __init__(self, key: str, label: str, count: int, collapsed: bool) -> None:
+    def __init__(self, key: str, label: str, stats: str, collapsed: bool) -> None:
         super().__init__()
         self.key = key
         self.label = label
-        self.count = count
+        self.stats = stats
         self.collapsed = collapsed
         self.position = 0
 
@@ -172,6 +172,9 @@ class IconsView(ListingView):
         self._scroller = Gtk.ScrolledWindow(vexpand=True)
         self._scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self._scroller.set_child(self._grid)
+        # A ListView claims right clicks before they reach a row widget, so the
+        # caption clicks are routed from above it (design/grouping.md D14).
+        self._install_group_clicks(self._scroller)
 
         # ``store`` is the model of the visible presentation: tiles when flat,
         # rows (captions + tile bands) when grouped. Tests and the tab read it.
@@ -259,7 +262,7 @@ class IconsView(ListingView):
                 HeaderRow(
                     section.key or "",
                     section.header or "",
-                    len(section.items),
+                    section.stats,
                     section.collapsed,
                 )
             )
@@ -296,7 +299,7 @@ class IconsView(ListingView):
             # state, and rebuilding a small widget is cheaper than key
             # bookkeeping here.
             header = GroupHeader(row.key)
-            header.set_caption(row.label, row.count)
+            header.set_caption(row.label, row.stats)
             header.set_collapsed(row.collapsed)
             header.set_action(self._on_group_action)
             header.set_menu_state(
@@ -305,6 +308,7 @@ class IconsView(ListingView):
                 any_collapsed=self._any_collapsed,
             )
             header.add_css_class("volna-icons-head")
+            self._headers[row.key] = header
             box.append(header)
             return
 

@@ -27,9 +27,9 @@ class GroupRow(GObject.Object):
 
     Group rows share the heterogeneous model with :class:`ListingItem` rows:
     one ColumnView keeps its sticky column header and shared column widths.
-    ``count`` is the number of items under the caption (visible items only:
-    a collapsed group renders its caption with the full count and nothing
-    else — design/grouping.md D13).
+    ``stats`` is the group's folders/files/size summary, the same string the
+    editor header shows (design/grouping.md D4); a collapsed group renders its
+    caption with the full summary and nothing else (D13).
     """
 
     __gtype_name__ = "VolnaGroupRow"
@@ -38,7 +38,7 @@ class GroupRow(GObject.Object):
         self,
         key: str,
         label: str,
-        count: int,
+        stats: str,
         collapsed: bool,
         *,
         others_collapsible: bool = True,
@@ -48,7 +48,7 @@ class GroupRow(GObject.Object):
         super().__init__()
         self.key = key
         self.label = label
-        self.count = count
+        self.stats = stats
         self.collapsed = collapsed
         # Menu sensitivity is a property of the whole group set (D14); the tab
         # computes it once per render and hands it to every caption row.
@@ -92,7 +92,10 @@ class _NameCell(Gtk.Box):
         self._header: GroupHeader | None = None
         self._group = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=px(8))
         self._group.add_css_class("volna-dt-group-content")
-        self._group.set_halign(Gtk.Align.START)
+        # The caption spans the name column, so its summary sits at the end of
+        # that column like it does across the whole band in «Значки».
+        self._group.set_halign(Gtk.Align.FILL)
+        self._group.set_hexpand(True)
         self._group.set_valign(Gtk.Align.CENTER)
 
         self._group.set_visible(False)
@@ -127,7 +130,7 @@ class _NameCell(Gtk.Box):
             self._group.remove(self._header)
 
         header = GroupHeader(row.key)
-        header.set_caption(row.label, row.count)
+        header.set_caption(row.label, row.stats)
         header.set_collapsed(row.collapsed)
         header.set_action(on_group_action)
         header.set_menu_state(
@@ -176,19 +179,14 @@ class DetailsView(ListingView):
         self._add_numeric_column("Размер", lambda row: row.size_text, width=px(96))
         self._add_numeric_column("Дата", lambda row: row.date_text, width=px(168))
 
-        # A group strip spans all three columns, but only the name cell hosts the
-        # header widget. A capture-phase gesture on the view finds the strip row
-        # under the pointer, so a right click anywhere on it opens the same menu
-        # (design/grouping.md D14).
-        self._headers: dict[str, GroupHeader] = {}
-        strip_click = Gtk.GestureClick()
-        strip_click.set_button(3)
-        strip_click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        strip_click.connect("pressed", self._on_strip_pressed)
-        self._column_view.add_controller(strip_click)
-
         self._scroller = Gtk.ScrolledWindow(vexpand=True)
         self._scroller.set_child(self._column_view)
+        # A group strip spans all three columns, but only the name cell hosts the
+        # caption widget: the shared capture-phase routing finds the caption
+        # under the pointer, so a click anywhere on the strip reaches it
+        # (design/grouping.md D14). The scroller sits above the column view,
+        # whose own click controllers claim right clicks first.
+        self._install_group_clicks(self._scroller)
 
     @property
     def widget(self) -> Gtk.Widget:
@@ -203,7 +201,7 @@ class DetailsView(ListingView):
                     GroupRow(
                         section.key or "",
                         section.header,
-                        len(section.items),
+                        section.stats,
                         section.collapsed,
                         others_collapsible=self._others_collapsible,
                         any_expanded=self._any_expanded,
@@ -265,31 +263,11 @@ class DetailsView(ListingView):
     def _remember_header(self, key: str, header: GroupHeader) -> None:
         self._headers[key] = header
 
-    def _on_strip_pressed(
-        self, gesture: Gtk.GestureClick, _n_press: int, x: float, y: float
-    ) -> bool:
-        """Open a group's menu from any cell of its strip; stop the propagation.
-
-        The column view exposes no row-under-pointer query, so the cell is
-        picked and walked up: a strip cell either is the header itself or
-        carries the group key (``_NumericCell``).
-        """
-        node = self._column_view.pick(int(x), int(y), Gtk.PickFlags.DEFAULT)
-        while node is not None and node is not self._column_view:
-            header: GroupHeader | None = None
-            if isinstance(node, GroupHeader):
-                header = node
-            elif isinstance(node, _NumericCell) and node.group_key is not None:
-                header = self._headers.get(node.group_key)
-
-            if header is not None:
-                gesture.set_state(Gtk.EventSequenceState.CLAIMED)
-                header.open_menu()
-                return True
-
-            node = node.get_parent()
-
-        return False
+    def _group_for_node(self, node: Gtk.Widget) -> GroupHeader | None:
+        """A strip's number cell carries only the key: resolve it to the caption."""
+        if isinstance(node, _NumericCell) and node.group_key is not None:
+            return self._headers.get(node.group_key)
+        return super()._group_for_node(node)
 
 
 def _setup_name(

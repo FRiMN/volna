@@ -104,10 +104,10 @@ def _captions(root: object) -> list[str]:
     ]
 
 
-def _counts(root: object) -> list[str]:
+def _summaries(root: object) -> list[str]:
     return [
         label.get_text()
-        for label in _by_class(root, "volna-group-count")
+        for label in _by_class(root, "volna-group-stats")
         if label.get_text()
     ]
 
@@ -145,26 +145,25 @@ def test_group_key_is_semantic_and_session_stable() -> None:
 # -- header widget (D14) --------------------------------------------------------
 
 
-def test_header_reports_toggle_from_chevron_and_row_click(gtk_display) -> None:
-
+def test_header_toggles_from_its_chevron_and_its_own_api(gtk_display) -> None:
     from volna.views.group_header import GroupHeader
 
     actions: list[tuple[str, GroupAction]] = []
     header = GroupHeader("today")
-    header.set_caption("Сегодня", 3)
+    header.set_caption("Сегодня", "1 папок · 2 файлов (5 Б)")
     header.set_action(lambda key, action: actions.append((key, action)))
     header.set_collapsed(True)
 
-    chevron = header._chevron
-    chevron.emit("clicked")
+    header._chevron.emit("clicked")
     _pump(0.05)
     assert actions == [("today", GroupAction.TOGGLE)]
 
-    # A synthetic click: the row-level GestureClick in a real run reports
-    # button 1 (primary) or 3 (right). GestureClick.set_current_button is not
-    # public API, so the contract under test is split: the gesture handler
-    # routes by button (covered by the menu test) and the row press toggles.
-    header._on_pressed(header._click, 1, 5.0, 5.0)
+    # The row-level toggle is the view's click routing; it calls this.
+    header.toggle()
+    assert actions == [
+        ("today", GroupAction.TOGGLE),
+        ("today", GroupAction.TOGGLE),
+    ]
 
 
 def test_header_menu_opens_with_state_sensitive_items(gtk_display) -> None:
@@ -174,7 +173,7 @@ def test_header_menu_opens_with_state_sensitive_items(gtk_display) -> None:
 
     actions: list[tuple[str, GroupAction]] = []
     header = GroupHeader("today")
-    header.set_caption("Сегодня", 3)
+    header.set_caption("Сегодня", "1 папок · 2 файлов (5 Б)")
     header.set_action(lambda key, action: actions.append((key, action)))
 
     # A popover needs a realized parent to pop up: show the header in a window.
@@ -517,13 +516,13 @@ def test_details_strip_opens_the_menu_from_any_cell(
         )
 
         view = tab._active_view
-        column_view = view._column_view
+        root = view._click_root
 
         def strip_point() -> tuple[int, int] | None:
             """A point over a number cell (not the name cell) of a group strip."""
-            for y in range(0, column_view.get_height(), 4):
-                for x in range(0, column_view.get_width(), 24):
-                    node = column_view.pick(x, y, Gtk.PickFlags.DEFAULT)
+            for y in range(0, root.get_height(), 4):
+                for x in range(0, root.get_width(), 24):
+                    node = root.pick(x, y, Gtk.PickFlags.DEFAULT)
                     if isinstance(node, _NumericCell) and node.group_key == "today":
                         return x, y
             return None
@@ -532,12 +531,187 @@ def test_details_strip_opens_the_menu_from_any_cell(
         x, y = strip_point()
         header = view._headers["today"]
 
-        assert view._on_strip_pressed(Gtk.GestureClick(), 1, float(x), float(y))
+        assert view._handle_group_press(3, float(x), float(y))
         _pump(0.2)
         try:
             assert header._menu.get_visible(), "the strip's header menu opened"
         finally:
             header._menu.popdown()
             _pump(0.1)
+
+        # The name cell is the caption widget itself: a left click toggles.
+        title_point = None
+        for y in range(0, root.get_height(), 4):
+            for x in range(0, root.get_width(), 24):
+                node = root.pick(x, y, Gtk.PickFlags.DEFAULT)
+                if isinstance(node, Gtk.Widget) and node.has_css_class(
+                    "volna-group-title"
+                ):
+                    title_point = (x, y)
+                    break
+            if title_point is not None:
+                break
+
+        assert title_point is not None
+        x, y = title_point
+        assert view._handle_group_press(1, float(x), float(y))
+        assert _pump_until(lambda: "today" in tab._collapsed_groups)
+    finally:
+        _close(window)
+
+
+def test_icons_header_menu_opens_from_a_right_click(
+    gtk_display, tmp_path: Path
+) -> None:
+    """«Значки» route the same caption clicks as the table (D14)."""
+    from gi.repository import Gtk
+
+    _make_listing(tmp_path)
+    window = _window(tmp_path, settings=ViewSettings(view_mode=ViewMode.ICONS))
+    try:
+        window.present()
+        tab = window._active_tab
+        assert _pump_until(lambda: tab.model.state is ScanState.READY)
+        _pump(0.4)
+        assert _pump_until(
+            lambda: len(_by_class(tab._active_view.widget, "volna-group-chevron")) >= 3
+        )
+
+        view = tab._active_view
+        root = view._click_root
+
+        point = None
+        for y in range(0, root.get_height(), 4):
+            for x in range(0, root.get_width(), 24):
+                node = root.pick(x, y, Gtk.PickFlags.DEFAULT)
+                if isinstance(node, Gtk.Widget) and node.has_css_class(
+                    "volna-group-title"
+                ):
+                    point = (x, y)
+                    break
+            if point is not None:
+                break
+
+        assert point is not None
+        x, y = point
+        header = view._headers["today"]
+
+        assert view._handle_group_press(3, float(x), float(y))
+        _pump(0.2)
+        try:
+            assert header._menu.get_visible(), "the caption menu opened in «Значки»"
+        finally:
+            header._menu.popdown()
+            _pump(0.1)
+    finally:
+        _close(window)
+
+
+def test_right_click_outside_a_caption_is_ignored(gtk_display, tmp_path: Path) -> None:
+    """Only group captions consume a right click; rows keep their own handling."""
+
+    _make_listing(tmp_path)
+    window = _window(tmp_path)
+    try:
+        window.present()
+        tab = window._active_tab
+        assert _pump_until(lambda: tab.model.state is ScanState.READY)
+        _pump(0.4)
+        assert _pump_until(
+            lambda: len(_by_class(tab._active_view.widget, "volna-group-chevron")) >= 3
+        )
+
+        import gi
+
+        gi.require_version("Graphene", "1.0")
+        from gi.repository import Graphene
+
+        view = tab._active_view
+        root = view._click_root
+
+        def center_in_root(widget: object) -> tuple[float, float]:
+            ok, rect = widget.compute_bounds(view.widget)
+            assert ok
+            middle = Graphene.Point().init(
+                rect.origin.x + rect.size.width / 2,
+                rect.origin.y + rect.size.height / 2,
+            )
+            ok, point = view.widget.compute_point(root, middle)
+            assert ok
+            return point.x, point.y
+
+        def row_label() -> object | None:
+            for label in _by_class(view.widget, "volna-dt-name"):
+                if label.get_text() == "today.txt":
+                    return label
+            return None
+
+        assert _pump_until(lambda: row_label() is not None)
+        x, y = center_in_root(row_label())
+        assert not view._handle_group_press(3, x, y), (
+            "a regular row must not open a group menu"
+        )
+
+        # The number cells of a regular row are empty too, and they must not
+        # resolve to the caption above them.
+        def regular_number_cell() -> object | None:
+            for cell in _by_class(view.widget, "volna-dt-num"):
+                if cell.group_key is None and cell.get_mapped():
+                    return cell
+            return None
+
+        assert _pump_until(lambda: regular_number_cell() is not None)
+        cell = regular_number_cell()
+        x, y = center_in_root(cell)
+        assert not cell.has_css_class("volna-dt-group"), "not a strip cell"
+        assert not view._handle_group_press(3, x, y), (
+            "an empty number cell of a regular row belongs to no group"
+        )
+
+        # An empty spot under the last caption is nobody's click either.
+        assert not view._handle_group_press(3, 5.0, float(root.get_height() - 5))
+    finally:
+        _close(window)
+
+
+def test_icons_right_click_on_a_tile_is_ignored(gtk_display, tmp_path: Path) -> None:
+    """A tile is not a caption: the group menu stays closed over the grid."""
+    import gi
+
+    gi.require_version("Graphene", "1.0")
+    from gi.repository import Graphene
+
+    _make_listing(tmp_path)
+    window = _window(tmp_path, settings=ViewSettings(view_mode=ViewMode.ICONS))
+    try:
+        window.present()
+        tab = window._active_tab
+        assert _pump_until(lambda: tab.model.state is ScanState.READY)
+        _pump(0.4)
+        assert _pump_until(
+            lambda: len(_by_class(tab._active_view.widget, "volna-group-chevron")) >= 3
+        )
+
+        view = tab._active_view
+        root = view._click_root
+
+        def tile_name() -> object | None:
+            for label in _by_class(view.widget, "volna-icons-name"):
+                if label.get_text() == "today.txt" and label.get_mapped():
+                    return label
+            return None
+
+        assert _pump_until(lambda: tile_name() is not None)
+        label = tile_name()
+        ok, rect = label.compute_bounds(view.widget)
+        assert ok
+        middle = Graphene.Point().init(
+            rect.origin.x + rect.size.width / 2, rect.origin.y + rect.size.height / 2
+        )
+        ok, point = view.widget.compute_point(root, middle)
+        assert ok
+
+        assert not view._handle_group_press(3, point.x, point.y)
+        assert not any(header._menu.get_visible() for header in view._headers.values())
     finally:
         _close(window)

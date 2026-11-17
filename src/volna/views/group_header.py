@@ -1,11 +1,16 @@
 """Group header widgets shared by the listing views (design/grouping.md D4).
 
 The header is one caption row above a date group: the group title on the left
-and the item count on the right. Metrics and colours live in ``theme.css``
+and the group summary on the right. Metrics and colours live in ``theme.css``
 under the ``volna-group-*`` classes; each mode only places the pieces.
 
 Details draws its own row (the row has to span the table columns), so it uses
 the label helpers and not :func:`header_box`.
+
+Pointer input does not live here: the owning view installs one capture-phase
+click handler over its scroller, because a ``Gtk.ListView`` claims right
+clicks before they reach a row widget (see ``ListingView._install_group_clicks``).
+The header only knows how to toggle and how to open its menu.
 """
 
 from __future__ import annotations
@@ -31,15 +36,26 @@ def title_label(text: str) -> Gtk.Label:
     return label
 
 
+def stats_label(text: str) -> Gtk.Label:
+    """The group summary: the editor header's counters, scoped to the group."""
+    label = Gtk.Label(label=text, xalign=1)
+    label.add_css_class("volna-group-stats")
+    return label
+
+
 def count_label(count: int) -> Gtk.Label:
-    """The item count: 12 mono muted, never shrinks."""
+    """The compact caption count used where a full summary does not fit."""
     label = Gtk.Label(label=str(count), xalign=1)
     label.add_css_class("volna-group-count")
     return label
 
 
-def header_box(text: str, count: int) -> Gtk.Box:
-    """A full-width caption row: title left, count right (28 px, `theme.css`)."""
+def header_box(text: str, summary: int | str) -> Gtk.Box:
+    """A full-width caption row: title left, summary right (28 px, `theme.css`).
+
+    A number is the compact form for a narrow column caption («Столбцы»);
+    a string is the full folders/files/size summary used by the wide captions.
+    """
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
     box.add_css_class("volna-group-header")
 
@@ -47,9 +63,10 @@ def header_box(text: str, count: int) -> Gtk.Box:
     title.set_hexpand(True)
     box.append(title)
 
-    count_widget = count_label(count)
-    count_widget.set_halign(Gtk.Align.END)
-    box.append(count_widget)
+    trailing = summary if isinstance(summary, str) else None
+    widget = stats_label(trailing) if trailing is not None else count_label(summary)
+    widget.set_halign(Gtk.Align.END)
+    box.append(widget)
 
     return box
 
@@ -57,11 +74,9 @@ def header_box(text: str, count: int) -> Gtk.Box:
 class GroupHeader(Gtk.Box):
     """An interactive date-group caption (design/grouping.md D13/D14).
 
-    The whole row toggles on click; a chevron button shows the state and
-    toggles too (a real ``Gtk.Button``, so focus and keyboard come from the
-    toolkit). Right click opens the context menu with the sensitive-by-state
-    items. The view wires ``key`` in; the tab decides what the state is, so
-    ``set_collapsed`` only paints.
+    The chevron is a real ``Gtk.Button`` (focus and keyboard come from the
+    toolkit), so a click on it toggles without the view's help. Clicks anywhere
+    else on the row and right clicks are routed by the owning view.
     """
 
     __gtype_name__ = "VolnaGroupHeader"
@@ -88,28 +103,25 @@ class GroupHeader(Gtk.Box):
         self._title.set_hexpand(True)
         self.append(self._title)
 
-        self._count = count_label(0)
-        self._count.set_halign(Gtk.Align.END)
-        self.append(self._count)
+        self._stats = stats_label("")
+        self._stats.set_halign(Gtk.Align.END)
+        self.append(self._stats)
 
         self.set_hexpand(True)
         self._sync_state()
-
-        # Toggle on any press over the caption; the context menu opens on the
-        # right button. A gesture both ways: the row is clickable, the button
-        # handles its own click first (it is inside the row).
-        self._click = Gtk.GestureClick()
-        self._click.connect("pressed", self._on_pressed)
-        self.add_controller(self._click)
 
         self._menu = self._build_menu()
         self._menu.set_parent(self)
         self._menu.set_has_arrow(False)
 
-    def set_caption(self, text: str, count: int) -> None:
+    @property
+    def key(self) -> str:
+        return self._key
+
+    def set_caption(self, text: str, stats: str) -> None:
         """Paint the caption; called on every bind (rows are recycled)."""
         self._title.set_text(text)
-        self._count.set_text(str(count))
+        self._stats.set_text(stats)
 
     def set_action(self, callback: Callable[[str, GroupAction], None]) -> None:
         """Where this header reports its interactions (the owning view)."""
@@ -126,15 +138,29 @@ class GroupHeader(Gtk.Box):
         any_expanded: bool,
         any_collapsed: bool,
     ) -> None:
-        """Sensitivity of the context menu, decided by the tab (D14).
+        """Sensitivity of the context menu, decided by the view (D14).
 
         The header alone cannot know whether «Свернуть все» makes sense (it
         does not, when everything is already collapsed) or whether anything
-        is collapsed to expand; the tab owns the whole group set.
+        is collapsed to expand; the view sees the whole group set.
         """
         self._others_collapsible = others_collapsible
         self._any_expanded = any_expanded
         self._any_collapsed = any_collapsed
+
+    # -- interaction -----------------------------------------------------
+
+    def toggle(self) -> None:
+        self._on_group_action(self._key, GroupAction.TOGGLE)
+
+    def open_menu(self) -> None:
+        # «Свернуть остальные» has a target only with several groups;
+        # «Свернуть все»/«Развернуть все» have one whenever anything is
+        # respectively expanded/collapsed (D14).
+        self._collapse_others.set_sensitive(self._others_collapsible)
+        self._collapse_all.set_sensitive(self._any_expanded)
+        self._expand_all.set_sensitive(self._any_collapsed)
+        self._menu.popup()
 
     # -- construction ----------------------------------------------------
 
@@ -177,40 +203,17 @@ class GroupHeader(Gtk.Box):
         return menu
 
     def _menu_item(self, text: str) -> Gtk.Button:
-        button = Gtk.Button(label=text)
+        button = Gtk.Button()
         button.add_css_class("volna-menu-item")
+        # A button centres its own label; a menu item reads left-aligned.
+        label = Gtk.Label(label=text, xalign=0)
+        label.set_hexpand(True)
+        button.set_child(label)
         return button
 
-    # -- interaction -----------------------------------------------------
-
     def _on_toggle(self, *_args: object) -> None:
-        self._on_group_action(self._key, GroupAction.TOGGLE)
-
-    def _on_pressed(
-        self,
-        click: Gtk.GestureClick,
-        n_press: int,
-        _x: float,
-        _y: float,
-    ) -> None:
-        if n_press != 1:
-            return
-
-        button = click.get_current_button()
-        if button == 3:
-            self._open_menu()
-        elif button == 1:
-            self._on_toggle()
+        self.toggle()
 
     def _on_menu_action(self, button: Gtk.Button, action: GroupAction) -> None:
         self._menu.popdown()
         self._on_group_action(self._key, action)
-
-    def open_menu(self) -> None:
-        # «Свернуть остальные» has a target only with several groups;
-        # «Свернуть все»/«Развернуть все» have one whenever anything is
-        # respectively expanded/collapsed (D14).
-        self._collapse_others.set_sensitive(self._others_collapsible)
-        self._collapse_all.set_sensitive(self._any_expanded)
-        self._expand_all.set_sensitive(self._any_collapsed)
-        self._menu.popup()

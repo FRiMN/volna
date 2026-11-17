@@ -50,11 +50,15 @@ class ColumnGroup(GObject.Object):
     __gtype_name__ = "VolnaColumnGroup"
 
     def __init__(
-        self, items: tuple[ListingItem, ...], header: str | None = None
+        self,
+        items: tuple[ListingItem, ...],
+        header: str | None = None,
+        stats: str = "",
     ) -> None:
         super().__init__()
         self.items = items
         self.header = header
+        self.stats = stats
 
 
 class ColumnsView(ListingView):
@@ -110,7 +114,7 @@ class ColumnsView(ListingView):
         """Grouped sections become one column each; a flat one is chunked."""
         if any(section.header is not None for section in sections):
             groups = [
-                ColumnGroup(tuple(section.items), section.header)
+                ColumnGroup(tuple(section.items), section.header, section.stats)
                 for section in sections
                 if section.items
             ]
@@ -169,6 +173,8 @@ class ColumnsView(ListingView):
 
         group = item.get_item()
         if group.header is not None:
+            # A column caption is narrow: the group summary does not fit there,
+            # so it keeps the compact item count (design/grouping.md §12).
             caption = header_box(group.header, len(group.items))
             caption.add_css_class("volna-col-head")
             column.append(caption)

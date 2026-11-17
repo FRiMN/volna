@@ -980,6 +980,15 @@ popover.volna-view-popover > contents {
   font-weight: 600;
 }
 
+/* The group summary reads like the editor header's counters (`.volna-editor-counts`),
+   scoped to one date group. */
+.volna-group-stats {
+  color: #9da0a8;
+  font-size: 13px;
+}
+
+/* «Столбцы» keep the compact count: a column caption is too narrow for the
+   full folders/files/size summary. */
 .volna-group-count {
   color: #6f737a;
   font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
@@ -1029,6 +1038,10 @@ popover.volna-view-popover > contents {
 }
 
 .volna-size-wide .volna-group-title {
+  font-size: 16px;
+}
+
+.volna-size-wide .volna-group-stats {
   font-size: 16px;
 }
 

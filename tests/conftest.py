@@ -7,11 +7,16 @@ cleanly when Xvfb or GTK4 is unavailable.
 
 from __future__ import annotations
 
+import ctypes
+import ctypes.util
 import os
 import shutil
 import subprocess
+import sys
 import time
-from collections.abc import Iterator
+from array import array
+from collections import Counter
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -85,3 +90,122 @@ def _start_xvfb() -> tuple[subprocess.Popen, str]:
     process.terminate()
     process.wait(5)
     pytest.skip("Xvfb did not start")
+
+
+class _XImage(ctypes.Structure):
+    """The X11 image header ``XGetImage`` returns."""
+
+    _fields_ = [
+        ("width", ctypes.c_int),
+        ("height", ctypes.c_int),
+        ("xoffset", ctypes.c_int),
+        ("format", ctypes.c_int),
+        ("data", ctypes.c_void_p),
+        ("byte_order", ctypes.c_int),
+        ("bitmap_unit", ctypes.c_int),
+        ("bitmap_bit_order", ctypes.c_int),
+        ("bitmap_pad", ctypes.c_int),
+        ("depth", ctypes.c_int),
+        ("bytes_per_line", ctypes.c_int),
+        ("bits_per_pixel", ctypes.c_int),
+        ("red_mask", ctypes.c_ulong),
+        ("green_mask", ctypes.c_ulong),
+        ("blue_mask", ctypes.c_ulong),
+        ("obdata", ctypes.c_void_p),
+    ]
+
+
+def _x11_library() -> ctypes.CDLL:
+    path = ctypes.util.find_library("X11")
+    if path is None:
+        pytest.skip("libX11 is not installed")
+
+    x11 = ctypes.CDLL(path)
+    x11.XOpenDisplay.restype = ctypes.c_void_p
+    x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+    x11.XGetImage.restype = ctypes.POINTER(_XImage)
+    x11.XGetImage.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_ulong,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_uint,
+        ctypes.c_uint,
+        ctypes.c_ulong,
+        ctypes.c_int,
+    ]
+    return x11
+
+
+Colour = tuple[int, int, int]
+"""An RGB colour of the screen, as the X11 readback reports it."""
+
+
+@pytest.fixture(scope="session")
+def x11_pixels(gtk_display) -> Iterator[Callable[[object], Counter[Colour]]]:
+    """Read the colours an X11 drawable actually shows.
+
+    A colour only exists in the cascade of the stylesheet, so a widget test
+    cannot see it: the rule that paints it may be anywhere, and the widget's
+    own class says nothing about the result. Under Xvfb every surface is a
+    real X11 window, so the pixels can be read back with ``XGetImage`` — the
+    only check that sees what the user sees.
+    """
+    x11 = _x11_library()
+
+    def read(surface: object) -> Counter[Colour]:
+        import gi
+
+        gi.require_version("GdkX11", "4.0")
+        from gi.repository import GdkX11
+
+        display = x11.XOpenDisplay(None)
+        if not display:
+            pytest.skip("cannot open the X display")
+
+        try:
+            xid = GdkX11.X11Surface.get_xid(surface)
+            width = surface.get_width()
+            height = surface.get_height()
+            image = x11.XGetImage(display, xid, 0, 0, width, height, 0xFFFFFFFF, 2)
+            if not image:
+                pytest.skip("XGetImage failed")
+
+            header = image.contents
+            raw = ctypes.string_at(header.data, header.bytes_per_line * header.height)
+
+            def shift(mask: int) -> int:
+                return (mask & -mask).bit_length() - 1
+
+            red_shift = shift(header.red_mask)
+            green_shift = shift(header.green_mask)
+            blue_shift = shift(header.blue_mask)
+            if header.bits_per_pixel != 32:
+                pytest.skip(
+                    f"unsupported pixel format: {header.bits_per_pixel} bits per pixel"
+                )
+
+            # The pixels are words in the order of the image; the machine may
+            # read them the other way round.
+            pixels = array("I")
+            for y in range(header.height):
+                start = y * header.bytes_per_line
+                pixels.frombytes(raw[start : start + header.width * 4])
+            if (header.byte_order == 0) != (sys.byteorder == "little"):
+                pixels.byteswap()
+
+            colours: Counter[Colour] = Counter()
+            for pixel in pixels:
+                colours[
+                    (
+                        (pixel & header.red_mask) >> red_shift,
+                        (pixel & header.green_mask) >> green_shift,
+                        (pixel & header.blue_mask) >> blue_shift,
+                    )
+                ] += 1
+            return colours
+        finally:
+            x11.XCloseDisplay(display)
+
+    yield read

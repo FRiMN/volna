@@ -17,6 +17,7 @@ import pytest
 pytest.importorskip("gi")
 
 from volna.display import (  # noqa: E402
+    Grouping,
     JsonViewSettingsStore,
     MemoryViewSettingsStore,
     SettingsPaths,
@@ -162,7 +163,11 @@ def test_folders_first_toggle_mixes_folders_and_files(
     (tmp_path / "zzz").mkdir()
     _touch(tmp_path / "aaa.txt", 1_600_000_000)
 
-    window = _window(tmp_path)
+    # The subject is the global flat order: folders first across the whole
+    # listing. Grouping is on by default and would interleave date groups, so
+    # this scenario runs ungrouped; within-group folders-first is covered by
+    # tests/test_grouping.py (grouping.md D3).
+    window = _window(tmp_path, settings=ViewSettings(grouping=Grouping.NONE))
     try:
         panel = _open_panel(window)
         _wait_for_names(window, "aaa.txt", "zzz")

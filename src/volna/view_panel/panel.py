@@ -22,7 +22,7 @@ from ..glyph import icon  # noqa: E402
 from ..size import px  # noqa: E402
 from .controls import footer, section, separator  # noqa: E402
 from .settings import SETTING_FEATURES  # noqa: E402
-from .settings.base import SettingFeature  # noqa: E402
+from .settings.base import SettingFeature, SettingsSection  # noqa: E402
 
 # The popover hangs 4 px below the trigger and starts at its left edge.
 # GTK positions the popup when it is presented, so both values belong to the
@@ -129,6 +129,11 @@ class ViewPanel:
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         content.add_css_class("volna-view-body")
+        # Both orders come from the registry tuple (settings/__init__.py):
+        # the position of a class in SETTING_FEATURES is its row position
+        # inside its section, and a section appears when its first feature
+        # does (first-seen grouping in _sections()). The enum's member order
+        # is documentation only and does not affect the layout.
         for title, features in self._sections():
             container, body = section(title)
             for feature in features:
@@ -146,9 +151,9 @@ class ViewPanel:
 
         return popover
 
-    def _sections(self) -> list[tuple[str, list[SettingFeature]]]:
-        """Group features by section title, in first-seen order."""
-        grouped: dict[str, list[SettingFeature]] = {}
+    def _sections(self) -> list[tuple[SettingsSection | str, list[SettingFeature]]]:
+        """Group features by section, in first-seen order; the section is the title."""
+        grouped: dict[SettingsSection | str, list[SettingFeature]] = {}
         for feature in self._settings_features:
             grouped.setdefault(feature.section, []).append(feature)
 

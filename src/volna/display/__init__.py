@@ -1,9 +1,12 @@
 """Display settings and their last-view storage (pure, no GTK)."""
 
 from ..core import SortKey
+from .grouping import GroupAction, group_key, group_label
 from .settings import (
+    COLLAPSE_MODES,
     DEFAULT_CAPABILITIES,
     DEFAULT_VIEW_SETTINGS,
+    GROUPING_ORDER,
     MODE_ORDER,
     Grouping,
     ViewCapabilities,
@@ -23,8 +26,11 @@ from .store import (
 __all__ = [
     "DEFAULT_CAPABILITIES",
     "DEFAULT_VIEW_SETTINGS",
+    "COLLAPSE_MODES",
+    "GROUPING_ORDER",
     "MODE_ORDER",
     "SCHEMA_VERSION",
+    "GroupAction",
     "Grouping",
     "JsonViewSettingsStore",
     "MemoryViewSettingsStore",
@@ -36,4 +42,6 @@ __all__ = [
     "ViewSettings",
     "ViewSettingsStore",
     "create_store",
+    "group_key",
+    "group_label",
 ]

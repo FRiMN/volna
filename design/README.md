@@ -17,6 +17,8 @@
 | [`reference/`](reference/) | Измеренные спеки референсов: Dolphin (398 строк) и JetBrains New UI (474 строки) |
 | [`content-spec.md`](content-spec.md) | Единый контент экрана (данные, подписи, счётчики) |
 | [`view-panel.md`](view-panel.md) | Проект и реализация панели «Вид»: решения, API, хранение, тесты, отложенное |
+| [`view-modes.md`](view-modes.md) | Проект и реализация режимов просмотра: «Значки», «Столбцы», «Подробности» |
+| [`grouping.md`](grouping.md) | Проект и реализация группировки листинга по дате изменения |
 | [`tools/`](tools/) | Скриншоты (`shot.sh`) и сравнительный коллаж (`build_compare.py`) |
 | [`backups/`](backups/) | Предыдущие версии макетов |
 | [`runtime-fix.md`](runtime-fix.md) | Локальный фикс runtime OpenDesign (free tier) |

@@ -311,6 +311,7 @@ def test_popover_has_only_live_sections(panel) -> None:
 
     assert _texts(harness.window, "volna-view-section-title") == [
         "Режим просмотра",
+        "Группировка",
         "Сортировка",
         "Параметры",
     ]
@@ -320,6 +321,8 @@ def test_popover_has_only_live_sections(panel) -> None:
         "Значки",
         "Столбцы",
         "Подробности",
+        "По дате изменения",
+        "Без группировки",
         "Дата изменения",
         "Размер",
         "Имя",
@@ -343,7 +346,7 @@ def test_popover_has_only_live_sections(panel) -> None:
         for widget in _walk(harness.window)
         if hasattr(widget, "get_text")
     ]
-    for deferred in ("Пресеты", "Группировка", "Масштаб"):
+    for deferred in ("Пресеты", "Масштаб"):
         assert deferred not in labels
 
 
@@ -368,18 +371,19 @@ def test_density_checkbox_requires_the_capability(panel) -> None:
 
 def test_setting_features_are_separate_classes_and_modules() -> None:
     from volna.view_panel.settings import SETTING_FEATURES
-    from volna.view_panel.settings.base import SettingFeature
+    from volna.view_panel.settings.base import SettingFeature, SettingsSection
 
     assert all(issubclass(feature, SettingFeature) for feature in SETTING_FEATURES)
     ids = [feature.id for feature in SETTING_FEATURES]
     assert len(set(ids)) == len(ids), f"duplicate setting ids: {ids}"
     assert [feature.section for feature in SETTING_FEATURES] == [
-        "Режим просмотра",
-        "Сортировка",
-        "Сортировка",
-        "Сортировка",
-        "Параметры",
-        "Параметры",
+        SettingsSection.view_mode,
+        SettingsSection.grouping,
+        SettingsSection.sorting,
+        SettingsSection.sorting,
+        SettingsSection.params,
+        SettingsSection.params,
+        SettingsSection.params,
     ]
     modules = {feature.__module__ for feature in SETTING_FEATURES}
     assert len(modules) == len(SETTING_FEATURES), "each setting must own its module"

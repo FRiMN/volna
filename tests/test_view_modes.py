@@ -194,6 +194,8 @@ def test_mode_section_lists_every_available_mode(gtk_display) -> None:
         "Значки",
         "Столбцы",
         "Подробности",
+        "По дате изменения",
+        "Без группировки",
         "Дата изменения",
         "Размер",
         "Имя",
@@ -361,10 +363,14 @@ def test_unavailable_modes_are_not_offered(gtk_display, tmp_path: Path) -> None:
 
 
 def test_double_click_in_icons_mode_opens_a_folder(gtk_display, tmp_path: Path) -> None:
+    from volna.display import Grouping, ViewSettings
+
     (tmp_path / "child").mkdir()
     _make_listing(tmp_path)
 
-    window = _window(tmp_path)
+    # The GridView tile positions are this test's subject, so it runs the flat
+    # listing: grouping has its own tests (tests/test_icons_grouping.py).
+    window = _window(tmp_path, settings=ViewSettings(grouping=Grouping.NONE))
     try:
         panel = _open_panel(window)
         _wait_for_names(window, ViewMode.DETAILS, "child")
@@ -459,3 +465,171 @@ def test_wheel_pans_columns_horizontally(gtk_display, tmp_path: Path) -> None:
         assert vertical.get_value() == 0.0
     finally:
         _close(window)
+
+
+# -- details: date groups (design/grouping.md D5) ----------------------------
+
+
+def _details():
+    from volna.views.details import DetailsView
+
+    activated: list[object] = []
+    return DetailsView(on_activate=activated.append), activated
+
+
+def _item(name: str):
+    from volna.views.item import ListingItem
+
+    return ListingItem(name, f"/tmp/listing/{name}", "1 КиБ", "17.11.2026 10:12", False)
+
+
+def _rows(view) -> list[object]:
+    return [view.store.get_item(index) for index in range(view.store.get_n_items())]
+
+
+def _labels(root, css_class: str) -> list[str]:
+    """Non-empty texts under ``css_class``; the hidden row branch stays empty."""
+    texts = []
+    for widget in _by_class(root, css_class):
+        getter = getattr(widget, "get_text", None)
+        if getter is None:
+            continue
+        text = getter()
+        if text:
+            texts.append(text)
+    return texts
+
+
+def test_details_grouped_sections_interleave_group_rows(gtk_display) -> None:
+    from volna.views.base import Section
+    from volna.views.details import GroupRow
+    from volna.views.item import ListingItem
+
+    view, _activated = _details()
+    alpha, beta, gamma = (
+        _item(name) for name in ("alpha.txt", "beta.txt", "gamma.txt")
+    )
+
+    view.render(
+        (
+            Section(items=(alpha, beta), header="Сегодня", stats="2 файлов (2 Б)"),
+            Section(items=(gamma,), header="Вчера", stats="1 файлов (1 Б)"),
+        )
+    )
+
+    rows = _rows(view)
+    assert isinstance(rows[0], GroupRow)
+    assert (rows[0].label, rows[0].stats) == ("Сегодня", "2 файлов (2 Б)")
+    assert [row.name for row in rows[1:3]] == ["alpha.txt", "beta.txt"]
+    assert isinstance(rows[3], GroupRow)
+    assert (rows[3].label, rows[3].stats) == ("Вчера", "1 файлов (1 Б)")
+    assert isinstance(rows[4], ListingItem)
+    assert rows[4].name == "gamma.txt"
+
+
+def test_details_group_row_renders_caption_summary_and_strip(gtk_display) -> None:
+    import gi
+
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import Gtk
+
+    from volna.views.base import Section
+
+    view, _activated = _details()
+    view.render(
+        (
+            Section(
+                items=(_item("alpha.txt"), _item("beta.txt")),
+                header="Сегодня",
+                stats="2 файлов (2 Б)",
+            ),
+        )
+    )
+
+    window = Gtk.Window()
+    window.set_child(view.widget)
+    window.set_default_size(800, 300)
+    window.present()
+    try:
+        assert _pump_until(
+            lambda: _labels(view.widget, "volna-group-title") == ["Сегодня"]
+        ), "the group caption never appeared"
+
+        assert _labels(view.widget, "volna-group-stats") == ["2 файлов (2 Б)"]
+        assert _labels(view.widget, "volna-dt-name") == ["alpha.txt", "beta.txt"]
+
+        stripped = _by_class(view.widget, "volna-dt-group")
+        assert len(stripped) == 3, (
+            "the strip covers the name cell and both numeric ones"
+        )
+        numeric = [cell for cell in stripped if cell.has_css_class("volna-dt-num")]
+        assert [cell.get_text() for cell in numeric] == ["", ""]
+    finally:
+        window.destroy()
+
+
+def test_details_flat_sections_have_no_group_rows(gtk_display) -> None:
+    from volna.views.base import Section
+    from volna.views.item import ListingItem
+
+    view, _activated = _details()
+    view.render((Section(items=(_item("alpha.txt"), _item("beta.txt"))),))
+
+    rows = _rows(view)
+    assert all(isinstance(row, ListingItem) for row in rows)
+    assert [row.name for row in rows] == ["alpha.txt", "beta.txt"]
+
+
+def test_details_group_row_activation_is_ignored(gtk_display) -> None:
+    from volna.views.base import Section
+
+    view, activated = _details()
+    alpha = _item("alpha.txt")
+    view.render((Section(items=(alpha,), header="Сегодня"),))
+
+    view._column_view.emit("activate", 0)
+
+    assert activated == [], "a group caption is not an entry"
+    view._column_view.emit("activate", 1)
+    assert activated == [alpha]
+
+
+def test_details_switching_to_flat_clears_the_group_strips(gtk_display) -> None:
+    """Recycled rows must lose the strip: grouping off leaves no caption behind."""
+    import gi
+
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import Gtk
+
+    from volna.views.base import Section
+
+    view, _activated = _details()
+    view.render(
+        (
+            Section(
+                items=(_item("alpha.txt"), _item("beta.txt")),
+                header="Сегодня",
+                stats="2 файлов (2 Б)",
+            ),
+        )
+    )
+
+    window = Gtk.Window()
+    window.set_child(view.widget)
+    window.set_default_size(800, 300)
+    window.present()
+    try:
+        assert _pump_until(
+            lambda: _labels(view.widget, "volna-group-title") == ["Сегодня"]
+        ), "the group caption never appeared"
+
+        view.render((Section(items=(_item("alpha.txt"), _item("beta.txt"))),))
+
+        assert _pump_until(
+            lambda: _labels(view.widget, "volna-dt-name") == ["alpha.txt", "beta.txt"]
+        )
+        assert _by_class(view.widget, "volna-dt-group") == []
+        assert _labels(view.widget, "volna-group-title") == []
+        assert _labels(view.widget, "volna-group-stats") == []
+    finally:
+        window.destroy()

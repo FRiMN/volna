@@ -10,7 +10,7 @@ from gi.repository import Gtk  # noqa: E402
 
 from ...display import SortKey, ViewSettings  # noqa: E402
 from ..controls import radio_row  # noqa: E402
-from .base import ChangeCallback, SettingFeature  # noqa: E402
+from .base import ChangeCallback, SettingFeature, SettingsSection  # noqa: E402
 
 _ROWS: tuple[tuple[SortKey, str], ...] = (
     (SortKey.MTIME, "Дата изменения"),
@@ -21,7 +21,7 @@ _ROWS: tuple[tuple[SortKey, str], ...] = (
 
 class SortKeySetting(SettingFeature):
     id = "sort-key"
-    section = "Сортировка"
+    section = SettingsSection.sorting
 
     def __init__(self, on_change: ChangeCallback) -> None:
         super().__init__(on_change)

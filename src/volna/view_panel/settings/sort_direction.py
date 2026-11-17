@@ -10,7 +10,7 @@ from gi.repository import Gtk  # noqa: E402
 
 from ...display import ViewSettings  # noqa: E402
 from ..controls import segmented  # noqa: E402
-from .base import ChangeCallback, SettingFeature  # noqa: E402
+from .base import ChangeCallback, SettingFeature, SettingsSection  # noqa: E402
 
 _ROWS: tuple[tuple[bool, str], ...] = (
     (True, "По убыванию"),
@@ -20,7 +20,7 @@ _ROWS: tuple[tuple[bool, str], ...] = (
 
 class SortDirectionSetting(SettingFeature):
     id = "sort-direction"
-    section = "Сортировка"
+    section = SettingsSection.sorting
 
     def __init__(self, on_change: ChangeCallback) -> None:
         super().__init__(on_change)

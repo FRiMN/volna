@@ -41,10 +41,30 @@ MODE_ORDER: tuple[ViewMode, ...] = (
     ViewMode.DETAILS,
 )
 
+# Modes whose group headers collapse (design/grouping.md §12, owner decision
+# 2026-11-17): «Столбцы» group by whole columns and keep static captions.
+COLLAPSE_MODES: frozenset[ViewMode] = frozenset({ViewMode.DETAILS, ViewMode.ICONS})
+
 
 class Grouping(StrEnum):
+    """How the listing is split into date groups (panel radio group)."""
+
     DATE = "date"
     NONE = "none"
+
+    @property
+    def label(self) -> str:
+        """Display name for controls (the View panel radio group)."""
+        return _GROUPING_LABELS[self]
+
+
+_GROUPING_LABELS: dict[Grouping, str] = {
+    Grouping.DATE: "По дате изменения",
+    Grouping.NONE: "Без группировки",
+}
+
+# Presentation order for controls: grouped (the design default) first.
+GROUPING_ORDER: tuple[Grouping, ...] = (Grouping.DATE, Grouping.NONE)
 
 
 # Preference order used when a stored mode is not available in this build.
@@ -69,7 +89,7 @@ class ViewCapabilities:
 
 DEFAULT_CAPABILITIES = ViewCapabilities(
     modes=frozenset(MODE_ORDER),
-    grouping=False,
+    grouping=True,
     density=True,
     zoom_modes=frozenset(),
 )

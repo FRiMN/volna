@@ -652,15 +652,20 @@ def _name_cell_rows(window: object) -> dict[str, str]:
 
     rows: dict[str, str] = {}
     for image in _by_class(window, "volna-dt-icon"):
-        assert image.get_pixel_size() == px(16)
-        assert Gtk.test_accessible_has_property(image, Gtk.AccessibleProperty.LABEL)
         cell = image.get_parent()
         label = cell.get_last_child()
+        name = label.get_text()
+        if not name:
+            # The recycled name cell bound to a date caption: the group branch
+            # is shown and the entry branch keeps an empty, hidden label.
+            continue
+        assert image.get_pixel_size() == px(16)
+        assert Gtk.test_accessible_has_property(image, Gtk.AccessibleProperty.LABEL)
         glyph = image.get_property("file")
         assert glyph is not None, "the row glyph was not loaded from a file"
         path = Path(glyph if isinstance(glyph, str) else glyph.get_path())
         assert path.parent.name == str(px(16))
-        rows[label.get_text()] = path.name
+        rows[name] = path.name
 
     return rows
 
@@ -725,9 +730,24 @@ def test_row_glyph_accessible_name_tracks_the_bound_kind(
         _close(window)
 
 
-def _listed_names(window: object) -> list[str]:
+def _entry_rows(window: object) -> list[object]:
+    """The entry rows of the active listing: date captions are not entries.
+
+    Grouping is on by default, so the details store is heterogeneous: it holds
+    ``GroupRow`` captions between the ``ListingItem`` rows (grouping.md D5).
+    """
+    from volna.views.item import ListingItem
+
     store = _details_view(window).store
-    return [store.get_item(index).name for index in range(store.get_n_items())]
+    return [
+        row
+        for row in (store.get_item(index) for index in range(store.get_n_items()))
+        if isinstance(row, ListingItem)
+    ]
+
+
+def _listed_names(window: object) -> list[str]:
+    return [row.name for row in _entry_rows(window)]
 
 
 def _wait_for_listing(window: object, *names: str) -> None:
@@ -738,12 +758,15 @@ def _wait_for_listing(window: object, *names: str) -> None:
 
 def _activate_listed_row(window: object, name: str) -> None:
     """Emit the ColumnView activation GTK sends for a double click / Enter."""
+    from volna.views.item import ListingItem
+
     store = _details_view(window).store
     _wait_for_listing(window, name)
     position = next(
         index
         for index in range(store.get_n_items())
-        if store.get_item(index).name == name
+        if isinstance(store.get_item(index), ListingItem)
+        and store.get_item(index).name == name
     )
     _details_view(window)._column_view.emit("activate", position)
 
@@ -780,12 +803,7 @@ def test_activation_of_a_row_from_the_previous_listing_is_ignored(
     try:
         window.present()
         _wait_for_listing(window, "beta")
-        store = _details_view(window).store
-        stale = next(
-            store.get_item(index)
-            for index in range(store.get_n_items())
-            if store.get_item(index).name == "beta"
-        )
+        stale = next(row for row in _entry_rows(window) if row.name == "beta")
 
         window._navigate_active_tab(alpha)
         window._active_tab._on_item_activated(stale)

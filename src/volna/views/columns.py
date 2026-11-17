@@ -15,10 +15,11 @@ gi.require_version("Gtk", "4.0")
 
 from gi.repository import Gio, GObject, Gtk, Pango  # noqa: E402
 
-from ..display import ViewMode  # noqa: E402
+from ..display import GroupAction, ViewMode  # noqa: E402
 from ..glyph import icon_path  # noqa: E402
 from ..size import px  # noqa: E402
 from .base import ListingView, Section  # noqa: E402
+from .group_header import header_box  # noqa: E402
 from .item import ListingItem  # noqa: E402
 
 # Rows per column, fixed like the mockup (perColumn = 6); growing the band
@@ -40,13 +41,24 @@ _WHEEL_STEP = px(100)
 
 
 class ColumnGroup(GObject.Object):
-    """One column: the items filling it top to bottom."""
+    """One column: an optional group caption plus the items filling it.
+
+    Grouped listings make one column per date group (design/grouping.md D7);
+    the flat listing keeps caption-less columns of ``ROWS_PER_COLUMN`` rows.
+    """
 
     __gtype_name__ = "VolnaColumnGroup"
 
-    def __init__(self, items: tuple[ListingItem, ...]) -> None:
+    def __init__(
+        self,
+        items: tuple[ListingItem, ...],
+        header: str | None = None,
+        stats: str = "",
+    ) -> None:
         super().__init__()
         self.items = items
+        self.header = header
+        self.stats = stats
 
 
 class ColumnsView(ListingView):
@@ -54,8 +66,16 @@ class ColumnsView(ListingView):
 
     mode = ViewMode.COLUMNS
 
-    def __init__(self, *, on_activate: Callable[[ListingItem], None]) -> None:
-        super().__init__(on_activate=on_activate)
+    def __init__(
+        self,
+        *,
+        on_activate: Callable[[ListingItem], None],
+        on_group_action: Callable[[str, GroupAction], None] | None = None,
+    ) -> None:
+        # The callback is stored contract-wide but unused here: «Столбцы» keep
+        # static captions — collapsing groups is a «Подробности»/«Значки»
+        # feature (design/grouping.md §12, owner decision 2026-11-17).
+        super().__init__(on_activate=on_activate, on_group_action=on_group_action)
         self.store = Gio.ListStore.new(ColumnGroup)
 
         factory = Gtk.SignalListItemFactory()
@@ -91,11 +111,20 @@ class ColumnsView(ListingView):
         return self._scroller
 
     def render(self, sections: Sequence[Section]) -> None:
-        items = [item for section in sections for item in section.items]
-        groups = [
-            ColumnGroup(tuple(items[start : start + ROWS_PER_COLUMN]))
-            for start in range(0, len(items), ROWS_PER_COLUMN)
-        ]
+        """Grouped sections become one column each; a flat one is chunked."""
+        if any(section.header is not None for section in sections):
+            groups = [
+                ColumnGroup(tuple(section.items), section.header, section.stats)
+                for section in sections
+                if section.items
+            ]
+        else:
+            items = [item for section in sections for item in section.items]
+            groups = [
+                ColumnGroup(tuple(items[start : start + ROWS_PER_COLUMN]))
+                for start in range(0, len(items), ROWS_PER_COLUMN)
+            ]
+
         self.store.splice(0, self.store.get_n_items(), groups)
 
     def reset_scroll(self) -> None:
@@ -142,7 +171,15 @@ class ColumnsView(ListingView):
             column.remove(child)
             child = following
 
-        for entry in item.get_item().items:
+        group = item.get_item()
+        if group.header is not None:
+            # A column caption is narrow: the group summary does not fit there,
+            # so it keeps the compact item count (design/grouping.md §12).
+            caption = header_box(group.header, len(group.items))
+            caption.add_css_class("volna-col-head")
+            column.append(caption)
+
+        for entry in group.items:
             column.append(self._row(entry))
 
     def _row(self, entry: ListingItem) -> Gtk.Widget:

@@ -964,3 +964,152 @@ popover.volna-view-popover > contents {
   margin-top: 8px;
   padding-top: 10px;
 }
+
+/* ---- date groups (design/grouping.md D9) ---------------------------- */
+/* Caption row above one date group: title left, count right, 28 px. The same
+   widget serves «Значки» and «Столбцы»; each mode only adds its own padding
+   and background (mode classes below). */
+.volna-group-header {
+  min-height: 28px;
+  border-bottom: 1px solid #393b40;
+}
+
+.volna-group-title {
+  color: #9da0a8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* The group summary reads like the editor header's counters (`.volna-editor-counts`),
+   scoped to one date group. */
+.volna-group-stats {
+  color: #9da0a8;
+  font-size: 13px;
+}
+
+/* «Столбцы» keep the compact count: a column caption is too narrow for the
+   full folders/files/size summary. */
+.volna-group-count {
+  color: #6f737a;
+  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+  font-size: 12px;
+}
+
+/* «Значки»: section caption with the grid right below it (design 04 §6.2). */
+.volna-icons-head {
+  padding: 0 4px;
+  margin-bottom: 8px;
+}
+
+/* «Столбцы»: column caption over the column's items; the column divider line
+   starts at the caption, so the caption sits on the canvas colour. */
+.volna-col-head {
+  padding: 0 8px;
+  background-color: #1e1f22;
+}
+
+/* «Подробности»: a full-width group strip across the table columns. Each
+   column cell gets the same background/borders so the strip is continuous;
+   the name cell carries the title and count. */
+.volna-dt-group {
+  min-height: 28px;
+  background-color: #26282d;
+  border-top: 1px solid #393b40;
+  border-bottom: 1px solid #393b40;
+  /* Adwaita pads every ColumnView cell child by 6px: pull the cell background
+     out to the cell edges and pad the content back, so a group strip reads as
+     one continuous band instead of cells with view-background slits. */
+  margin: 0 -6px;
+  padding: 0 6px;
+}
+
+.volna-dt-group-content {
+  padding: 0 12px;
+}
+
+/* Compact layout: the design keeps group captions at 28 px, only cell
+   paddings shrink (02 §9). */
+.volna-density-compact .volna-col-head {
+  padding: 0 6px;
+}
+
+.volna-size-wide .volna-group-header {
+  min-height: 35px;
+}
+
+.volna-size-wide .volna-group-title {
+  font-size: 16px;
+}
+
+.volna-size-wide .volna-group-stats {
+  font-size: 16px;
+}
+
+.volna-size-wide .volna-group-count {
+  font-size: 15px;
+}
+
+.volna-size-wide .volna-icons-head {
+  padding: 0 5px;
+  margin-bottom: 10px;
+}
+
+.volna-size-wide .volna-col-head {
+  padding: 0 10px;
+}
+
+.volna-size-wide .volna-dt-group {
+  min-height: 35px;
+}
+
+.volna-size-wide .volna-dt-group-content {
+  padding: 0 15px;
+}
+
+/* «Значки», grouped: a band is one ListView row of equal-width tiles. The
+   tile's design min-width must not become the *window* minimum: the band is
+   width-driven and re-chunks on resize (design/grouping.md D6). Flat GridView
+   tiles are not inside `.volna-icons-band` and keep their min-width. */
+.volna-icons-band .volna-icons-tile {
+  min-width: 0;
+}
+
+.volna-size-wide .volna-icons-band .volna-icons-tile {
+  min-width: 0;
+}
+
+/* «Значки», grouped: the tile margin exists for the flat GridView's gap; a band
+   already spaces its tiles, so only the vertical margin (band gap) stays. */
+.volna-icons-band .volna-icons-tile {
+  margin: 0 0 6px 0;
+}
+
+.volna-size-wide .volna-icons-band .volna-icons-tile {
+  margin: 0 0 8px 0;
+}
+
+/* ---- group collapse (design/grouping.md §12) ------------------------ */
+/* Chevron button in an interactive group header: focus ring from the
+   toolkit, rotation shows the state (collapsed = pointing right). */
+.volna-group-chevron {
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0 2px;
+  margin: 0;
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+.volna-group-chevron:hover:not(:disabled) {
+  background-color: #393b40;
+}
+
+.volna-group-chevron > * {
+  transition: transform 120ms ease;
+}
+
+.volna-group-collapsed .volna-group-chevron > * {
+  transform: rotate(-90deg);
+}

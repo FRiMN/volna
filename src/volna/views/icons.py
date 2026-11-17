@@ -162,10 +162,14 @@ class TileBand(Gtk.Widget):
             if not tile.get_visible():
                 continue
 
-            tile_width = min(self._tile_width, max(0, width - x))
+            # A band that no longer fits (the ListView allocates the previous
+            # rows once more between a resize and the idle re-chunk) is clipped
+            # by the scroller instead of squeezing the tiles to zero width: a
+            # tile narrower than its padding makes GTK allocate the padded
+            # children with negative sizes.
             transform = Gsk.Transform.new().translate(Graphene.Point().init(x, 0))
-            tile.allocate(tile_width, height, -1, transform)
-            x += tile_width + _GAP
+            tile.allocate(self._tile_width, height, -1, transform)
+            x += self._tile_width + _GAP
 
 
 class IconsView(ListingView):

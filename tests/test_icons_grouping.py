@@ -387,6 +387,52 @@ def test_flat_after_grouped_drops_the_captions(gtk_display) -> None:
         assert _texts(harness.view.widget, "volna-group-title") == []
 
 
+def test_narrow_band_clips_tiles_instead_of_squeezing_them(gtk_display) -> None:
+    """A band narrower than its tiles must not allocate a tile below its padding.
+
+    The ListView allocates the previous rows once more between a resize and the
+    idle re-chunk. Squeezing the overflowing tiles to zero width made GTK
+    allocate their padded children with negative sizes (``GtkImage ... with
+    width -14``); the band now clips them at their design width instead.
+    """
+    import gi
+
+    gi.require_version("GLib", "2.0")
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import GLib, Gtk
+
+    from volna.views.icons import TileBand, _make_tile
+
+    criticals: list[str] = []
+
+    def on_log(_domain: str, _level: int, message: str, _data) -> None:
+        criticals.append(message)
+
+    handler = GLib.log_set_handler(
+        "Gtk",
+        GLib.LogLevelFlags.LEVEL_WARNING | GLib.LogLevelFlags.LEVEL_CRITICAL,
+        on_log,
+        None,
+    )
+    try:
+        with _project_theme():
+            band = TileBand(tile_width=_TILE_MIN)
+            for _ in range(2):
+                band.append(_make_tile())
+
+            window = Gtk.Window()
+            window.set_default_size(100, 200)
+            window.set_child(band)
+            window.present()
+            _pump(0.4)
+            window.destroy()
+            _pump(0.1)
+    finally:
+        GLib.log_remove_handler("Gtk", handler)
+
+    assert criticals == []
+
+
 # -- activation and scroll ----------------------------------------------------
 
 

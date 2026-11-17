@@ -10,11 +10,11 @@ gi.require_version("Gtk", "4.0")
 
 from gi.repository import Gio, GObject, Gtk, Pango  # noqa: E402
 
-from ..display import ViewMode  # noqa: E402
+from ..display import GroupAction, ViewMode  # noqa: E402
 from ..glyph import icon_path  # noqa: E402
 from ..size import px  # noqa: E402
 from .base import ListingView, Section  # noqa: E402
-from .group_header import count_label, title_label  # noqa: E402
+from .group_header import GroupHeader  # noqa: E402
 from .item import ListingItem  # noqa: E402
 
 # One cell of a group strip; every column cell carries it so the 28 px row
@@ -27,15 +27,34 @@ class GroupRow(GObject.Object):
 
     Group rows share the heterogeneous model with :class:`ListingItem` rows:
     one ColumnView keeps its sticky column header and shared column widths.
-    ``count`` is the number of items rendered under the caption.
+    ``count`` is the number of items under the caption (visible items only:
+    a collapsed group renders its caption with the full count and nothing
+    else — design/grouping.md D13).
     """
 
     __gtype_name__ = "VolnaGroupRow"
 
-    def __init__(self, label: str, count: int) -> None:
+    def __init__(
+        self,
+        key: str,
+        label: str,
+        count: int,
+        collapsed: bool,
+        *,
+        others_collapsible: bool = True,
+        any_expanded: bool = True,
+        any_collapsed: bool = False,
+    ) -> None:
         super().__init__()
+        self.key = key
         self.label = label
         self.count = count
+        self.collapsed = collapsed
+        # Menu sensitivity is a property of the whole group set (D14); the tab
+        # computes it once per render and hands it to every caption row.
+        self.others_collapsible = others_collapsible
+        self.any_expanded = any_expanded
+        self.any_collapsed = any_collapsed
 
 
 class _NameCell(Gtk.Box):
@@ -70,36 +89,52 @@ class _NameCell(Gtk.Box):
         self._entry.append(self.picture)
         self._entry.append(self.text)
 
+        self._header: GroupHeader | None = None
         self._group = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=px(8))
         self._group.add_css_class("volna-dt-group-content")
         self._group.set_halign(Gtk.Align.START)
         self._group.set_valign(Gtk.Align.CENTER)
 
-        self._title = title_label("")
-        self._count = count_label(0)
-
-        self._group.append(self._title)
-        self._group.append(self._count)
         self._group.set_visible(False)
 
         self.append(self._entry)
         self.append(self._group)
 
-    def bind(self, row: ListingItem | GroupRow) -> None:
+    def bind(
+        self,
+        row: ListingItem | GroupRow,
+        *,
+        on_group_action: Callable[[str, GroupAction], None],
+    ) -> None:
         """Fill the cell for ``row``, switching between the two layouts."""
         if isinstance(row, GroupRow):
-            self._show_group(row)
+            self._show_group(row, on_group_action)
             return
 
         self._show_entry(row)
 
-    def _show_group(self, row: GroupRow) -> None:
+    def _show_group(
+        self,
+        row: GroupRow,
+        on_group_action: Callable[[str, GroupAction], None],
+    ) -> None:
         self.add_css_class(_GROUP_CELL)
-        self._title.set_text(row.label)
-        self._count.set_text(str(row.count))
-        # Recycle safety: the hidden entry branch must not keep its old text.
-        self.text.set_text("")
+        # A fresh header per bind: a recycled one keeps its key and menu state,
+        # and rebuilding a small widget is cheaper than key bookkeeping here.
+        if self._header is not None:
+            self._group.remove(self._header)
 
+        header = GroupHeader(row.key)
+        header.set_caption(row.label, row.count)
+        header.set_collapsed(row.collapsed)
+        header.set_action(on_group_action)
+        header.set_menu_state(
+            others_collapsible=row.others_collapsible,
+            any_expanded=row.any_expanded,
+            any_collapsed=row.any_collapsed,
+        )
+        self._group.append(header)
+        self._header = header
         self._group.set_visible(True)
         self._entry.set_visible(False)
 
@@ -109,10 +144,8 @@ class _NameCell(Gtk.Box):
         # The icon is the only type cue in the table, so give it a name for AT.
         self.picture.update_property([Gtk.AccessibleProperty.LABEL], [row.icon_label])
         self.text.set_text(row.name)
-        # Recycle safety: the hidden group branch must not keep its old caption.
-        self._title.set_text("")
-        self._count.set_text("")
-
+        # Recycle safety: the caption widget is rebuilt per group row, so there
+        # is no stale caption to clear.
         self._entry.set_visible(True)
         self._group.set_visible(False)
 
@@ -122,8 +155,13 @@ class DetailsView(ListingView):
 
     mode = ViewMode.DETAILS
 
-    def __init__(self, *, on_activate: Callable[[ListingItem], None]) -> None:
-        super().__init__(on_activate=on_activate)
+    def __init__(
+        self,
+        *,
+        on_activate: Callable[[ListingItem], None],
+        on_group_action: Callable[[str, GroupAction], None] | None = None,
+    ) -> None:
+        super().__init__(on_activate=on_activate, on_group_action=on_group_action)
         self.store = Gio.ListStore.new(GObject.Object)
         selection = Gtk.NoSelection(model=self.store)
         self._column_view = Gtk.ColumnView(model=selection)
@@ -143,10 +181,24 @@ class DetailsView(ListingView):
         return self._scroller
 
     def render(self, sections: Sequence[Section]) -> None:
+        self._read_menu_state(sections)
         rows: list[ListingItem | GroupRow] = []
         for section in sections:
             if section.header is not None:
-                rows.append(GroupRow(section.header, len(section.items)))
+                rows.append(
+                    GroupRow(
+                        section.key or "",
+                        section.header,
+                        len(section.items),
+                        section.collapsed,
+                        others_collapsible=self._others_collapsible,
+                        any_expanded=self._any_expanded,
+                        any_collapsed=self._any_collapsed,
+                    )
+                )
+                if section.collapsed:
+                    continue
+
             rows.extend(section.items)
 
         self.store.splice(0, self.store.get_n_items(), rows)
@@ -159,7 +211,7 @@ class DetailsView(ListingView):
     def _add_name_column(self, title: str) -> None:
         factory = Gtk.SignalListItemFactory()
         factory.connect("setup", _setup_name)
-        factory.connect("bind", _bind_name)
+        factory.connect("bind", self._bind_name_row)
         column = Gtk.ColumnViewColumn.new(title, factory)
         column.set_expand(True)
         self._column_view.append_column(column)
@@ -187,6 +239,11 @@ class DetailsView(ListingView):
 
         self._on_activate(row)
 
+    def _bind_name_row(
+        self, _factory: Gtk.SignalListItemFactory, item: Gtk.ListItem
+    ) -> None:
+        item.get_child().bind(item.get_item(), on_group_action=self._on_group_action)
+
 
 def _setup_name(
     _factory: Gtk.SignalListItemFactory,
@@ -194,12 +251,10 @@ def _setup_name(
 ) -> None:
     item.set_child(_NameCell())
 
-
-def _bind_name(
-    _factory: Gtk.SignalListItemFactory,
-    item: Gtk.ListItem,
-) -> None:
-    item.get_child().bind(item.get_item())
+    def _bind_name_row(
+        self, _factory: Gtk.SignalListItemFactory, item: Gtk.ListItem
+    ) -> None:
+        item.get_child().bind(item.get_item(), on_group_action=self._on_group_action)
 
 
 def _setup_numeric(

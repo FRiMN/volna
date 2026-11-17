@@ -10,6 +10,7 @@ see design/grouping.md D1–D2.
 from __future__ import annotations
 
 import time
+from enum import StrEnum
 
 from ..core import Group, GroupBucket
 
@@ -42,3 +43,24 @@ def group_label(group: Group) -> str:
         return _WEEKDAYS[time.localtime(group.day).tm_wday]
 
     return _BUCKET_LABELS[group.bucket]
+
+
+class GroupAction(StrEnum):
+    """What a group header interaction asks the tab to do (design/grouping.md D13)."""
+
+    TOGGLE = "toggle"
+    COLLAPSE_OTHERS = "collapse-others"
+    COLLAPSE_ALL = "collapse-all"
+    EXPAND_ALL = "expand-all"
+
+
+def group_key(group: Group) -> str:
+    """Stable identity of a date group within a session (design/grouping.md D12).
+
+    Weekday groups key by their local date, so a collapsed «Среда» stays
+    collapsed while the session runs; the coarse buckets key by themselves.
+    """
+    if group.bucket is GroupBucket.THIS_WEEK and group.day is not None:
+        return f"week:{time.strftime('%Y-%m-%d', time.localtime(group.day))}"
+
+    return group.bucket.value

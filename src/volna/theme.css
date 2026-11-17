@@ -1074,3 +1074,29 @@ popover.volna-view-popover > contents {
 .volna-size-wide .volna-icons-band .volna-icons-tile {
   margin: 0 0 8px 0;
 }
+
+/* ---- group collapse (design/grouping.md §12) ------------------------ */
+/* Chevron button in an interactive group header: focus ring from the
+   toolkit, rotation shows the state (collapsed = pointing right). */
+.volna-group-chevron {
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0 2px;
+  margin: 0;
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+.volna-group-chevron:hover:not(:disabled) {
+  background-color: #393b40;
+}
+
+.volna-group-chevron > * {
+  transition: transform 120ms ease;
+}
+
+.volna-group-collapsed .volna-group-chevron > * {
+  transform: rotate(-90deg);
+}

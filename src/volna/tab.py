@@ -18,11 +18,14 @@ from gi.repository import GLib, Gtk
 from .controller import DirectoryController
 from .core import DirModel, Entry, Event, ScanState
 from .display import (
+    COLLAPSE_MODES,
     DEFAULT_CAPABILITIES,
+    GroupAction,
     Grouping,
     ViewCapabilities,
     ViewMode,
     ViewSettings,
+    group_key,
     group_label,
 )
 from .history import NavigationHistory
@@ -61,7 +64,10 @@ class DirectoryTab:
 
         # One view per available mode; the stack shows exactly one of them.
         self._views: dict[ViewMode, ListingView] = {
-            mode: factory(on_activate=self._on_item_activated)
+            mode: factory(
+                on_activate=self._on_item_activated,
+                on_group_action=self._on_group_action,
+            )
             for mode, factory in VIEWS_BY_MODE.items()
             if mode in capabilities.modes
         }
@@ -77,6 +83,9 @@ class DirectoryTab:
         self._loaded = False
         self._closed = False
         self._refresh_scheduled = False
+        # Collapsed date groups, by key (design/grouping.md D11): a session
+        # state of this tab, not a stored display setting.
+        self._collapsed_groups: set[str] = set()
 
         self.model.subscribe(Event.ITEM_BATCH, self._schedule_refresh)
         self.model.subscribe(Event.ORDER_CHANGED, self._schedule_refresh)
@@ -184,6 +193,8 @@ class DirectoryTab:
 
     def _load(self, path: Path) -> None:
         self.path = path
+        # Collapsed groups belong to the listing just left (D11).
+        self._collapsed_groups.clear()
         self.reload()
         self._active_view.reset_scroll()
         self._on_navigate(self)
@@ -227,19 +238,47 @@ class DirectoryTab:
 
         Grouping is a display policy over the loaded model, so this never
         touches the scanner (design/grouping.md D3, D8): the model already has
-        the entries and their order.
+        the entries and their order. Collapse applies only in the modes that
+        support it (§12): other modes get their headers with ``collapsed=False``.
         """
         if self._settings.grouping is Grouping.NONE:
             items = tuple(self._item(entry) for entry in self.model.entries())
             return (Section(items=items),)
 
+        collapsible = self._settings.view_mode in COLLAPSE_MODES
         return tuple(
             Section(
                 items=tuple(self._item(entry) for entry in group.entries),
                 header=group_label(group),
+                key=group_key(group),
+                collapsed=(collapsible and group_key(group) in self._collapsed_groups),
             )
             for group in self.model.groups()
         )
+
+    def _on_group_action(self, key: str, action: GroupAction) -> None:
+        """Apply a group-header interaction (design/grouping.md D14)."""
+        if self._closed or self._settings.view_mode not in COLLAPSE_MODES:
+            return
+
+        keys = self._group_keys()
+        if action is GroupAction.TOGGLE:
+            self._collapsed_groups ^= {key}
+        elif action is GroupAction.COLLAPSE_OTHERS:
+            self._collapsed_groups = keys - {key}
+        elif action is GroupAction.COLLAPSE_ALL:
+            self._collapsed_groups = set(keys)
+        elif action is GroupAction.EXPAND_ALL:
+            self._collapsed_groups.clear()
+
+        self._schedule_refresh()
+
+    def _group_keys(self) -> set[str]:
+        """Keys of the currently loaded groups; empty for a stale listing."""
+        if self._settings.grouping is not Grouping.DATE:
+            return set()
+
+        return {group_key(group) for group in self.model.groups()}
 
     @staticmethod
     def _item(entry: Entry) -> ListingItem:

@@ -20,11 +20,11 @@ gi.require_version("Graphene", "1.0")
 
 from gi.repository import Gio, GLib, GObject, Graphene, Gsk, Gtk, Pango  # noqa: E402
 
-from ..display import ViewMode  # noqa: E402
+from ..display import GroupAction, ViewMode  # noqa: E402
 from ..glyph import icon_path  # noqa: E402
 from ..size import px  # noqa: E402
 from .base import ListingView, Section  # noqa: E402
-from .group_header import header_box  # noqa: E402
+from .group_header import GroupHeader  # noqa: E402
 from .item import ListingItem  # noqa: E402
 
 # Tile icon from the mockup at the default zoom: ``--tile-icon`` = 60 base px,
@@ -55,10 +55,12 @@ class HeaderRow(IconsRow):
 
     __gtype_name__ = "VolnaIconsHeaderRow"
 
-    def __init__(self, label: str, count: int) -> None:
+    def __init__(self, key: str, label: str, count: int, collapsed: bool) -> None:
         super().__init__()
+        self.key = key
         self.label = label
         self.count = count
+        self.collapsed = collapsed
         self.position = 0
 
 
@@ -136,8 +138,13 @@ class IconsView(ListingView):
 
     mode = ViewMode.ICONS
 
-    def __init__(self, *, on_activate: Callable[[ListingItem], None]) -> None:
-        super().__init__(on_activate=on_activate)
+    def __init__(
+        self,
+        *,
+        on_activate: Callable[[ListingItem], None],
+        on_group_action: Callable[[str, GroupAction], None] | None = None,
+    ) -> None:
+        super().__init__(on_activate=on_activate, on_group_action=on_group_action)
 
         self._grid_store = Gio.ListStore.new(ListingItem)
         grid_factory = Gtk.SignalListItemFactory()
@@ -183,6 +190,7 @@ class IconsView(ListingView):
 
     def render(self, sections: Sequence[Section]) -> None:
         self._sections = tuple(sections)
+        self._read_menu_state(sections)
 
         if any(section.header is not None for section in sections):
             self._render_grouped()
@@ -247,7 +255,19 @@ class IconsView(ListingView):
             if not section.items:
                 continue
 
-            rows.append(HeaderRow(section.header or "", len(section.items)))
+            rows.append(
+                HeaderRow(
+                    section.key or "",
+                    section.header or "",
+                    len(section.items),
+                    section.collapsed,
+                )
+            )
+            if section.collapsed:
+                # A collapsed group is its caption row only (design/grouping.md
+                # D13); the count still says what is inside.
+                continue
+
             for start in range(0, len(section.items), self._columns):
                 band = section.items[start : start + self._columns]
                 rows.append(TileRow(band))
@@ -272,10 +292,20 @@ class IconsView(ListingView):
         box.icon_row = row
 
         if isinstance(row, HeaderRow):
-            caption = header_box(row.label, row.count)
-            caption.add_css_class("volna-icons-head")
-            caption.set_hexpand(True)
-            box.append(caption)
+            # A fresh header per bind: a recycled one keeps its key and menu
+            # state, and rebuilding a small widget is cheaper than key
+            # bookkeeping here.
+            header = GroupHeader(row.key)
+            header.set_caption(row.label, row.count)
+            header.set_collapsed(row.collapsed)
+            header.set_action(self._on_group_action)
+            header.set_menu_state(
+                others_collapsible=self._others_collapsible,
+                any_expanded=self._any_expanded,
+                any_collapsed=self._any_collapsed,
+            )
+            header.add_css_class("volna-icons-head")
+            box.append(header)
             return
 
         # Fixed-width tiles along the row: a short band must not stretch two

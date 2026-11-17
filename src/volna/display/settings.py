@@ -41,6 +41,10 @@ MODE_ORDER: tuple[ViewMode, ...] = (
     ViewMode.DETAILS,
 )
 
+# Modes whose group headers collapse (design/grouping.md §12, owner decision
+# 2026-11-17): «Столбцы» group by whole columns and keep static captions.
+COLLAPSE_MODES: frozenset[ViewMode] = frozenset({ViewMode.DETAILS, ViewMode.ICONS})
+
 
 class Grouping(StrEnum):
     """How the listing is split into date groups (panel radio group)."""

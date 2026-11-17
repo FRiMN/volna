@@ -15,7 +15,7 @@ gi.require_version("Gtk", "4.0")
 
 from gi.repository import Gio, GObject, Gtk, Pango  # noqa: E402
 
-from ..display import ViewMode  # noqa: E402
+from ..display import GroupAction, ViewMode  # noqa: E402
 from ..glyph import icon_path  # noqa: E402
 from ..size import px  # noqa: E402
 from .base import ListingView, Section  # noqa: E402
@@ -62,8 +62,16 @@ class ColumnsView(ListingView):
 
     mode = ViewMode.COLUMNS
 
-    def __init__(self, *, on_activate: Callable[[ListingItem], None]) -> None:
-        super().__init__(on_activate=on_activate)
+    def __init__(
+        self,
+        *,
+        on_activate: Callable[[ListingItem], None],
+        on_group_action: Callable[[str, GroupAction], None] | None = None,
+    ) -> None:
+        # The callback is stored contract-wide but unused here: «Столбцы» keep
+        # static captions — collapsing groups is a «Подробности»/«Значки»
+        # feature (design/grouping.md §12, owner decision 2026-11-17).
+        super().__init__(on_activate=on_activate, on_group_action=on_group_action)
         self.store = Gio.ListStore.new(ColumnGroup)
 
         factory = Gtk.SignalListItemFactory()

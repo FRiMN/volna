@@ -13,6 +13,8 @@ display is set up by the session fixture (see ``tests/test_view_modes.py``).
 
 from __future__ import annotations
 
+import subprocess
+import sys
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -499,3 +501,161 @@ def test_grouped_render_before_the_window_is_shown_still_chunks(gtk_display) -> 
         assert len(_bands(view)[0].items) > 1
     finally:
         window.destroy()
+
+
+# -- teardown -----------------------------------------------------------------
+
+# A band parents its tiles by hand (``set_parent``); GtkWidget releases no
+# children of a custom widget, so a disposed band has to unparent them itself.
+# When it does not, GTK finalizes it "with children left" — the warning the user
+# sees on every group toggle — and leaks the tiles. The warning is written to
+# stderr by C, so the scenarios run in a child interpreter: PyGObject does not
+# dispatch GObject's ``dispose`` to Python and offers no practical in-process
+# hook.
+_LIFECYCLE_SCRIPT = """
+import gc
+import time
+import weakref
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+from gi.repository import GLib, Gtk
+
+Gtk.init()
+
+from volna.size import px
+from volna.views.base import Section
+from volna.views.icons import IconsView, TileBand, TileRow
+from volna.views.item import ListingItem
+
+
+def pump(seconds=0.3):
+    context = GLib.MainContext.default()
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        while context.pending():
+            context.iteration(False)
+        time.sleep(0.01)
+
+
+def pump_until(condition, timeout=5.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if condition():
+            return True
+        pump(0.02)
+
+    return False
+
+
+def items(prefix, count):
+    return tuple(
+        ListingItem(
+            f"{prefix}{index}.txt",
+            f"/tmp/{prefix}{index}.txt",
+            "1 КиБ",
+            "01.01.2026 00:00",
+            False,
+        )
+        for index in range(count)
+    )
+
+
+def sections(*, collapsed):
+    return (
+        Section(
+            items=items("today", 8),
+            header="Сегодня",
+            key="today",
+            collapsed=collapsed,
+        ),
+        Section(items=items("yesterday", 5), header="Вчера", key="yesterday"),
+    )
+
+
+def materialised_bands():
+    \"\"\"Bands on screen that still show their tiles.\"\"\"
+    count = 0
+    child = view._list.get_first_child()
+    while child is not None:
+        box = child.get_first_child()
+        row = getattr(box, "icon_row", None)
+        band = box.get_first_child() if box is not None else None
+        if child.get_mapped() and isinstance(row, TileRow):
+            if band is not None and band.get_first_child() is not None:
+                count += 1
+
+        child = child.get_next_sibling()
+
+    return count
+
+
+class CountedTile(Gtk.Box):
+    \"\"\"A tile with a Python-subclass wrapper, kept alive with its GObject.\"\"\"
+
+    __gtype_name__ = "VolnaCountedTile"
+
+
+# 1. A band discarded without ever being rooted: GtkWidget unroots a widget only
+#    if it had a root, so unroot alone would never release such a band's tiles.
+orphan = TileBand(tile_width=px(150))
+tiles = [CountedTile(), CountedTile()]
+gone = [weakref.ref(tile) for tile in tiles]
+for tile in tiles:
+    orphan.append(tile)
+
+del tile, tiles, orphan
+gc.collect()
+assert all(ref() is None for ref in gone), "the never-rooted band leaked its tiles"
+print("ORPHAN TORN DOWN", flush=True)
+
+# 2. What a group toggle does: the tab renders the sections again, the rows are
+#    rebuilt and the bands of the previous render are discarded.
+window = Gtk.Window()
+window.set_default_size(900, 900)
+view = IconsView(on_activate=lambda item: None)
+window.set_child(view.widget)
+window.present()
+pump(0.4)
+
+view.render(sections(collapsed=False))
+assert pump_until(lambda: materialised_bands() > 0), "no tile bands on screen"
+
+for _ in range(3):
+    view.render(sections(collapsed=True))
+    pump(0.3)
+    view.render(sections(collapsed=False))
+    pump(0.3)
+
+assert pump_until(lambda: materialised_bands() > 0), "the toggles lost the bands"
+print("TOGGLES DONE", flush=True)
+
+window.destroy()
+pump(0.4)
+view = None
+gc.collect()
+pump(0.3)
+"""
+
+
+def test_discarded_bands_leave_no_children_behind(gtk_display) -> None:
+    """A discarded band must release its hand-parented tiles.
+
+    Both paths are covered: a group toggle discards the bands of the rebuilt
+    rows, and a band can be dropped before it is ever rooted (GtkWidget then
+    never unroots it). Either way, GTK finalizes a band "with children left" —
+    the warning reported on every group toggle — and the tiles of every
+    discarded row stay alive.
+    """
+    result = subprocess.run(
+        [sys.executable, "-c", _LIFECYCLE_SCRIPT],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "ORPHAN TORN DOWN" in result.stdout, result.stderr
+    assert "TOGGLES DONE" in result.stdout, result.stderr
+    assert "still has children left" not in result.stderr, result.stderr

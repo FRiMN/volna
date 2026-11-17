@@ -83,6 +83,13 @@ class TileBand(Gtk.Widget):
     the window could never shrink (no re-chunk). This widget therefore reports
     a zero minimum width and allocates its tiles by hand: the natural width is
     the design's tile width times the tiles in the row (design/grouping.md D6).
+
+    The tiles are parented by hand, so the band releases them itself: when it
+    leaves a rooted tree (:meth:`do_unroot`, the common path) and when GTK
+    disposes it (:meth:`_on_destroy`, the backstop for a band that was never
+    rooted). GTK releases no children of a custom widget, and a leftover child
+    makes it warn on finalization while leaking the tile. The view builds a
+    fresh band on every bind, so a released band is not re-used.
     """
 
     __gtype_name__ = "VolnaTileBand"
@@ -93,11 +100,22 @@ class TileBand(Gtk.Widget):
         self._tile_width = tile_width
         self.set_halign(Gtk.Align.START)
         self.set_valign(Gtk.Align.START)
+        self.connect("destroy", self._on_destroy)
 
     def append(self, tile: Gtk.Widget) -> None:
         tile.set_parent(self)
         self._tiles.append(tile)
         self.queue_resize()
+
+    def release(self) -> None:
+        """Unparent every tile; a released band must not be re-used afterwards."""
+        child = self.get_first_child()
+        while child is not None:
+            following = child.get_next_sibling()
+            child.unparent()
+            child = following
+
+        self._tiles.clear()
 
     def set_tile_width(self, tile_width: int) -> None:
         if tile_width == self._tile_width:
@@ -105,6 +123,23 @@ class TileBand(Gtk.Widget):
 
         self._tile_width = tile_width
         self.queue_resize()
+
+    def do_unroot(self) -> None:
+        # The prompt path: the view takes the band out of a rooted tree as soon
+        # as the ListView discards its row, and the tiles must go with it then,
+        # not at the next Python cycle-GC pass (the destroy handler below holds
+        # the band in a reference cycle until then).
+        self.release()
+        Gtk.Widget.do_unroot(self)
+
+    def _on_destroy(self, *_args: object) -> None:
+        # The guaranteed path: GTK emits destroy from gtk_widget_dispose for
+        # every widget, including one that was never rooted (unroot only comes
+        # to rooted widgets) or is disposed during teardown. Children parented
+        # by hand have no container to release them, and GObject's ``dispose``
+        # — the usual place for that — cannot be overridden from Python; a band
+        # finalized with a leftover child makes GTK warn and leaks the tile.
+        self.release()
 
     def do_measure(self, orientation: int, for_size: int):
         count = len(self._tiles)

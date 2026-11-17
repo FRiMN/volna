@@ -189,7 +189,7 @@ def test_header_menu_opens_with_state_sensitive_items(gtk_display) -> None:
     header.set_menu_state(
         others_collapsible=True, any_expanded=False, any_collapsed=True
     )
-    header._open_menu()
+    header.open_menu()
     _pump(0.1)
     assert header._menu.get_visible()
     assert header._collapse_others.get_sensitive()
@@ -204,7 +204,7 @@ def test_header_menu_opens_with_state_sensitive_items(gtk_display) -> None:
     header.set_menu_state(
         others_collapsible=False, any_expanded=True, any_collapsed=False
     )
-    header._open_menu()
+    header.open_menu()
     _pump(0.1)
     assert not header._collapse_others.get_sensitive(), "a single group"
     assert header._collapse_all.get_sensitive(), "everything is expanded"
@@ -469,7 +469,7 @@ def test_window_menu_state_follows_the_whole_group_set(
         )
 
         header = first_header()
-        header._open_menu()
+        header.open_menu()
         _pump(0.2)
         try:
             assert header._collapse_others.get_sensitive(), "more than one group"
@@ -485,11 +485,57 @@ def test_window_menu_state_follows_the_whole_group_set(
         assert _pump_until(lambda: first_header()._collapsed)
 
         header = first_header()
-        header._open_menu()
+        header.open_menu()
         _pump(0.2)
         try:
             assert not header._collapse_all.get_sensitive(), "everything is collapsed"
             assert header._expand_all.get_sensitive(), "there is something to expand"
+        finally:
+            header._menu.popdown()
+            _pump(0.1)
+    finally:
+        _close(window)
+
+
+def test_details_strip_opens_the_menu_from_any_cell(
+    gtk_display, tmp_path: Path
+) -> None:
+    """A group strip spans the table: right click works outside the name cell."""
+    from gi.repository import Gtk
+
+    from volna.views.details import _NumericCell
+
+    _make_listing(tmp_path)
+    window = _window(tmp_path)
+    try:
+        window.present()
+        tab = window._active_tab
+        assert _pump_until(lambda: tab.model.state is ScanState.READY)
+        _pump(0.4)
+        assert _pump_until(
+            lambda: len(_by_class(tab._active_view.widget, "volna-group-chevron")) >= 3
+        )
+
+        view = tab._active_view
+        column_view = view._column_view
+
+        def strip_point() -> tuple[int, int] | None:
+            """A point over a number cell (not the name cell) of a group strip."""
+            for y in range(0, column_view.get_height(), 4):
+                for x in range(0, column_view.get_width(), 24):
+                    node = column_view.pick(x, y, Gtk.PickFlags.DEFAULT)
+                    if isinstance(node, _NumericCell) and node.group_key == "today":
+                        return x, y
+            return None
+
+        assert _pump_until(lambda: strip_point() is not None)
+        x, y = strip_point()
+        header = view._headers["today"]
+
+        assert view._on_strip_pressed(Gtk.GestureClick(), 1, float(x), float(y))
+        _pump(0.2)
+        try:
+            assert header._menu.get_visible(), "the strip's header menu opened"
         finally:
             header._menu.popdown()
             _pump(0.1)

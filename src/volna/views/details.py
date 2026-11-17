@@ -105,10 +105,11 @@ class _NameCell(Gtk.Box):
         row: ListingItem | GroupRow,
         *,
         on_group_action: Callable[[str, GroupAction], None],
+        on_header: Callable[[str, GroupHeader], None],
     ) -> None:
         """Fill the cell for ``row``, switching between the two layouts."""
         if isinstance(row, GroupRow):
-            self._show_group(row, on_group_action)
+            self._show_group(row, on_group_action, on_header)
             return
 
         self._show_entry(row)
@@ -117,6 +118,7 @@ class _NameCell(Gtk.Box):
         self,
         row: GroupRow,
         on_group_action: Callable[[str, GroupAction], None],
+        on_header: Callable[[str, GroupHeader], None],
     ) -> None:
         self.add_css_class(_GROUP_CELL)
         # A fresh header per bind: a recycled one keeps its key and menu state,
@@ -133,6 +135,7 @@ class _NameCell(Gtk.Box):
             any_expanded=row.any_expanded,
             any_collapsed=row.any_collapsed,
         )
+        on_header(row.key, header)
         self._group.append(header)
         self._header = header
         self._group.set_visible(True)
@@ -172,6 +175,17 @@ class DetailsView(ListingView):
         self._add_name_column("Имя")
         self._add_numeric_column("Размер", lambda row: row.size_text, width=px(96))
         self._add_numeric_column("Дата", lambda row: row.date_text, width=px(168))
+
+        # A group strip spans all three columns, but only the name cell hosts the
+        # header widget. A capture-phase gesture on the view finds the strip row
+        # under the pointer, so a right click anywhere on it opens the same menu
+        # (design/grouping.md D14).
+        self._headers: dict[str, GroupHeader] = {}
+        strip_click = Gtk.GestureClick()
+        strip_click.set_button(3)
+        strip_click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        strip_click.connect("pressed", self._on_strip_pressed)
+        self._column_view.add_controller(strip_click)
 
         self._scroller = Gtk.ScrolledWindow(vexpand=True)
         self._scroller.set_child(self._column_view)
@@ -242,7 +256,40 @@ class DetailsView(ListingView):
     def _bind_name_row(
         self, _factory: Gtk.SignalListItemFactory, item: Gtk.ListItem
     ) -> None:
-        item.get_child().bind(item.get_item(), on_group_action=self._on_group_action)
+        item.get_child().bind(
+            item.get_item(),
+            on_group_action=self._on_group_action,
+            on_header=self._remember_header,
+        )
+
+    def _remember_header(self, key: str, header: GroupHeader) -> None:
+        self._headers[key] = header
+
+    def _on_strip_pressed(
+        self, gesture: Gtk.GestureClick, _n_press: int, x: float, y: float
+    ) -> bool:
+        """Open a group's menu from any cell of its strip; stop the propagation.
+
+        The column view exposes no row-under-pointer query, so the cell is
+        picked and walked up: a strip cell either is the header itself or
+        carries the group key (``_NumericCell``).
+        """
+        node = self._column_view.pick(int(x), int(y), Gtk.PickFlags.DEFAULT)
+        while node is not None and node is not self._column_view:
+            header: GroupHeader | None = None
+            if isinstance(node, GroupHeader):
+                header = node
+            elif isinstance(node, _NumericCell) and node.group_key is not None:
+                header = self._headers.get(node.group_key)
+
+            if header is not None:
+                gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+                header.open_menu()
+                return True
+
+            node = node.get_parent()
+
+        return False
 
 
 def _setup_name(
@@ -251,20 +298,43 @@ def _setup_name(
 ) -> None:
     item.set_child(_NameCell())
 
-    def _bind_name_row(
-        self, _factory: Gtk.SignalListItemFactory, item: Gtk.ListItem
+
+class _NumericCell(Gtk.Label):
+    """A size/date cell; on a group strip it is empty but still interactive.
+
+    It keeps the group key so a right click anywhere on the strip finds the
+    caption's menu (design/grouping.md D14).
+    """
+
+    __gtype_name__ = "VolnaNumericCell"
+
+    def __init__(self) -> None:
+        super().__init__(xalign=1)
+        self.set_ellipsize(Pango.EllipsizeMode.END)
+        self.add_css_class("volna-dt-num")
+        self.group_key: str | None = None
+
+    def bind(
+        self, row: ListingItem | GroupRow, getter: Callable[[ListingItem], str]
     ) -> None:
-        item.get_child().bind(item.get_item(), on_group_action=self._on_group_action)
+        if isinstance(row, GroupRow):
+            # An empty cell that still joins the strip: same background and
+            # height, and a right click target.
+            self.add_css_class(_GROUP_CELL)
+            self.group_key = row.key
+            self.set_text("")
+            return
+
+        self.remove_css_class(_GROUP_CELL)
+        self.group_key = None
+        self.set_text(getter(row))
 
 
 def _setup_numeric(
     _factory: Gtk.SignalListItemFactory,
     item: Gtk.ListItem,
 ) -> None:
-    widget = Gtk.Label(xalign=1)
-    widget.set_ellipsize(Pango.EllipsizeMode.END)
-    widget.add_css_class("volna-dt-num")
-    item.set_child(widget)
+    item.set_child(_NumericCell())
 
 
 def _bind_text(
@@ -272,13 +342,4 @@ def _bind_text(
     item: Gtk.ListItem,
     getter: Callable[[ListingItem], str],
 ) -> None:
-    row = item.get_item()
-    label: Gtk.Label = item.get_child()
-    if isinstance(row, GroupRow):
-        # An empty cell that still joins the strip: same background and height.
-        label.add_css_class(_GROUP_CELL)
-        label.set_text("")
-        return
-
-    label.remove_css_class(_GROUP_CELL)
-    label.set_text(getter(row))
+    item.get_child().bind(item.get_item(), getter)

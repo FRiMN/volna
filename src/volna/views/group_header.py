@@ -206,7 +206,7 @@ class GroupHeader(Gtk.Box):
         self._menu.popdown()
         self._on_group_action(self._key, action)
 
-    def _open_menu(self) -> None:
+    def open_menu(self) -> None:
         # «Свернуть остальные» has a target only with several groups;
         # «Свернуть все»/«Развернуть все» have one whenever anything is
         # respectively expanded/collapsed (D14).

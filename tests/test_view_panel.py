@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.util
+import re
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -815,3 +816,54 @@ def test_theme_stylesheet_has_a_view_panel_block() -> None:
         ".volna-density-compact .volna-dt-name",
     ):
         assert selector in css
+
+
+# -- effective colours (issue #3) --------------------------------------------
+
+# The card of the «Вид» panel, as the stylesheet spells it (#2b2d30).
+_PANEL_COLOUR = (0x2B, 0x2D, 0x30)
+
+
+def test_the_panel_is_one_solid_surface(panel, x11_pixels) -> None:
+    """The «Вид» panel is a single card of the panel colour (issue #3).
+
+    The panel scrolls its content, but it is not the listing: its scrolled
+    window stays transparent, so the card shows through it. The check reads
+    the pixels of the presented popover, so it sees the whole cascade and not
+    one line of the stylesheet.
+    """
+    harness = panel()
+    harness.open()
+    _pump(0.5)
+
+    native = harness.popover.get_native()
+    surface = native.get_surface() if native is not None else None
+    if surface is None:
+        pytest.skip("the popover has no surface yet")
+
+    colours = x11_pixels(surface)
+    dominant = colours.most_common(1)[0][0]
+
+    assert dominant == _PANEL_COLOUR, (
+        f"the panel is painted {_hex(dominant)}, not {_hex(_PANEL_COLOUR)}; "
+        f"the colours on the popover are {[_hex(c) for c, _ in colours.most_common(3)]}"
+    )
+
+
+def test_the_canvas_colour_is_scoped_to_the_listing() -> None:
+    """A bare ``scrolledwindow`` rule paints every scrolled window (issue #3).
+
+    The listing canvas belongs to the listing: without the scope the panel
+    repaints itself with the canvas colour (the rule reached the scrolled
+    window of the «Вид» panel).
+    """
+    css = _theme_css_path().read_text(encoding="utf-8")
+
+    assert not re.search(r"(?m)^\s*scrolledwindow\s*\{", css), (
+        "a bare `scrolledwindow` rule paints every scrolled window in the app"
+    )
+    assert ".volna-editor scrolledwindow" in css
+
+
+def _hex(colour: tuple[int, int, int]) -> str:
+    return f"#{colour[0]:02x}{colour[1]:02x}{colour[2]:02x}"

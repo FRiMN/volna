@@ -130,40 +130,42 @@ def _label_text(window: object) -> str:
     return labels[0].get_text()
 
 
-def _list_names(window: object) -> list[str]:
-    """Preset names the open inline list shows, in order."""
+def _menu_names(window: object) -> list[str]:
+    """Preset names the dropdown menu shows, in order."""
+    return [
+        label.get_text()
+        for label in _by_class(_section(window).widget(), "volna-preset-item-name")
+    ]
+
+
+def _menu_rows(window: object) -> list[object]:
     section = _section(window)
-    names = []
-    for item in _by_class(section.widget(), "volna-preset-item"):
-        buttons = _by_class(item, "volna-preset-apply")
-        if not buttons:
-            continue
-        rows = _by_class(buttons[0], "volna-preset-item-name")
-        names.append(rows[0].get_text() if rows else "")
-    return names
+    return [row for row in _by_class(section.widget(), "volna-preset-item")]
 
 
-def _expand_list(window: object) -> None:
-    if _section(window).list_open:
+def _open_menu(window: object) -> None:
+    section = _section(window)
+    if section.menu_open:
         return
 
-    select = _by_class(_section(window).widget(), "volna-preset-select")
-    assert len(select) == 1
-    select[0].emit("clicked")
-    _pump(0.05)
-    assert _section(window).list_open
+    section.open_menu()
+    _pump(0.15)
+    assert section.menu_open
+
+
+def _row(window: object, name: str) -> object:
+    """The menu row labelled ``name``."""
+    for row in _menu_rows(window):
+        labels = _by_class(row, "volna-preset-item-name")
+        if labels and labels[0].get_text() == name:
+            return row
+    raise AssertionError(f"preset {name!r} is not in the menu")
 
 
 def _apply(window: object, name: str) -> None:
-    for item in _by_class(_section(window).widget(), "volna-preset-item"):
-        apply = _by_class(item, "volna-preset-apply")
-        if not apply:
-            continue
-        if _by_class(apply[0], "volna-preset-item-name")[0].get_text() == name:
-            apply[0].emit("clicked")
-            _pump(0.1)
-            return
-    raise AssertionError(f"preset {name!r} is not in the list")
+    """Activate the menu row ``name`` the way a click does."""
+    _section(window)._list.emit("row-activated", _row(window, name))
+    _pump(0.1)
 
 
 def _settings(window: object) -> ViewSettings:
@@ -219,29 +221,38 @@ def test_the_field_says_manual_when_no_preset_matches() -> None:
 def test_the_list_shows_the_four_builtin_presets(window_factory) -> None:
     window = window_factory(Path("/"))
     _open_panel(window)
-    _expand_list(window)
+    _open_menu(window)
 
-    assert _list_names(window) == BUILTIN_NAMES
+    assert _menu_names(window) == BUILTIN_NAMES
 
 
-def test_the_trigger_opens_and_closes_the_list(window_factory) -> None:
+def test_the_field_is_the_menu_trigger(window_factory) -> None:
+    """One control opens the list: the field is a MenuButton, like the mockup."""
+    import gi
+
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import Gtk
+
     window = window_factory(Path("/"))
     _open_panel(window)
-    select = _by_class(_section(window).widget(), "volna-preset-select")[0]
+    section = _section(window)
+    select = _by_class(section.widget(), "volna-preset-select")
 
-    select.emit("clicked")
-    _pump(0.05)
-    assert _section(window).list_open
+    assert len(select) == 1
+    assert isinstance(select[0], Gtk.MenuButton)
+    assert select[0].get_popover() is section._popover
 
-    select.emit("clicked")
-    _pump(0.05)
-    assert not _section(window).list_open
+    _open_menu(window)
+    assert section.menu_open
+    section.close_menu()
+    _pump(0.15)
+    assert not section.menu_open
 
 
 def test_builtin_presets_have_no_rename_or_delete_actions(window_factory) -> None:
     window = window_factory(Path("/"))
     _open_panel(window)
-    _expand_list(window)
+    _open_menu(window)
 
     assert _by_class(_section(window).widget(), "volna-preset-act") == []
 
@@ -254,7 +265,7 @@ def test_applying_a_preset_writes_its_snapshot_into_the_active_tab(
 ) -> None:
     window = window_factory(Path("/"))
     _open_panel(window)
-    _expand_list(window)
+    _open_menu(window)
 
     _apply(window, "Крупные значки")
 
@@ -269,18 +280,18 @@ def test_applying_a_preset_writes_its_snapshot_into_the_active_tab(
 def test_applying_a_preset_closes_the_list(window_factory) -> None:
     window = window_factory(Path("/"))
     _open_panel(window)
-    _expand_list(window)
+    _open_menu(window)
 
     _apply(window, "Без группировки")
 
-    assert not _section(window).list_open
+    assert not _section(window).menu_open
     assert window._view_panel.popover.get_visible()
 
 
 def test_a_manual_change_switches_the_label_to_manual(window_factory) -> None:
     window = window_factory(Path("/"))
     _open_panel(window)
-    _expand_list(window)
+    _open_menu(window)
     _apply(window, "Плотный список")
     assert _label_text(window) == "Плотный список"
 
@@ -294,7 +305,7 @@ def test_a_manual_change_switches_the_label_to_manual(window_factory) -> None:
 def test_returning_to_the_preset_snapshot_names_it_again(window_factory) -> None:
     window = window_factory(Path("/"))
     _open_panel(window)
-    _expand_list(window)
+    _open_menu(window)
     _apply(window, "Плотный список")
 
     window._view_panel._on_change({"compact": False})
@@ -366,9 +377,9 @@ def test_a_saved_preset_is_offered_in_the_list(window_factory) -> None:
     _pump(0.1)
 
     _open_panel(window)
-    _expand_list(window)
+    _open_menu(window)
 
-    assert _list_names(window) == [*BUILTIN_NAMES, "Мой вид"]
+    assert _menu_names(window) == [*BUILTIN_NAMES, "Мой вид"]
 
 
 def test_save_is_disabled_for_an_empty_name(window_factory) -> None:
@@ -401,9 +412,9 @@ def test_saving_with_a_builtin_name_overrides_it_in_the_list(window_factory) -> 
     _pump(0.1)
 
     _open_panel(window)
-    _expand_list(window)
+    _open_menu(window)
 
-    assert _list_names(window) == BUILTIN_NAMES  # same slot, custom behind it
+    assert _menu_names(window) == BUILTIN_NAMES  # same slot, custom behind it
     assert window._presets.find(DEFAULT_PRESET_ID) is not None
     assert window._presets.find("dense-list") is None
 
@@ -431,18 +442,8 @@ def _saved_window(window_factory) -> object:
     _dialog_button(window._save_dialog, "Сохранить").emit("clicked")
     _pump(0.1)
     _open_panel(window)
-    _expand_list(window)
+    _open_menu(window)
     return window
-
-
-def _row(window: object, name: str) -> object:
-    for item in _by_class(_section(window).widget(), "volna-preset-item"):
-        apply = _by_class(item, "volna-preset-apply")
-        if not apply:
-            continue
-        if _by_class(apply[0], "volna-preset-item-name")[0].get_text() == name:
-            return item
-    raise AssertionError(f"preset {name!r} is not in the list")
 
 
 def _open_rename(window: object, name: str) -> object:
@@ -510,9 +511,9 @@ def test_rename_keeps_the_list_open_and_the_panel_visible(window_factory) -> Non
     _dialog_button(dialog, "Переименовать").emit("clicked")
     _pump(0.2)
 
-    assert _section(window).list_open
+    assert _section(window).menu_open
     assert window._view_panel.popover.get_visible()
-    assert "Снимки" in _list_names(window)
+    assert "Снимки" in _menu_names(window)
 
 
 def test_rename_rejects_a_builtin_name_and_keeps_the_dialog_open(
@@ -540,7 +541,7 @@ def test_rename_rejects_another_custom_name(window_factory) -> None:
     _dialog_button(window._save_dialog, "Сохранить").emit("clicked")
     _pump(0.1)
     _open_panel(window)
-    _expand_list(window)
+    _open_menu(window)
 
     dialog = _open_rename(window, "Фото")
     _entry(dialog).set_text("видео")
@@ -664,7 +665,7 @@ def test_deleting_an_override_restores_the_builtin(window_factory) -> None:
     _dialog_button(window._save_dialog, "Сохранить").emit("clicked")
     _pump(0.1)
     _open_panel(window)
-    _expand_list(window)
+    _open_menu(window)
     assert window._presets.find("dense-list") is None
 
     item = _by_class(_section(window).widget(), "volna-preset-item")[1]
@@ -756,7 +757,7 @@ def test_a_preloaded_custom_preset_matching_the_view_is_named(
 def test_grouping_and_sort_fields_travel_with_a_preset(window_factory) -> None:
     window = window_factory(Path("/"))
     _open_panel(window)
-    _expand_list(window)
+    _open_menu(window)
 
     _apply(window, "Без группировки")
 
@@ -889,7 +890,7 @@ def test_a_read_only_store_keeps_presets_in_memory_and_says_so(
 def test_applying_a_preset_does_not_rescan_the_directory(window_factory) -> None:
     window = window_factory(Path("/"))
     _open_panel(window)
-    _expand_list(window)
+    _open_menu(window)
     tab = window._active_tab
     assert _pump_until(lambda: tab.model.state.name == "READY")
 
@@ -901,7 +902,7 @@ def test_applying_a_preset_does_not_rescan_the_directory(window_factory) -> None
 def test_a_preset_applies_to_the_active_tab_only(window_factory) -> None:
     window = window_factory(Path("/"))
     _open_panel(window)
-    _expand_list(window)
+    _open_menu(window)
     first = window._active_tab
 
     second = window._open_tab(first.path)
@@ -915,22 +916,103 @@ def test_a_preset_applies_to_the_active_tab_only(window_factory) -> None:
     )
 
 
-def test_expanding_the_list_does_not_drop_the_accessible_state(
+def test_the_menu_opens_inside_the_panel_and_the_panel_stays_open(
     window_factory,
 ) -> None:
-    """The a11y EXPANDED state must reach GTK without a g_value warning."""
-    import warnings
-
+    """The dropdown is a child popover: the panel must not be dismissed by it."""
     window = window_factory(Path("/"))
     _open_panel(window)
-    select = _by_class(_section(window).widget(), "volna-preset-select")[0]
+    section = _section(window)
 
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        select.emit("clicked")
-        _pump(0.05)
-        select.emit("clicked")
-        _pump(0.05)
+    section.open_menu()
+    _pump(0.2)
 
-    messages = [str(item.message) for item in caught]
-    assert not [text for text in messages if "g_value" in text], messages
+    assert section.menu_open
+    assert window._view_panel.popover.get_visible()
+    section.close_menu()
+    _pump(0.2)
+    assert not section.menu_open
+    assert window._view_panel.popover.get_visible()
+
+
+# -- the dropdown itself ------------------------------------------------------
+
+
+def _twelve_presets(window: object) -> list[str]:
+    names = []
+    for index in range(1, 13):
+        name = f"Пресет {index:02d}"
+        window._presets.save(name, ViewSettings(compact=True))
+        names.append(name)
+    window._view_panel.sync()
+    return names
+
+
+def test_the_menu_lists_every_preset_without_a_height_cap(window_factory) -> None:
+    """The inline list was capped at 174 px and cut its last row in half."""
+    window = window_factory(Path("/"))
+    names = _twelve_presets(window)
+    _open_panel(window)
+    _open_menu(window)
+
+    assert _menu_names(window) == [*BUILTIN_NAMES, *names]
+
+
+def test_the_panel_does_not_grow_when_the_menu_opens(window_factory) -> None:
+    window = window_factory(Path("/"))
+    _twelve_presets(window)
+    _open_panel(window)
+    _pump(0.2)
+    closed = window._view_panel.popover.get_height()
+
+    _open_menu(window)
+    _pump(0.3)
+
+    assert window._view_panel.popover.get_height() == closed
+    assert window._view_panel.popover.get_visible()
+
+
+def test_a_row_action_does_not_apply_the_preset(window_factory) -> None:
+    """Measured on a real click: the action button consumes it, the row stays put."""
+    window = _saved_window(window_factory)
+    before = _settings(window)
+    _open_menu(window)
+
+    actions = _by_class(_row(window, "Фото"), "volna-preset-act")
+    assert len(actions) == 2
+    actions[0].emit("clicked")  # the pencil
+    _pump(0.2)
+
+    assert _settings(window) == before, "renaming must not apply the preset"
+    assert window._rename_dialog.is_open
+    assert _menu_names(window)  # rows survive
+
+
+def test_the_row_actions_open_the_rename_and_delete_dialogs(window_factory) -> None:
+    window = _saved_window(window_factory)
+    _open_menu(window)
+
+    actions = _by_class(_row(window, "Фото"), "volna-preset-act")
+    actions[1].emit("clicked")  # the bin
+    _pump(0.2)
+
+    assert window._delete_dialog.is_open
+    assert [preset.name for preset in window._presets.custom] == ["Фото"]
+
+
+def test_a_custom_preset_with_a_builtin_snapshot_is_named_by_itself(
+    window_factory,
+) -> None:
+    """The selected preset wins over an identical one earlier in the list."""
+    window = window_factory(Path("/"))
+    _open_panel(window)
+    _open_menu(window)
+
+    # «Плотный список» and a copy of it hold the same snapshot of settings.
+    _apply(window, "Плотный список")
+    window._presets.save("Моя копия", _settings(window))
+    window._view_panel.sync()
+    window.apply_preset(window._presets.custom[-1].id)
+    _pump(0.1)
+
+    assert _label_text(window) == "Моя копия"

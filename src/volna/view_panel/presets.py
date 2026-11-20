@@ -1,9 +1,15 @@
-"""«Пресеты» section of the View panel: select field, save button, inline list.
+"""«Пресеты» section of the View panel: select field, save button, dropdown list.
 
-The section owns only widgets and whether its list is expanded. Every rule
-(names, overrides, selection, deletion fallback) and every mutation goes
-through ``PresetActions``, which the window implements (design/spec/04 §2,
-05 §18); the row buttons open the window's dialogs for rename and delete.
+The field is a ``Gtk.MenuButton``: the preset list opens as a dropdown menu
+under it instead of growing the panel. A menu row keeps the design's anatomy
+(check, name, rename/delete for custom presets) and clicking a row's action does
+not select the preset — measured: the button consumes the press, the row stays
+inactive and the menu stays open.
+
+The section owns only widgets and whether the menu is open. Every rule (names,
+overrides, selection, deletion fallback) and every mutation goes through
+``PresetActions``, which the window implements (design/spec/04 §2, 05 §18, and
+design/view-panel.md §10.1 for the dropdown decision).
 """
 
 from __future__ import annotations
@@ -13,9 +19,8 @@ from typing import Protocol
 import gi
 
 gi.require_version("Gtk", "4.0")
-gi.require_version("Gdk", "4.0")
 
-from gi.repository import GLib, Gtk  # noqa: E402
+from gi.repository import Gtk  # noqa: E402
 
 from ..display.presets import Preset  # noqa: E402
 from ..glyph import icon  # noqa: E402
@@ -41,33 +46,39 @@ class PresetActions(Protocol):
 
     def open_delete_dialog(self, preset_id: str) -> None: ...
 
-    def notify(self, text: str) -> None:
-        """Show a short status note (the «bandNote» of the design)."""
-        ...
-
 
 class PresetsSection:
-    """Select field + save button + list; rebuilt from the window on each sync."""
+    """Select field + save button; the preset list is the field's dropdown menu."""
 
     def __init__(self, actions: PresetActions) -> None:
         self._actions = actions
-        self._list_open = False
+        self._rows: dict[Gtk.ListBoxRow, str] = {}
         self._container, self._body = section(PRESETS_TITLE)
-
-        self._select = Gtk.Button()
-        self._select.add_css_class("volna-preset-select")
-        self._select.set_hexpand(True)
-        self._select.set_halign(Gtk.Align.FILL)
-        self._select.connect("clicked", self._on_select_clicked)
-        # Screen readers announce the field as the owner of a popup list.
-        self._select.update_property([Gtk.AccessibleProperty.HAS_POPUP], [True])
 
         self._name = Gtk.Label()
         self._name.add_css_class("volna-preset-name")
         self._name.set_halign(Gtk.Align.START)
         self._name.set_hexpand(True)
         self._name.set_ellipsize(3)  # Pango.EllipsizeMode.END
+
+        self._select = Gtk.MenuButton()
+        self._select.add_css_class("volna-preset-select")
+        self._select.set_hexpand(True)
+        self._select.set_halign(Gtk.Align.FILL)
+        self._select.set_valign(Gtk.Align.CENTER)
         self._select.set_child(self._select_child())
+
+        self._popover = Gtk.Popover()
+        self._popover.add_css_class("volna-preset-menu-popover")
+        self._popover.set_has_arrow(False)
+        self._list = Gtk.ListBox()
+        self._list.add_css_class("volna-preset-menu")
+        # No selection state: the check mark names the current preset, and a
+        # selected row would paint a second, competing highlight over it.
+        self._list.set_selection_mode(Gtk.SelectionMode.NONE)
+        self._list.connect("row-activated", self._on_row_activated)
+        self._popover.set_child(self._list)
+        self._select.set_popover(self._popover)
 
         self._save = Gtk.Button()
         self._save.add_css_class("volna-preset-save")
@@ -82,28 +93,20 @@ class PresetsSection:
         row.append(self._save)
         self._body.append(row)
 
-        self._list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
-        self._list.add_css_class("volna-preset-list")
-
-        # The design caps the list at 174 px and scrolls it (04 §2): a long
-        # preset list must not push the settings below it out of the panel.
-        self._list_scroller = Gtk.ScrolledWindow()
-        self._list_scroller.add_css_class("volna-preset-scroller")
-        self._list_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        self._list_scroller.set_max_content_height(px(174))
-        self._list_scroller.set_propagate_natural_height(True)
-        self._list_scroller.set_visible(False)
-        self._list_scroller.set_child(self._list)
-        self._body.append(self._list_scroller)
-
     # -- public surface ---------------------------------------------------
 
     def widget(self) -> Gtk.Widget:
         return self._container
 
     @property
-    def list_open(self) -> bool:
-        return self._list_open
+    def menu_open(self) -> bool:
+        return self._popover.get_visible()
+
+    def open_menu(self) -> None:
+        self._select.set_active(True)
+
+    def close_menu(self) -> None:
+        self._select.set_active(False)
 
     def sync(self) -> None:
         """Reflect the current presets, selection and derived label."""
@@ -116,24 +119,6 @@ class PresetsSection:
         )
         self._rebuild_rows(active)
 
-    def open_list(self) -> None:
-        if self._list_open:
-            return
-
-        self._list_open = True
-        self._list_scroller.set_visible(True)
-        self._select.add_css_class("is-expanded")
-        self._set_expanded(True)
-
-    def close_list(self) -> None:
-        if not self._list_open:
-            return
-
-        self._list_open = False
-        self._list_scroller.set_visible(False)
-        self._select.remove_css_class("is-expanded")
-        self._set_expanded(False)
-
     # -- construction -----------------------------------------------------
 
     def _select_child(self) -> Gtk.Widget:
@@ -143,60 +128,40 @@ class PresetsSection:
         return row
 
     def _rebuild_rows(self, active: Preset | None) -> None:
-        # Rebuilding replaces every row, and the scroller would show the first
-        # one again; the user's position in a long list must survive a rename.
-        adjustment = self._list_scroller.get_vadjustment()
-        scroll = adjustment.get_value() if adjustment is not None else 0.0
-
         child = self._list.get_first_child()
         while child is not None:
             following = child.get_next_sibling()
             self._list.remove(child)
             child = following
 
+        self._rows.clear()
         for preset in self._actions.visible_presets():
             is_current = active is not None and preset.id == active.id
-            self._list.append(self._row(preset, is_current=is_current))
+            row = self._row(preset, is_current=is_current)
+            self._rows[row] = preset.id
+            self._list.append(row)
 
-        if adjustment is not None and scroll > 0:
-            # After the layout: the new rows give the adjustment its range.
-            GLib.idle_add(self._restore_scroll, scroll)
-
-    def _restore_scroll(self, scroll: float) -> bool:
-        adjustment = self._list_scroller.get_vadjustment()
-        if adjustment is not None:
-            limit = max(0.0, adjustment.get_upper() - adjustment.get_page_size())
-            adjustment.set_value(min(scroll, limit))
-        return False
-
-    def _row(self, preset: Preset, *, is_current: bool) -> Gtk.Widget:
-        item = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+    def _row(self, preset: Preset, *, is_current: bool) -> Gtk.ListBoxRow:
+        item = Gtk.ListBoxRow()
         item.add_css_class("volna-preset-item")
         if is_current:
             item.add_css_class("is-current")
 
-        apply = Gtk.Button()
-        apply.add_css_class("volna-preset-apply")
-        apply.set_hexpand(True)
-        apply.set_halign(Gtk.Align.FILL)
-        apply.set_tooltip_text(f"Применить пресет «{preset.name}»")
-        apply.connect("clicked", self._on_apply_clicked, preset.id)
-
-        text = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=px(8))
+        line = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=px(8))
         check = icon("check", px(14))
         check.set_opacity(1.0 if is_current else 0.0)
-        text.append(check)
+        line.append(check)
+
         name = Gtk.Label(label=preset.name)
         name.add_css_class("volna-preset-item-name")
         name.set_halign(Gtk.Align.START)
         name.set_hexpand(True)
-        text.append(name)
-        apply.set_child(text)
-        item.append(apply)
+        line.append(name)
 
         if not preset.builtin:
-            item.append(self._action_buttons(preset))
+            line.append(self._action_buttons(preset))
 
+        item.set_child(line)
         return item
 
     def _action_buttons(self, preset: Preset) -> Gtk.Widget:
@@ -225,26 +190,15 @@ class PresetsSection:
 
         return actions
 
-    # -- list interaction -------------------------------------------------
+    # -- menu interaction -------------------------------------------------
 
-    def _on_select_clicked(self, _button: Gtk.Button) -> None:
-        if self._list_open:
-            self.close_list()
+    def _on_row_activated(self, _list: Gtk.ListBox, row: Gtk.ListBoxRow) -> None:
+        preset_id = self._rows.get(row)
+        if preset_id is None:
             return
 
-        self.open_list()
-
-    def _set_expanded(self, expanded: bool) -> None:
-        # EXPANDED is a tristate and PyGObject only accepts it as a plain int
-        # (a bool or the enum object is dropped with a g_value assertion).
-        value = (
-            Gtk.AccessibleTristate.TRUE if expanded else Gtk.AccessibleTristate.FALSE
-        )
-        self._select.update_state([Gtk.AccessibleState.EXPANDED], [int(value)])
-
-    def _on_apply_clicked(self, _button: Gtk.Button, preset_id: str) -> None:
         self._actions.apply_preset(preset_id)
-        self.close_list()
+        self.close_menu()
         self.sync()
 
 

@@ -751,7 +751,7 @@ popover.volna-view-popover > contents > scrolledwindow {
   margin-bottom: 0.2857em;
 }
 
-.volna-preset-select {
+.volna-preset-select > button {
   min-height: 2em;
   padding: 0 0.5714em;
   background-color: #1e1f22;
@@ -763,13 +763,13 @@ popover.volna-view-popover > contents > scrolledwindow {
   font-size: 1em;
 }
 
-.volna-preset-select:hover {
+.volna-preset-select > button:hover {
   background-color: #26282d;
   border-color: #4d5057;
 }
 
-.volna-preset-select:checked,
-.volna-preset-select:focus-visible {
+.volna-preset-select > button:checked,
+.volna-preset-select > button:focus-visible {
   border-color: #3574f0;
 }
 
@@ -790,42 +790,39 @@ popover.volna-view-popover > contents > scrolledwindow {
   color: #dfe1e5;
 }
 
-/* The frame belongs to the scroller, not to the inner box: the box is taller
-   than the 174 px viewport, so its border and radius would be clipped. */
-.volna-preset-scroller {
-  margin-top: 0.2857em;
-  padding: 0.1429em;
+/* The list is the field's dropdown menu, a popup surface of its own: it is not
+   clipped by the panel and grows with the number of presets. */
+popover.volna-preset-menu-popover {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+popover.volna-preset-menu-popover > contents {
   background-color: #1e1f22;
   border: 1px solid #393b40;
   border-radius: 6px;
+  padding: 0.1429em;
+  /* The text field is the panel content minus the 4 px gap and the 28 px save
+     button (px(320) - 2 x 0.8571em padding - 4 - 2em = 18.8571em). */
+  min-width: 18.8571em;
 }
 
-.volna-preset-list {
-  background-color: transparent;
+.volna-preset-menu {
+  background: transparent;
 }
 
-.volna-preset-item {
+.volna-preset-menu > row {
   min-height: 1.8571em;
+  padding: 0 0.2857em;
   border-radius: 4px;
 }
 
-.volna-preset-item:hover,
-.volna-preset-item:focus-within {
+.volna-preset-menu > row:hover {
   background-color: #393b40;
 }
 
-.volna-preset-apply {
-  min-height: 1.8571em;
-  padding: 0 0.4286em;
-  background: transparent;
-  background-image: none;
-  border: none;
-  border-radius: 4px;
-  box-shadow: none;
-  color: #dfe1e5;
-}
-
-.volna-preset-item.is-current .volna-preset-apply {
+.volna-preset-item.is-current .volna-preset-item-name {
   font-weight: 600;
 }
 

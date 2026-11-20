@@ -84,9 +84,8 @@ class ViewPanel:
         self._button.set_active(True)
 
     def close(self) -> None:
+        # Closing the panel closes the preset menu too: it is a child popover.
         self._button.set_active(False)
-        if self._presets is not None:
-            self._presets.close_list()
 
     def sync(self) -> None:
         """Reflect the current snapshot; never reports changes back to the window."""

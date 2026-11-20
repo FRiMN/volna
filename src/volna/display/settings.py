@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
-from enum import StrEnum
-from typing import TypeVar
+from enum import Enum, StrEnum
+from typing import Any, TypeVar, cast
 
 from ..core import SortKey
 
@@ -127,7 +127,7 @@ class ViewSettings:
 
     def merged(self, capabilities: ViewCapabilities, **changes: object) -> ViewSettings:
         """Apply UI changes to a copy and normalize the result."""
-        return replace(self, **changes).normalized(capabilities)
+        return replace(self, **cast("dict[str, Any]", changes)).normalized(capabilities)
 
     def to_mapping(self) -> dict[str, object]:
         return {
@@ -168,7 +168,9 @@ def _clamp_zoom(value: int) -> int:
     return max(0, min(100, value))
 
 
-EnumT = TypeVar("EnumT", bound=StrEnum)
+# Bound is the plain ``Enum``, not ``StrEnum``: ``SortKey`` is a domain enum
+# that lives in core and must stay free of settings-layer types.
+EnumT = TypeVar("EnumT", bound=Enum)
 
 
 def _enum(enum_type: type[EnumT], raw: object, default: EnumT) -> EnumT:

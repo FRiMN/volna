@@ -63,8 +63,7 @@ def header_box(text: str, summary: int | str) -> Gtk.Box:
     title.set_hexpand(True)
     box.append(title)
 
-    trailing = summary if isinstance(summary, str) else None
-    widget = stats_label(trailing) if trailing is not None else count_label(summary)
+    widget = stats_label(summary) if isinstance(summary, str) else count_label(summary)
     widget.set_halign(Gtk.Align.END)
     box.append(widget)
 

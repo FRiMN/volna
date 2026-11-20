@@ -102,12 +102,15 @@ def system_font_px() -> float | None:
 
     name = settings.get_property("gtk-font-name") or "Sans 10"
     description = Pango.FontDescription.from_string(name)
-    size = description.get_size()
+    # gi is untyped here, so these arrive as Any: convert at the boundary
+    # instead of leaking Any into the float arithmetic.
+    scale = float(Pango.SCALE)
+    size = int(description.get_size())
     if size <= 0:
         return None
-    if description.get_size_is_absolute():
-        return size / Pango.SCALE
+    if bool(description.get_size_is_absolute()):
+        return size / scale
 
-    dpi = settings.get_property("gtk-xft-dpi")
-    dpi = dpi / 1024.0 if dpi and dpi > 0 else DEFAULT_DPI
-    return size / Pango.SCALE * dpi / 72.0
+    dpi = float(settings.get_property("gtk-xft-dpi") or 0)
+    dpi = dpi / 1024.0 if dpi > 0 else DEFAULT_DPI
+    return size / scale * dpi / 72.0

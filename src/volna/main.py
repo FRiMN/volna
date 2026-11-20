@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from importlib import resources
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import gi
 
@@ -23,6 +24,9 @@ from .display import (  # noqa: E402
     create_store,
 )
 
+if TYPE_CHECKING:
+    from .window import MainWindow
+
 APP_ID = "io.github.frimn.volna"
 
 
@@ -30,7 +34,7 @@ class VolnaApplication(Gtk.Application):
     def __init__(self, *, screenshot: str | None = None) -> None:
         super().__init__(application_id=APP_ID)
         self.screenshot = screenshot
-        self.window = None
+        self.window: MainWindow | None = None
 
         self._settings_store = create_store(SettingsPaths.default())
         document = self._settings_store.load()
@@ -91,14 +95,18 @@ class VolnaApplication(Gtk.Application):
             GLib.timeout_add(700, self._capture)
 
     def _capture(self) -> bool:
-        content = self.window.get_child()
+        window = self.window
+        if window is None or self.screenshot is None:
+            return False
+
+        content = window.get_child()
         width = content.get_width()
         height = content.get_height()
         paintable = Gtk.WidgetPaintable.new(content)
         snapshot = Gtk.Snapshot.new()
         paintable.snapshot(snapshot, width, height)
         node = snapshot.to_node()
-        renderer = self.window.get_native().get_renderer()
+        renderer = window.get_native().get_renderer()
         viewport = Graphene.Rect().init(0, 0, width, height)
         texture = renderer.render_texture(node, viewport)
         texture.save_to_png(str(Path(self.screenshot).expanduser()))

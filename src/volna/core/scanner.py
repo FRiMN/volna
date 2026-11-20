@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from contextlib import closing
 from dataclasses import dataclass
 from enum import Enum
@@ -43,7 +43,7 @@ def iter_dirents(
     *,
     batch_size: int = DIRENT_BATCH,
     cancel: threading.Event | None = None,
-) -> Iterator[Batch]:
+) -> Generator[Batch, None, None]:
     """Phase 1: yield DIRENT batches straight from ``readdir``.
 
     Entries carry ``name``/``path``/``kind`` only; ``size``/``mtime`` stay empty
@@ -76,7 +76,7 @@ def iter_stats(
     stat_pool: StatPool | None = None,
     chunk_size: int = STAT_CHUNK,
     cancel: threading.Event | None = None,
-) -> Iterator[Batch]:
+) -> Generator[Batch, None, None]:
     """Phase 2: fill ``size``/``mtime`` on ``entries`` and yield STATS batches.
 
     ``entries`` are mutated in place, ``chunk_size`` at a time. Without a
@@ -112,7 +112,7 @@ def iter_batches(
     batch_size: int = DIRENT_BATCH,
     need_stats: bool = True,
     cancel: threading.Event | None = None,
-) -> Iterator[Batch]:
+) -> Generator[Batch, None, None]:
     """Yield DIRENT batches, then (optionally) STATS batches that fill sizes."""
     dirents = iter_dirents(
         path,

@@ -6,6 +6,7 @@
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
 src/volna/_version.py
 
 # build artifacts

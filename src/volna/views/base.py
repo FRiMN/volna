@@ -146,9 +146,13 @@ class ListingView(abc.ABC):
 
     def _group_at(self, x: float, y: float) -> tuple[GroupHeader | None, bool]:
         """The caption under a point and whether the point is on its chevron."""
-        node = self._click_root.pick(int(x), int(y), Gtk.PickFlags.DEFAULT)
+        root = self._click_root
+        if root is None:
+            return None, False
+
+        node = root.pick(int(x), int(y), Gtk.PickFlags.DEFAULT)
         on_chevron = False
-        while node is not None and node is not self._click_root:
+        while node is not None and node is not root:
             if isinstance(node, Gtk.Button) and node.has_css_class(
                 "volna-group-chevron"
             ):

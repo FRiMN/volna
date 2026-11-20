@@ -182,7 +182,7 @@ class MainWindow(Gtk.ApplicationWindow):
         capabilities: ViewCapabilities = DEFAULT_CAPABILITIES,
         startup_issues: tuple[str, ...] = (),
         preset_store: PresetStore | None = None,
-        **kwargs,
+        **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
         self.set_title("Волна")
@@ -643,7 +643,13 @@ class MainWindow(Gtk.ApplicationWindow):
         if self._active_tab is not None:
             self._path_label.set_text(str(self._active_tab.path))
 
-    def _on_path_key_pressed(self, _controller, keyval, _keycode, _state) -> bool:
+    def _on_path_key_pressed(
+        self,
+        _controller: Gtk.EventControllerKey,
+        keyval: int,
+        _keycode: int,
+        _state: Gdk.ModifierType,
+    ) -> bool:
         if keyval == Gdk.KEY_Escape:
             self._cancel_path_edit()
             return True
@@ -1038,7 +1044,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self._tab_close_buttons[tab] = close
         widget.append(close)
 
-        make_clickable(widget, lambda current=tab: self._activate(current))
+        make_clickable(widget, lambda: self._activate(tab))
         return widget
 
     def _tab_icon_file(self, tab: DirectoryTab) -> Path:

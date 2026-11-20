@@ -362,6 +362,9 @@ class MainWindow(Gtk.ApplicationWindow):
             on_done=self._panel_restore(),
         )
 
+    def close_panel(self) -> None:
+        self._view_panel.close()
+
     def _rename_preset(self, preset_id: str, name: str) -> str | None:
         try:
             renamed = self._presets.rename(preset_id, name)

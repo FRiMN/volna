@@ -55,6 +55,10 @@ class PresetActions(Protocol):
 
     def open_delete_dialog(self, preset_id: str) -> None: ...
 
+    def close_panel(self) -> None:
+        """Dismiss the View panel itself (the preset is chosen, the task is done)."""
+        ...
+
 
 class PresetsSection:
     """Select field + save button; the preset list is the field's dropdown menu."""
@@ -234,9 +238,13 @@ class PresetsSection:
         if preset_id is None:
             return
 
-        self._actions.apply_preset(preset_id)
+        # Close the menu before anything rebuilds the rows: the row that emitted
+        # this signal must not be destroyed while GtkListBox is still in it.
         self.close_menu()
-        self.sync()
+        self._actions.apply_preset(preset_id)
+        # Choosing a preset ends the interaction: leaving the panel open kept a
+        # popup floating over the other windows after the user had moved on.
+        self._actions.close_panel()
 
 
 __all__ = ["PRESETS_TITLE", "PresetActions", "PresetsSection", "UNMANAGED_LABEL"]

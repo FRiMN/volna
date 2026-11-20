@@ -148,6 +148,8 @@ def _open_menu(window: object) -> None:
     if section.menu_open:
         return
 
+    if not window._view_panel.popover.get_visible():
+        _open_panel(window)
     section.open_menu()
     _pump(0.15)
     assert section.menu_open
@@ -277,7 +279,8 @@ def test_applying_a_preset_writes_its_snapshot_into_the_active_tab(
     assert _label_text(window) == "Крупные значки"
 
 
-def test_applying_a_preset_closes_the_list(window_factory) -> None:
+def test_choosing_a_preset_closes_the_menu_and_the_panel(window_factory) -> None:
+    """Leaving the panel open kept a popup floating over the other windows."""
     window = window_factory(Path("/"))
     _open_panel(window)
     _open_menu(window)
@@ -285,7 +288,8 @@ def test_applying_a_preset_closes_the_list(window_factory) -> None:
     _apply(window, "Без группировки")
 
     assert not _section(window).menu_open
-    assert window._view_panel.popover.get_visible()
+    assert not window._view_panel.popover.get_visible()
+    assert window._active_tab.view_settings.grouping is Grouping.NONE
 
 
 def test_a_manual_change_switches_the_label_to_manual(window_factory) -> None:

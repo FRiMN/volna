@@ -1,7 +1,18 @@
-"""Display settings and their last-view storage (pure, no GTK)."""
+"""Display settings, grouping policy and their last-view storage (pure, no GTK)."""
 
 from ..core import SortKey
-from .grouping import GroupAction, group_key, group_label
+from .grouping import (
+    GROUPING_ORDER,
+    GROUPING_STRATEGIES,
+    DateGrouping,
+    FlatGrouping,
+    Group,
+    GroupAction,
+    Grouping,
+    GroupingStrategy,
+    SizeGrouping,
+    strategy_for,
+)
 from .presets import (
     BUILTIN_PRESETS,
     DEFAULT_PRESET_ID,
@@ -21,9 +32,7 @@ from .settings import (
     COLLAPSE_MODES,
     DEFAULT_CAPABILITIES,
     DEFAULT_VIEW_SETTINGS,
-    GROUPING_ORDER,
     MODE_ORDER,
-    Grouping,
     ViewCapabilities,
     ViewMode,
     ViewSettings,
@@ -45,8 +54,13 @@ __all__ = [
     "DEFAULT_PRESET_ID",
     "DEFAULT_VIEW_SETTINGS",
     "GROUPING_ORDER",
+    "GROUPING_STRATEGIES",
+    "DateGrouping",
+    "FlatGrouping",
+    "Group",
     "GroupAction",
     "Grouping",
+    "GroupingStrategy",
     "JsonViewSettingsStore",
     "MODE_ORDER",
     "MemoryPresetStore",
@@ -59,6 +73,7 @@ __all__ = [
     "SCHEMA_VERSION",
     "SettingsDocument",
     "SettingsPaths",
+    "SizeGrouping",
     "SortKey",
     "ViewCapabilities",
     "ViewMode",
@@ -67,7 +82,6 @@ __all__ = [
     "clean_name",
     "create_preset_store",
     "create_store",
-    "group_key",
-    "group_label",
     "settings_fields",
+    "strategy_for",
 ]

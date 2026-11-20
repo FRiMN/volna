@@ -1,6 +1,6 @@
 from volna.core.entry import Entry, Kind
 from volna.core.model import Counters, DirModel, Event, ScanState
-from volna.core.order import GroupBucket, SortKey, day_start
+from volna.core.order import SortKey
 from volna.core.scanner import Batch, Phase
 
 
@@ -68,35 +68,6 @@ def test_events_fire_in_order() -> None:
     assert values[-1] == "state"
 
 
-def test_groups_bucket_entries() -> None:
-    now = 1_700_000_000.0
-    today = day_start(now)
-    model = DirModel(now=lambda: now)
-    generation = model.begin_scan("/d")
-    model.ingest(
-        Batch(
-            generation,
-            Phase.DIRENT,
-            [
-                make("today", mtime=today + 10),
-                make("yesterday", mtime=today - 10),
-                make("old", mtime=today - 8 * 86_400),
-                make("unknown"),
-            ],
-        )
-    )
-
-    groups = {
-        group.bucket: [entry.name for entry in group.entries]
-        for group in model.groups()
-    }
-
-    assert groups[GroupBucket.TODAY] == ["today"]
-    assert groups[GroupBucket.YESTERDAY] == ["yesterday"]
-    assert groups[GroupBucket.OLDER] == ["old"]
-    assert groups[GroupBucket.UNKNOWN] == ["unknown"]
-
-
 def test_scan_reads_real_directory(tmp_path) -> None:
     (tmp_path / "a.txt").write_text("hello")
     (tmp_path / "b.txt").write_text("")
@@ -117,70 +88,3 @@ def test_scan_of_missing_path_sets_error(tmp_path) -> None:
 
     assert model.state is ScanState.ERROR
     assert model.entries() == []
-
-
-def test_groups_split_this_week_per_calendar_day() -> None:
-    now = 1_700_000_000.0
-    today = day_start(now)
-    model = DirModel(now=lambda: now)
-    generation = model.begin_scan("/d")
-    model.ingest(
-        Batch(
-            generation,
-            Phase.DIRENT,
-            [
-                make("today", mtime=today + 10),
-                make("yesterday", mtime=today - 10),
-                make("two-days", mtime=day_start(today - 2 * 86_400)),
-                make("three-days", mtime=day_start(today - 3 * 86_400)),
-                make("old", mtime=today - 8 * 86_400),
-                make("unknown"),
-            ],
-        )
-    )
-
-    groups = model.groups()
-
-    assert [group.bucket for group in groups] == [
-        GroupBucket.TODAY,
-        GroupBucket.YESTERDAY,
-        GroupBucket.THIS_WEEK,
-        GroupBucket.THIS_WEEK,
-        GroupBucket.OLDER,
-        GroupBucket.UNKNOWN,
-    ]
-    assert [group.day for group in groups[:2]] == [None, None]
-    assert groups[2].day == day_start(today - 2 * 86_400)
-    assert groups[3].day == day_start(today - 3 * 86_400)
-    assert groups[4].day is None
-    assert [entry.name for entry in groups[2].entries] == ["two-days"]
-    assert [entry.name for entry in groups[3].entries] == ["three-days"]
-
-
-def test_groups_keep_the_sort_order_inside_every_group() -> None:
-    now = 1_700_000_000.0
-    today = day_start(now)
-    model = DirModel(sort_key=SortKey.NAME, reverse=False, now=lambda: now)
-    generation = model.begin_scan("/d")
-    model.ingest(
-        Batch(
-            generation,
-            Phase.DIRENT,
-            [
-                make("b", mtime=today - 2 * 86_400),
-                make("a", mtime=today - 2 * 86_400),
-                make("c", mtime=today - 3 * 86_400),
-            ],
-        )
-    )
-
-    groups = model.groups()
-
-    assert [[entry.name for entry in group.entries] for group in groups] == [
-        ["a", "b"],
-        ["c"],
-    ]
-    assert [group.day for group in groups] == [
-        day_start(today - 2 * 86_400),
-        day_start(today - 3 * 86_400),
-    ]

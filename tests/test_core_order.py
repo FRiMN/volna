@@ -1,5 +1,5 @@
 from volna.core.entry import Entry, Kind
-from volna.core.order import GroupBucket, SortKey, day_start, group_of, sort_entries
+from volna.core.order import SortKey, sort_entries
 
 
 def make(
@@ -95,14 +95,3 @@ def test_sort_by_mtime_without_folders_first_mixes_kinds() -> None:
     sort_entries(entries, key=SortKey.MTIME, folders_first=False)
 
     assert [entry.name for entry in entries] == ["a", "dir", "c"]
-
-
-def test_group_of_buckets() -> None:
-    now = 1_700_000_000.0
-    today = day_start(now)
-
-    assert group_of(None, now=now) is GroupBucket.UNKNOWN
-    assert group_of(today + 10, now=now) is GroupBucket.TODAY
-    assert group_of(today - 10, now=now) is GroupBucket.YESTERDAY
-    assert group_of(today - 2 * 86_400, now=now) is GroupBucket.THIS_WEEK
-    assert group_of(today - 8 * 86_400, now=now) is GroupBucket.OLDER

@@ -10,6 +10,7 @@ its stack and renders the loaded listing into the active view only.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -21,12 +22,10 @@ from .display import (
     COLLAPSE_MODES,
     DEFAULT_CAPABILITIES,
     GroupAction,
-    Grouping,
     ViewCapabilities,
     ViewMode,
     ViewSettings,
-    group_key,
-    group_label,
+    strategy_for,
 )
 from .history import NavigationHistory
 from .naming import tab_icon, tab_title
@@ -83,8 +82,10 @@ class DirectoryTab:
         self._loaded = False
         self._closed = False
         self._refresh_scheduled = False
-        # Collapsed date groups, by key (design/grouping.md D11): a session
-        # state of this tab, not a stored display setting.
+        # Collapsed listing groups, by key (design/grouping.md D11): a session
+        # state of this tab, not a stored display setting. Keys are namespaced
+        # by strategy (``today``, ``size:large``, …), so switching the grouping
+        # cannot collapse an unrelated group.
         self._collapsed_groups: set[str] = set()
 
         self.model.subscribe(Event.ITEM_BATCH, self._schedule_refresh)
@@ -234,27 +235,36 @@ class DirectoryTab:
         return False
 
     def _sections(self) -> tuple[Section, ...]:
-        """The loaded listing as view sections: date groups or one flat chunk.
+        """The loaded listing as view sections, one per group of the strategy.
 
         Grouping is a display policy over the loaded model, so this never
         touches the scanner (design/grouping.md D3, D8): the model already has
         the entries and their order. Collapse applies only in the modes that
-        support it (§12): other modes get their headers with ``collapsed=False``.
+        support it (§12): other modes get their headers with
+        ``collapsed=False``. The ungrouped strategy yields one header-less
+        section, which is exactly the flat listing the views already paint.
         """
-        if self._settings.grouping is Grouping.NONE:
-            items = tuple(self._item(entry) for entry in self.model.entries())
-            return (Section(items=items),)
-
+        strategy = strategy_for(self._settings.grouping)
         collapsible = self._settings.view_mode in COLLAPSE_MODES
+        groups = strategy.groups(self.model.entries(), now=time.time())
+
         return tuple(
             Section(
                 items=tuple(self._item(entry) for entry in group.entries),
-                header=group_label(group),
-                key=group_key(group),
-                collapsed=(collapsible and group_key(group) in self._collapsed_groups),
-                stats=format_counters(counters_of(group.entries)),
+                header=group.header,
+                key=group.key,
+                collapsed=(
+                    collapsible
+                    and group.key is not None
+                    and group.key in self._collapsed_groups
+                ),
+                stats=(
+                    format_counters(counters_of(group.entries))
+                    if group.header is not None
+                    else ""
+                ),
             )
-            for group in self.model.groups()
+            for group in groups
         )
 
     def _on_group_action(self, key: str, action: GroupAction) -> None:
@@ -275,11 +285,13 @@ class DirectoryTab:
         self._schedule_refresh()
 
     def _group_keys(self) -> set[str]:
-        """Keys of the currently loaded groups; empty for a stale listing."""
-        if self._settings.grouping is not Grouping.DATE:
-            return set()
-
-        return {group_key(group) for group in self.model.groups()}
+        """Keys of the currently loaded groups; empty for a flat listing."""
+        strategy = strategy_for(self._settings.grouping)
+        return {
+            group.key
+            for group in strategy.groups(self.model.entries(), now=time.time())
+            if group.key is not None
+        }
 
     @staticmethod
     def _item(entry: Entry) -> ListingItem:

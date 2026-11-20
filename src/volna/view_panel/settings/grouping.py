@@ -1,4 +1,4 @@
-"""«Группировка» section: split the listing by modification date or not.
+"""«Группировка» section: choose the listing grouping strategy or none.
 
 Labels and order come from ``display`` (``grouping.label`` / ``GROUPING_ORDER``)
 — this module never hardcodes them, the same as the view-mode feature.

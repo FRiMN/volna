@@ -76,6 +76,25 @@ def test_root_font_keeps_the_design_convention(use_scale) -> None:
     assert size_module.base_font_px() == 17.5
 
 
+def test_the_root_font_covers_every_surface_root(use_scale) -> None:
+    """A popover is its own surface: the window rule does not reach it.
+
+    The View panel used to render at the toolkit default 13.33 px because only
+    ``.volna-window`` got the design font — 5 % smaller than the grid, and
+    unaffected by the interface scale.
+    """
+    use_scale(1.0)
+    css = size_module.root_font_css()
+
+    for selector in size_module.SURFACE_FONT_SELECTOR.split(","):
+        assert f"{selector.strip()} {{" in css or f"{selector.strip()}," in css
+
+    assert "font-size: 14.0000px" in css
+
+    use_scale(1.25)
+    assert "font-size: 17.5000px" in size_module.root_font_css()
+
+
 def test_configure_resolves_the_scale_from_the_desktop(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

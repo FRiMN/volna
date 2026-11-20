@@ -618,7 +618,7 @@ popover.volna-view-popover > contents > scrolledwindow {
   font-size: 0.8571em;
   font-weight: 600;
   letter-spacing: 0.02em;
-  margin-bottom: 0.2286em;
+  margin-bottom: 0.2857em;
 }
 
 .volna-view-separator {
@@ -630,15 +630,19 @@ popover.volna-view-popover > contents > scrolledwindow {
   margin-top: 0.4571em;
 }
 
-/* Radio and checkbox rows: the whole row is the native control. */
+/* Radio and checkbox rows: the whole row is the native control.
+   Sizes are the design's viewRow/viewRadioBox (tokens.json): a 26 px row with
+   body text. They have to be em of the *row's* font size, so the font is set
+   to the body size instead of a smaller one: em in a length resolves against
+   the element's own font-size, and a shrunken label also shrank the row. */
 .volna-radio,
 .volna-check {
-  padding: 0 0.2286em;
-  min-height: 1.4857em;
+  padding: 0 0.2857em;
+  min-height: 1.8571em;
   border-radius: 4px;
-  border-spacing: 0.4571em;
+  border-spacing: 0.5714em;
   color: #dfe1e5;
-  font-size: 0.8em;
+  font-size: 1em;
   outline: none;
 }
 

@@ -823,6 +823,35 @@ def test_theme_is_a_single_em_grid() -> None:
         assert value.strip().endswith(("em", "%", "inherit")), value
 
 
+def test_a_radio_row_is_the_design_row_height(gtk_display, project_theme) -> None:
+    """Rows are 26 px tall with body text (tokens.json viewRow, design 04 §2).
+
+    Both numbers live in em of the row's own font size, so the row's font must
+    be the body size: a smaller label shrank the row to 16 px as well.
+    """
+    from volna import size
+
+    Gtk = _gtk()
+    root = Gtk.CssProvider()
+    root.load_from_string(size.root_font_css())
+    display = _gdk().Display.get_default()
+    Gtk.StyleContext.add_provider_for_display(
+        display, root, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+    )
+
+    try:
+        harness = _Harness()
+        try:
+            harness.open()
+            rows = _by_class(harness.popover, "volna-radio")
+            assert rows
+            assert {row.get_height() for row in rows} == {_px(26)}
+        finally:
+            harness.destroy()
+    finally:
+        Gtk.StyleContext.remove_provider_for_display(display, root)
+
+
 def test_theme_stylesheet_has_a_view_panel_block() -> None:
     """theme.css is shipped as package data; guard the CSS contract classes."""
     css = _theme_css_path().read_text(encoding="utf-8")

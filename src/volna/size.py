@@ -51,6 +51,18 @@ def base_font_px() -> float:
     return BASE_FONT_PX * ui_scale()
 
 
+# Every surface root, not just the window: a popover and a dialog window are
+# their own surfaces in GTK, and a font size set on the window class does not
+# reach them — the View panel then renders at the toolkit default (13.33 px)
+# and silently ignores the interface scale.
+SURFACE_FONT_SELECTOR: Final = "window, popover"
+
+
+def root_font_css() -> str:
+    """The stylesheet that puts the design's root font on every surface root."""
+    return f"{SURFACE_FONT_SELECTOR} {{ font-size: {base_font_px():.4f}px; }}"
+
+
 def px(base: int) -> int:
     """Scale a compact-grid metric to the active interface size."""
     return max(1, int(base * ui_scale() + 0.5))

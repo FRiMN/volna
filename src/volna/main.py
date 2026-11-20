@@ -62,10 +62,10 @@ class VolnaApplication(Gtk.Application):
 
         # The stylesheet is the compact grid in em; this provider sets the root
         # font size the grid scales against. Added after the theme so it wins.
+        # size.root_font_css() covers every surface root (window and popover):
+        # a popover is its own surface and does not inherit the window's font.
         root = Gtk.CssProvider()
-        root.load_from_string(
-            f".volna-window {{ font-size: {size.base_font_px():.4f}px; }}"
-        )
+        root.load_from_string(size.root_font_css())
 
         display = Gdk.Display.get_default()
         if display is not None:

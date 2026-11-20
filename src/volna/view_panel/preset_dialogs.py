@@ -373,6 +373,11 @@ class DeleteDialog:
         _escape_cancels(card, self.cancel)
         _escape_cancels(self._root, self.cancel)
 
+        # Enter confirms (design 04 §2.3), while keyboard focus stays on «Отмена»
+        # so Space and Esc back out: without a default widget Enter activated the
+        # focused button — it cancelled the deletion the user had just asked for.
+        self._root.set_default_widget(self._delete_button)
+
     @property
     def widget(self) -> Gtk.Widget:
         """The card; tests and the window walk it, never the window node."""
@@ -395,8 +400,12 @@ class DeleteDialog:
             f"Пресет «{name}» будет удалён. Это действие нельзя отменить."
         )
         self._root.present()
-        # «Отмена» is the safe default (design §2.3); grab after the mapping.
-        GLib.idle_add(lambda: self._cancel_button.grab_focus() and False)
+        # Enter must confirm the deletion (design 04 §2.3), and GTK4 Enter
+        # activates the *focused* button — activate_default() follows the focus
+        # too. So the destructive button takes the focus while it is open; Esc
+        # and «Отмена» are the ways out, and the dialog is a confirmation the
+        # user opened deliberately.
+        GLib.idle_add(lambda: self._delete_button.grab_focus() and False)
 
     def close(self) -> None:
         if not self._root.get_visible():

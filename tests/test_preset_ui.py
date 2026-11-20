@@ -832,16 +832,69 @@ def test_enter_in_the_entry_saves_the_preset(window_factory) -> None:
     assert [preset.name for preset in window._presets.custom] == ["С клавиатуры"]
 
 
-def test_the_delete_dialog_focuses_cancel(window_factory) -> None:
-    window = _saved_window(window_factory)
-    item = _by_class(_section(window).widget(), "volna-preset-item")[-1]
-    _by_class(item, "volna-preset-act")[1].emit("clicked")
-    _pump(0.2)
+def _press_return() -> None:
+    """A real Return key press (XTest), the way the user confirms the dialog."""
+    import ctypes
+    import ctypes.util
 
-    dialog = window._delete_dialog
-    assert dialog._cancel_button.has_focus() or _pump_until(
-        lambda: dialog._cancel_button.has_focus(), 2.0
-    )
+    x11_path = ctypes.util.find_library("X11")
+    xtst_path = ctypes.util.find_library("Xtst")
+    if x11_path is None or xtst_path is None:
+        pytest.skip("libX11/libXtst are not installed")
+
+    x11 = ctypes.CDLL(x11_path)
+    xtst = ctypes.CDLL(xtst_path)
+    x11.XOpenDisplay.restype = ctypes.c_void_p
+    x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+    x11.XKeysymToKeycode.restype = ctypes.c_ubyte
+    x11.XKeysymToKeycode.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+    x11.XFlush.argtypes = [ctypes.c_void_p]
+    xtst.XTestFakeKeyEvent.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.c_ulong,
+    ]
+
+    display = x11.XOpenDisplay(None)
+    assert display, "cannot open the X display"
+    try:
+        keycode = x11.XKeysymToKeycode(display, 0xFF0D)  # XK_Return
+        xtst.XTestFakeKeyEvent(display, keycode, True, 0)
+        xtst.XTestFakeKeyEvent(display, keycode, False, 0)
+        x11.XFlush(display)
+        _pump(0.3)
+    finally:
+        x11.XCloseDisplay(display)
+
+
+def _open_delete(window: object, name: str) -> object:
+    _by_class(_row(window, name), "volna-preset-act")[1].emit("clicked")
+    _pump(0.3)
+    assert window._delete_dialog.is_open
+
+    return window._delete_dialog
+
+
+def test_the_delete_dialog_focuses_the_confirm_button(window_factory) -> None:
+    """Enter activates the focused button, so «Удалить» must own the focus."""
+    window = _saved_window(window_factory)
+    dialog = _open_delete(window, "Фото")
+
+    assert dialog._root.get_focus() is dialog._delete_button
+
+
+def test_enter_confirms_the_deletion(window_factory) -> None:
+    """Reported bug: Enter closed the dialog and deleted nothing."""
+    window = _saved_window(window_factory)
+    dialog = _open_delete(window, "Фото")
+    assert [preset.name for preset in window._presets.custom] == ["Фото"]
+
+    _press_return()
+
+    assert not dialog.is_open
+    assert window._presets.custom == ()
 
 
 def test_escape_closes_the_delete_dialog_without_deleting(window_factory) -> None:

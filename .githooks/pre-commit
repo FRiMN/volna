@@ -1,0 +1,6 @@
+#!/bin/sh
+# Static gate before a commit: ruff check, ruff format --check, mypy.
+# Enable once per clone with `uv run invoke hooks`.
+set -e
+
+exec uv run --frozen invoke static

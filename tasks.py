@@ -15,6 +15,14 @@ def venv(c):
 
 
 @task
+def hooks(c):
+    """Включить git-хуки из .githooks (один раз после клонирования).
+    Отключить: `git config --unset core.hooksPath`.
+    """
+    c.run("git config core.hooksPath .githooks")
+
+
+@task
 def check(c):
     """Проверка кода (ruff)"""
     c.run("uv run ruff check")
@@ -27,6 +35,24 @@ def fmt(c):
 
 
 @task
+def types(c):
+    """Проверка типов (mypy, strict)"""
+    c.run("uv run mypy")
+
+
+@task
 def testing(c):
     """Запуск тестов"""
+    c.run("uv run pytest")
+
+
+@task(pre=[check, types])
+def static(c):
+    """Статический гейт: линт, формат, типы (без тестов)"""
+    c.run("uv run ruff format --check")
+
+
+@task(pre=[static])
+def verify(c):
+    """Полный гейт: статика и тесты — то, что должен пройти каждый пуш"""
     c.run("uv run pytest")

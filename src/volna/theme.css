@@ -742,6 +742,197 @@ popover.volna-view-popover > contents > scrolledwindow {
   border-top: 1px solid #393b40;
 }
 
+/* ---- presets (View panel «Пресеты», design/spec/04 §2) -------------- */
+.volna-preset-row {
+  margin-bottom: 0.2857em;
+}
+
+.volna-preset-select {
+  min-height: 2em;
+  padding: 0 0.5714em;
+  background-color: #1e1f22;
+  background-image: none;
+  border: 1px solid #393b40;
+  border-radius: 4px;
+  box-shadow: none;
+  color: #dfe1e5;
+  font-size: 1em;
+}
+
+.volna-preset-select:hover {
+  background-color: #26282d;
+  border-color: #4d5057;
+}
+
+.volna-preset-select:checked,
+.volna-preset-select:focus-visible {
+  border-color: #3574f0;
+}
+
+.volna-preset-save {
+  min-width: 2em;
+  min-height: 2em;
+  padding: 0;
+  background-color: #1e1f22;
+  background-image: none;
+  border: 1px solid #393b40;
+  border-radius: 4px;
+  box-shadow: none;
+  color: #9da0a8;
+}
+
+.volna-preset-save:hover {
+  background-color: #393b40;
+  color: #dfe1e5;
+}
+
+/* The frame belongs to the scroller, not to the inner box: the box is taller
+   than the 174 px viewport, so its border and radius would be clipped. */
+.volna-preset-scroller {
+  margin-top: 0.2857em;
+  padding: 0.1429em;
+  background-color: #1e1f22;
+  border: 1px solid #393b40;
+  border-radius: 6px;
+}
+
+.volna-preset-list {
+  background-color: transparent;
+}
+
+.volna-preset-item {
+  min-height: 1.8571em;
+  border-radius: 4px;
+}
+
+.volna-preset-item:hover,
+.volna-preset-item:focus-within {
+  background-color: #393b40;
+}
+
+.volna-preset-apply {
+  min-height: 1.8571em;
+  padding: 0 0.4286em;
+  background: transparent;
+  background-image: none;
+  border: none;
+  border-radius: 4px;
+  box-shadow: none;
+  color: #dfe1e5;
+}
+
+.volna-preset-item.is-current .volna-preset-apply {
+  font-weight: 600;
+}
+
+.volna-preset-act {
+  min-width: 1.5714em;
+  min-height: 1.5714em;
+  padding: 0;
+  background: transparent;
+  background-image: none;
+  border: none;
+  border-radius: 4px;
+  box-shadow: none;
+  color: #9da0a8;
+}
+
+.volna-preset-act:hover,
+.volna-preset-act:focus-visible {
+  background-color: #4a4d52;
+  color: #dfe1e5;
+}
+
+.volna-preset-act.is-danger:hover {
+  color: #db5c5c;
+}
+
+.volna-preset-hint {
+  color: #9da0a8;
+  font-size: 0.8571em;
+}
+
+.volna-preset-hint.is-warning {
+  color: #e0a84f;
+}
+
+/* Dialogs are small modal windows: only their card repaints, so opening one
+   never re-snapshots the main window and the panel comes back at once. */
+window.volna-preset-dialog-window {
+  background-color: #2b2d30;
+}
+
+.volna-preset-dialog {
+  min-width: 26.4em;
+  padding: 1.1429em;
+  background-color: #2b2d30;
+  border: 1px solid #393b40;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+}
+
+.volna-preset-dialog-title {
+  color: #dfe1e5;
+  font-size: 1em;
+  font-weight: 600;
+  margin-bottom: 0.9em;
+}
+
+.volna-preset-dialog-label {
+  color: #9da0a8;
+  font-size: 0.8571em;
+  font-weight: 600;
+  margin-bottom: 0.4286em;
+}
+
+.volna-preset-dialog-entry {
+  min-height: 2em;
+  padding: 0 0.5714em;
+  background-color: #1e1f22;
+  border: 1px solid #393b40;
+  border-radius: 4px;
+  color: #dfe1e5;
+}
+
+.volna-preset-dialog-entry:focus {
+  border-color: #3574f0;
+}
+
+.volna-preset-dialog-text {
+  color: #9da0a8;
+  font-size: 0.9em;
+  margin-bottom: 1.2857em;
+}
+
+.volna-preset-dialog-button {
+  min-height: 2.2857em;
+  padding: 0 1em;
+  background: transparent;
+  border: 1px solid #393b40;
+  border-radius: 4px;
+  color: #dfe1e5;
+}
+
+.volna-preset-dialog-button:hover {
+  background-color: #393b40;
+}
+
+.volna-preset-dialog-button.is-primary {
+  background-color: #3574f0;
+  border-color: #3574f0;
+  color: #ffffff;
+}
+
+.volna-preset-dialog-button.is-primary:disabled {
+  opacity: 0.5;
+}
+
+.volna-preset-dialog-button.is-danger {
+  background-color: #db5c5c;
+  border-color: #db5c5c;
+  color: #ffffff;
+}
+
 /* Compact density (window class set by the tab): details rows and mode cells shrink. */
 .volna-density-compact .volna-dt-name {
   font-size: 0.8571em;

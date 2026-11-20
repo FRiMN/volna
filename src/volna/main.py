@@ -19,6 +19,7 @@ from .display import (  # noqa: E402
     DEFAULT_CAPABILITIES,
     SettingsPaths,
     ViewSettings,
+    create_preset_store,
     create_store,
 )
 
@@ -37,6 +38,7 @@ class VolnaApplication(Gtk.Application):
             DEFAULT_CAPABILITIES
         )
         self._startup_issues = document.issues
+        self._preset_store = create_preset_store(SettingsPaths.default())
         self.set_accels_for_action("win.new-tab", ["<Control>t"])
         self.set_accels_for_action("win.close-tab", ["<Control>w"])
         self.connect("startup", self._on_startup)
@@ -82,6 +84,7 @@ class VolnaApplication(Gtk.Application):
             initial_settings=self._initial_settings,
             settings_store=self._settings_store,
             startup_issues=self._startup_issues,
+            preset_store=self._preset_store,
         )
         self.window.present()
         if self.screenshot:

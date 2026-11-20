@@ -109,8 +109,14 @@ def _open_panel(window: object) -> object:
 
 
 def _control(root: object, text: str) -> object:
-    """Find a labeled control (radio, checkbox, segmented button) by its text."""
+    """Find a labeled control (radio, checkbox, segmented button) by its text.
+
+    Only activatable widgets count: a preset may carry the same name as a
+    setting («Без группировки» is both a preset and a grouping option).
+    """
     for widget in _walk(root):
+        if not hasattr(widget, "set_active"):
+            continue
         getter = getattr(widget, "get_label", None)
         if getter is not None and getter() == text:
             return widget

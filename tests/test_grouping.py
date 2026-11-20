@@ -133,8 +133,15 @@ def _open_panel(window: object) -> object:
 
 
 def _control(root: object, text: str) -> object:
-    """Find a labelled control (radio, checkbox, segmented button) by its text."""
+    """Find a labelled control (radio, checkbox, segmented button) by its text.
+
+    Only activatable widgets count: a preset may carry the same name as a
+    setting («Без группировки» is both a preset and a grouping option), and a
+    bare label is not a control.
+    """
     for widget in _walk(root):
+        if not hasattr(widget, "set_active"):
+            continue
         getter = getattr(widget, "get_label", None)
         if getter is not None and getter() == text:
             return widget
@@ -534,6 +541,7 @@ def test_view_panel_offers_grouping_between_mode_and_sorting(
 
         titles = _mapped_texts(panel.popover, "volna-view-section-title")
         assert titles == [
+            "Пресеты",
             "Режим просмотра",
             "Группировка",
             "Сортировка",

@@ -10,13 +10,12 @@ from __future__ import annotations
 import json
 import logging
 import os
-import tempfile
-import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from .files import preserve_invalid, write_atomically
 from .settings import ViewSettings
 
 SCHEMA_VERSION = 1
@@ -162,36 +161,15 @@ class JsonViewSettingsStore:
         return SettingsDocument(view=ViewSettings.from_mapping(view_raw))
 
     def _write_atomically(self, payload: str) -> None:
-        descriptor, tmp_name = tempfile.mkstemp(
-            prefix=".settings-", suffix=".tmp", dir=self._paths.directory
-        )
-        tmp_path = Path(tmp_name)
-
-        try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                handle.write(payload)
-                handle.flush()
-                os.fsync(handle.fileno())
-
-            os.replace(tmp_path, self._paths.file)
-        finally:
-            tmp_path.unlink(missing_ok=True)
-
-        _fsync_directory(self._paths.directory)
+        write_atomically(self._paths.directory, self._paths.file, payload)
 
     def _preserve_invalid(self) -> None:
         """Keep a corrupt file instead of silently overwriting user data."""
-        if not self._discard_invalid_on_save or not self._paths.file.exists():
+        if not self._discard_invalid_on_save:
             return
 
-        backup = self._paths.file.with_name(
-            f"{self._paths.file.name}.invalid-{int(time.time())}"
-        )
-        try:
-            os.replace(self._paths.file, backup)
-        except OSError as exc:  # pragma: no cover - defensive, disk-level failure
-            _LOG.warning("cannot preserve invalid settings file: %s", exc)
-        else:
+        backup = preserve_invalid(self._paths.file)
+        if backup is not None:
             _LOG.warning("preserved invalid settings as %s", backup)
 
 
@@ -208,18 +186,3 @@ def _encode(view: ViewSettings) -> str:
     document = {"schema_version": SCHEMA_VERSION, "view": view.to_mapping()}
 
     return json.dumps(document, ensure_ascii=False, indent=2) + "\n"
-
-
-def _fsync_directory(directory: Path) -> None:
-    """Best effort: not every platform/filesystem allows fsync on a directory."""
-    try:
-        descriptor = os.open(directory, os.O_RDONLY)
-    except OSError:  # pragma: no cover - platform dependent
-        return
-
-    try:
-        os.fsync(descriptor)
-    except OSError:  # pragma: no cover - platform dependent
-        pass
-    finally:
-        os.close(descriptor)

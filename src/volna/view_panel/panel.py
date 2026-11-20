@@ -21,6 +21,7 @@ from ..display import ViewCapabilities, ViewSettings  # noqa: E402
 from ..glyph import icon  # noqa: E402
 from ..size import px  # noqa: E402
 from .controls import footer, section, separator  # noqa: E402
+from .presets import PresetsSection  # noqa: E402
 from .settings import SETTING_FEATURES  # noqa: E402
 from .settings.base import SettingFeature, SettingsSection  # noqa: E402
 
@@ -43,10 +44,12 @@ class ViewPanel:
         update: Callable[..., bool],
         capabilities: ViewCapabilities,
         setting_features: Sequence[type[SettingFeature]] | None = None,
+        presets: PresetsSection | None = None,
     ) -> None:
         self._settings = settings
         self._update = update
         self._capabilities = capabilities
+        self._presets = presets
         self._syncing = False
 
         factories = SETTING_FEATURES if setting_features is None else setting_features
@@ -64,6 +67,10 @@ class ViewPanel:
         self._popover.connect("closed", self._on_closed)
         self.sync()
 
+    @property
+    def presets(self) -> PresetsSection | None:
+        return self._presets
+
     # -- public surface -------------------------------------------------
 
     def trigger(self) -> Gtk.MenuButton:
@@ -78,9 +85,14 @@ class ViewPanel:
 
     def close(self) -> None:
         self._button.set_active(False)
+        if self._presets is not None:
+            self._presets.close_list()
 
     def sync(self) -> None:
         """Reflect the current snapshot; never reports changes back to the window."""
+        if self._presets is not None:
+            self._presets.sync()
+
         snapshot = self._settings()
 
         self._syncing = True
@@ -129,6 +141,9 @@ class ViewPanel:
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         content.add_css_class("volna-view-body")
+        if self._presets is not None:
+            content.append(self._presets.widget())
+            content.append(separator())
         # Both orders come from the registry tuple (settings/__init__.py):
         # the position of a class in SETTING_FEATURES is its row position
         # inside its section, and a section appears when its first feature

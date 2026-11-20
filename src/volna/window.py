@@ -33,16 +33,30 @@ from gi.repository import Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 
 from .core import ScanState  # noqa: E402
 from .display import (  # noqa: E402
+    BUILTIN_PRESETS,
     DEFAULT_CAPABILITIES,
+    DEFAULT_PRESET_ID,
+    MemoryPresetStore,
+    Preset,
+    PresetBook,
+    PresetError,
+    PresetStore,
     ViewCapabilities,
     ViewSettings,
     ViewSettingsStore,
+    settings_fields,
 )
 from .geometry import edge_at as geometry_edge_at  # noqa: E402
 from .glyph import icon, icon_path  # noqa: E402
 from .size import px  # noqa: E402
 from .tab import DirectoryTab  # noqa: E402
 from .view_panel import ViewPanel  # noqa: E402
+from .view_panel.preset_dialogs import (  # noqa: E402
+    DeleteDialog,
+    RenameDialog,
+    SaveDialog,
+)
+from .view_panel.presets import PresetsSection  # noqa: E402
 from .views.format import format_counters  # noqa: E402
 
 _POINTER_CURSOR = Gdk.Cursor.new_from_name("pointer", None)
@@ -167,6 +181,7 @@ class MainWindow(Gtk.ApplicationWindow):
         settings_store: ViewSettingsStore,
         capabilities: ViewCapabilities = DEFAULT_CAPABILITIES,
         startup_issues: tuple[str, ...] = (),
+        preset_store: PresetStore | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -188,6 +203,16 @@ class MainWindow(Gtk.ApplicationWindow):
         self._initial_settings = initial_settings.normalized(capabilities)
         self._settings_store = settings_store
         self._startup_issues = startup_issues
+        self._preset_store = preset_store or MemoryPresetStore()
+        preset_document = self._preset_store.load()
+        self._startup_issues = startup_issues + preset_document.issues
+        self._presets = PresetBook(preset_document.presets)
+        initial_preset = self._presets.preset_for(self._initial_settings, capabilities)
+        self._presets.select(initial_preset.id if initial_preset is not None else None)
+        self._presets_section = PresetsSection(self)
+        self._save_dialog = SaveDialog(self)
+        self._rename_dialog = RenameDialog(self)
+        self._delete_dialog = DeleteDialog(self)
         self._view_panel = self._create_view_panel()
 
         self._install_actions()
@@ -295,7 +320,129 @@ class MainWindow(Gtk.ApplicationWindow):
             settings=self._current_view_settings,
             update=self._update_view_settings,
             capabilities=self._capabilities,
+            presets=self._presets_section,
         )
+
+    # -- presets (PresetActions) ------------------------------------------
+
+    def visible_presets(self) -> tuple[Preset, ...]:
+        return self._presets.presets()
+
+    def active_preset(self) -> Preset | None:
+        return self._presets.preset_for(
+            self._current_view_settings(), self._capabilities
+        )
+
+    def apply_preset(self, preset_id: str) -> None:
+        preset = self._presets.find(preset_id)
+        tab = self._active_tab
+        if preset is None or tab is None:
+            return
+
+        self._update_view_settings(**settings_fields(preset.settings))
+        self._presets.select(preset_id)
+        self._view_panel.sync()
+
+    def open_rename_dialog(self, preset_id: str) -> None:
+        preset = self._presets.find(preset_id)
+        if preset is None or preset.builtin:
+            return
+
+        self._rename_dialog.open(
+            preset.name,
+            on_save=lambda name: self._rename_preset(preset_id, name),
+            on_done=self._panel_restore(),
+        )
+
+    def _rename_preset(self, preset_id: str, name: str) -> str | None:
+        try:
+            renamed = self._presets.rename(preset_id, name)
+        except PresetError as exc:
+            return str(exc)
+
+        self._view_panel.sync()
+        self._report_preset_saved(f"Пресет переименован: {renamed.name}")
+        return None
+
+    def open_save_dialog(self) -> None:
+        current = self._current_view_settings()
+        active = self._presets.preset_for(current, self._capabilities)
+        suggested = f"{active.name} (копия)" if active is not None else "Мой вид"
+        existing = [preset.name for preset in self._presets.presets()]
+        self._save_dialog.open(
+            suggested,
+            existing,
+            on_save=lambda name: self._save_preset(name, current),
+            on_done=self._panel_restore(),
+        )
+
+    def _save_preset(self, name: str, settings: ViewSettings) -> str | None:
+        try:
+            saved = self._presets.save(name, settings)
+        except PresetError as exc:
+            return str(exc)
+
+        self._view_panel.sync()
+        self._report_preset_saved(f"Пресет сохранён: {saved.name}")
+        return None
+
+    def open_delete_dialog(self, preset_id: str) -> None:
+        preset = self._presets.find(preset_id)
+        if preset is None or preset.builtin:
+            return
+
+        self._delete_dialog.open(
+            preset.name,
+            on_confirm=lambda: self._delete_preset(preset_id),
+            on_done=self._panel_restore(),
+        )
+
+    def _delete_preset(self, preset_id: str) -> None:
+        preset = self._presets.find(preset_id)
+        if preset is None:
+            return
+
+        was_selected = self._presets.delete(preset_id)
+        if was_selected:
+            self._presets.select(DEFAULT_PRESET_ID)
+            default = BUILTIN_PRESETS[0]
+            self._update_view_settings(**settings_fields(default.settings))
+
+        self._view_panel.sync()
+        self._report_preset_saved(f"Пресет удалён: {preset.name}")
+
+    def _panel_restore(self) -> Callable[[], None]:
+        """Close the panel for a dialog and hand it back when the dialog ends.
+
+        The popover holds a grab, so an open dialog could not take keyboard
+        focus. The list is restored too: the action came from a row in it.
+        """
+        list_was_open = self._presets_section.list_open
+        self._view_panel.close()
+
+        def restore() -> None:
+            self._view_panel.open()
+            if list_was_open:
+                self._presets_section.open_list()
+
+        return restore
+
+    def notify(self, text: str) -> None:
+        self._show_status_note(text)
+
+    def _persist_presets(self) -> bool:
+        saved = self._preset_store.save(self._presets.custom)
+        if not saved:
+            _LOG.warning("cannot save presets; they stay in memory")
+        return saved
+
+    def _report_preset_saved(self, done: str) -> None:
+        """Announce the change, but never claim a write that did not happen."""
+        if self._persist_presets():
+            self._show_status_note(done)
+            return
+
+        self._show_status_note(f"{done} (не сохранено: изменения только в памяти)")
 
     def _current_view_settings(self) -> ViewSettings:
         tab = self._active_tab
@@ -309,7 +456,19 @@ class MainWindow(Gtk.ApplicationWindow):
         applied = tab.update_view_settings(**changes)
         if applied:
             self._apply_density(tab.view_settings.compact)
+            self._forget_selection_if_manual()
         return applied
+
+    def _forget_selection_if_manual(self) -> None:
+        """A manual change to the snapshot ends the selection (design §18.3)."""
+        if self._presets.selected() is None:
+            return
+
+        if (
+            self._presets.applied(self._current_view_settings(), self._capabilities)
+            is None
+        ):
+            self._presets.clear_selection()
 
     def _apply_density(self, compact: bool) -> None:
         if compact:

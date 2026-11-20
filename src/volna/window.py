@@ -329,9 +329,17 @@ class MainWindow(Gtk.ApplicationWindow):
         return self._presets.presets()
 
     def active_preset(self) -> Preset | None:
-        return self._presets.preset_for(
-            self._current_view_settings(), self._capabilities
-        )
+        """The preset the field names: the selection first, then any match.
+
+        Two presets can hold the same snapshot (a custom copy of a built-in);
+        the one the user picked must win over the first one in the list.
+        """
+        settings = self._current_view_settings()
+        applied = self._presets.applied(settings, self._capabilities)
+        if applied is not None:
+            return applied
+
+        return self._presets.preset_for(settings, self._capabilities)
 
     def apply_preset(self, preset_id: str) -> None:
         preset = self._presets.find(preset_id)
@@ -353,6 +361,9 @@ class MainWindow(Gtk.ApplicationWindow):
             on_save=lambda name: self._rename_preset(preset_id, name),
             on_done=self._panel_restore(),
         )
+
+    def close_panel(self) -> None:
+        self._view_panel.close()
 
     def _rename_preset(self, preset_id: str, name: str) -> str | None:
         try:
@@ -415,20 +426,22 @@ class MainWindow(Gtk.ApplicationWindow):
         """Close the panel for a dialog and hand it back when the dialog ends.
 
         The popover holds a grab, so an open dialog could not take keyboard
-        focus. The list is restored too: the action came from a row in it.
+        focus. The preset menu is restored too: the action came from a row in
+        it. The menu is a child popover, so it waits for the panel to be shown.
         """
-        list_was_open = self._presets_section.list_open
+        menu_was_open = self._presets_section.menu_open
         self._view_panel.close()
 
         def restore() -> None:
             self._view_panel.open()
-            if list_was_open:
-                self._presets_section.open_list()
+            if menu_was_open:
+                GLib.idle_add(self._reopen_preset_menu)
 
         return restore
 
-    def notify(self, text: str) -> None:
-        self._show_status_note(text)
+    def _reopen_preset_menu(self) -> bool:
+        self._presets_section.open_menu()
+        return False
 
     def _persist_presets(self) -> bool:
         saved = self._preset_store.save(self._presets.custom)

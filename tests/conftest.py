@@ -142,6 +142,67 @@ Colour = tuple[int, int, int]
 """An RGB colour of the screen, as the X11 readback reports it."""
 
 
+def _read_colours(
+    x11: ctypes.CDLL,
+    surface: object,
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+) -> Counter[Colour]:
+    """The colours of a rectangle of an X11 drawable."""
+    import gi
+
+    gi.require_version("GdkX11", "4.0")
+    from gi.repository import GdkX11
+
+    display = x11.XOpenDisplay(None)
+    if not display:
+        pytest.skip("cannot open the X display")
+
+    try:
+        xid = GdkX11.X11Surface.get_xid(surface)
+        image = x11.XGetImage(display, xid, x, y, width, height, 0xFFFFFFFF, 2)
+        if not image:
+            pytest.skip("XGetImage failed")
+
+        header = image.contents
+        raw = ctypes.string_at(header.data, header.bytes_per_line * header.height)
+
+        def shift(mask: int) -> int:
+            return (mask & -mask).bit_length() - 1
+
+        red_shift = shift(header.red_mask)
+        green_shift = shift(header.green_mask)
+        blue_shift = shift(header.blue_mask)
+        if header.bits_per_pixel != 32:
+            pytest.skip(
+                f"unsupported pixel format: {header.bits_per_pixel} bits per pixel"
+            )
+
+        # The pixels are words in the order of the image; the machine may
+        # read them the other way round.
+        pixels = array("I")
+        for row in range(header.height):
+            start = row * header.bytes_per_line
+            pixels.frombytes(raw[start : start + header.width * 4])
+        if (header.byte_order == 0) != (sys.byteorder == "little"):
+            pixels.byteswap()
+
+        colours: Counter[Colour] = Counter()
+        for pixel in pixels:
+            colours[
+                (
+                    (pixel & header.red_mask) >> red_shift,
+                    (pixel & header.green_mask) >> green_shift,
+                    (pixel & header.blue_mask) >> blue_shift,
+                )
+            ] += 1
+        return colours
+    finally:
+        x11.XCloseDisplay(display)
+
+
 @pytest.fixture(scope="session")
 def x11_pixels(gtk_display) -> Iterator[Callable[[object], Counter[Colour]]]:
     """Read the colours an X11 drawable actually shows.
@@ -155,57 +216,57 @@ def x11_pixels(gtk_display) -> Iterator[Callable[[object], Counter[Colour]]]:
     x11 = _x11_library()
 
     def read(surface: object) -> Counter[Colour]:
-        import gi
-
-        gi.require_version("GdkX11", "4.0")
-        from gi.repository import GdkX11
-
-        display = x11.XOpenDisplay(None)
-        if not display:
-            pytest.skip("cannot open the X display")
-
-        try:
-            xid = GdkX11.X11Surface.get_xid(surface)
-            width = surface.get_width()
-            height = surface.get_height()
-            image = x11.XGetImage(display, xid, 0, 0, width, height, 0xFFFFFFFF, 2)
-            if not image:
-                pytest.skip("XGetImage failed")
-
-            header = image.contents
-            raw = ctypes.string_at(header.data, header.bytes_per_line * header.height)
-
-            def shift(mask: int) -> int:
-                return (mask & -mask).bit_length() - 1
-
-            red_shift = shift(header.red_mask)
-            green_shift = shift(header.green_mask)
-            blue_shift = shift(header.blue_mask)
-            if header.bits_per_pixel != 32:
-                pytest.skip(
-                    f"unsupported pixel format: {header.bits_per_pixel} bits per pixel"
-                )
-
-            # The pixels are words in the order of the image; the machine may
-            # read them the other way round.
-            pixels = array("I")
-            for y in range(header.height):
-                start = y * header.bytes_per_line
-                pixels.frombytes(raw[start : start + header.width * 4])
-            if (header.byte_order == 0) != (sys.byteorder == "little"):
-                pixels.byteswap()
-
-            colours: Counter[Colour] = Counter()
-            for pixel in pixels:
-                colours[
-                    (
-                        (pixel & header.red_mask) >> red_shift,
-                        (pixel & header.green_mask) >> green_shift,
-                        (pixel & header.blue_mask) >> blue_shift,
-                    )
-                ] += 1
-            return colours
-        finally:
-            x11.XCloseDisplay(display)
+        return _read_colours(
+            x11, surface, 0, 0, surface.get_width(), surface.get_height()
+        )
 
     yield read
+
+
+@pytest.fixture(scope="session")
+def x11_region(
+    gtk_display,
+) -> Iterator[Callable[[object, int, int, int, int], Counter[Colour]]]:
+    """Read the colours of one rectangle of an X11 drawable.
+
+    The window shows the whole app, so a check about one pane needs the pane's
+    own rectangle, not the colours of every pixel on the screen.
+    """
+    x11 = _x11_library()
+
+    def read(
+        surface: object, x: int, y: int, width: int, height: int
+    ) -> Counter[Colour]:
+        return _read_colours(x11, surface, x, y, width, height)
+
+    yield read
+
+
+@pytest.fixture
+def project_theme(gtk_display) -> Iterator[Callable[[], None]]:
+    """Put ``theme.css`` on the display for one test.
+
+    The application's stylesheet is loaded by ``volna.main`` at start-up; a
+    widget test has to do it itself, or the widgets are painted by the GTK
+    theme alone. The provider is taken off the display afterwards, so the next
+    test starts from the same state as this one did.
+    """
+    import gi
+
+    gi.require_version("Gdk", "4.0")
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import Gdk, Gtk
+
+    css = (Path(__file__).resolve().parents[1] / "src/volna/theme.css").read_text(
+        encoding="utf-8"
+    )
+    provider = Gtk.CssProvider()
+    provider.load_from_string(css)
+    display = Gdk.Display.get_default()
+    Gtk.StyleContext.add_provider_for_display(
+        display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+    )
+    try:
+        yield
+    finally:
+        Gtk.StyleContext.remove_provider_for_display(display, provider)

@@ -21,6 +21,7 @@ gi.require_version("Gdk", "4.0")
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from ..display.presets import MAX_NAME_LENGTH, PresetError, clean_name  # noqa: E402
+from ..size import px  # noqa: E402
 
 
 def _button(text: str, css: str) -> Gtk.Button:
@@ -103,6 +104,7 @@ class _NameDialog:
         card.append(self._entry)
 
         self._existing: Gtk.Box | None = None
+        self._existing_name_list: list[str] = []
         if with_existing:
             existing_caption = Gtk.Label(label="Или выберите существующий")
             existing_caption.set_halign(Gtk.Align.START)
@@ -111,7 +113,18 @@ class _NameDialog:
 
             self._existing = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
             self._existing.add_css_class("volna-preset-list")
-            card.append(self._existing)
+            # The design caps this list (04 §2.2, max-height 144 px); without
+            # the cap a library of presets made the dialog taller than the
+            # screen and pushed its buttons out of reach.
+            self._existing_scroller = Gtk.ScrolledWindow()
+            self._existing_scroller.add_css_class("volna-preset-list-scroller")
+            self._existing_scroller.set_policy(
+                Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC
+            )
+            self._existing_scroller.set_propagate_natural_height(True)
+            self._existing_scroller.set_max_content_height(px(144))
+            self._existing_scroller.set_child(self._existing)
+            card.append(self._existing_scroller)
 
         self._hint = Gtk.Label()
         self._hint.set_halign(Gtk.Align.START)
@@ -210,10 +223,18 @@ class _NameDialog:
             self._existing.remove(child)
             child = following
 
+        self._existing_name_list = list(names)
         for name in names:
-            row = Gtk.Button(label=name)
-            row.add_css_class("volna-preset-dialog-button")
+            row = Gtk.Button()
+            row.add_css_class("volna-preset-existing-row")
             row.set_halign(Gtk.Align.FILL)
+
+            text = Gtk.Label(label=name)
+            text.set_xalign(0)
+            text.set_halign(Gtk.Align.START)
+            text.set_hexpand(True)
+            row.set_child(text)
+
             row.connect("clicked", self._pick_existing, name)
             self._existing.append(row)
 
@@ -223,16 +244,7 @@ class _NameDialog:
         self._entry.select_region(0, -1)
 
     def _existing_names(self) -> list[str]:
-        if self._existing is None:
-            return []
-
-        names: list[str] = []
-        child = self._existing.get_first_child()
-        while child is not None:
-            if isinstance(child, Gtk.Button):
-                names.append(child.get_label() or "")
-            child = child.get_next_sibling()
-        return names
+        return list(self._existing_name_list)
 
     def _typed_name(self) -> str:
         return self._entry.get_text().strip()

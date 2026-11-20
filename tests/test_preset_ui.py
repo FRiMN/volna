@@ -1016,3 +1016,54 @@ def test_a_custom_preset_with_a_builtin_snapshot_is_named_by_itself(
     _pump(0.1)
 
     assert _label_text(window) == "Моя копия"
+
+
+# -- long preset libraries ----------------------------------------------------
+
+
+def _many_presets(window: object, count: int = 40) -> None:
+    for index in range(1, count + 1):
+        window._presets.save(f"Пресет {index:02d}", ViewSettings(zoom=index % 100))
+    window._view_panel.sync()
+
+
+def test_the_menu_is_capped_and_scrolls_with_a_long_library(window_factory) -> None:
+    """34 real presets made an 805 px menu on a 900 px screen: the tail was lost."""
+    window = window_factory(Path("/"))
+    _many_presets(window)
+    _open_panel(window)
+    _open_menu(window)
+    _pump(0.3)
+
+    from volna import size
+
+    section = _section(window)
+    cap = size.px(14 * 26)
+    assert section._popover.get_height() <= cap + size.px(16), (
+        f"menu is {section._popover.get_height()} px, cap is {cap}"
+    )
+
+    adjustment = section._scroller.get_vadjustment()
+    assert adjustment.get_upper() > adjustment.get_page_size(), "the list must scroll"
+
+    rows = _menu_rows(window)
+    assert len(rows) == len(BUILTIN_NAMES) + 40
+
+
+def test_the_save_dialog_list_is_capped_and_scrolls(window_factory) -> None:
+    """The design caps that list at 144 px; uncapped it grew the dialog to 1520 px."""
+    window = window_factory(Path("/"))
+    _many_presets(window)
+    _open_panel(window)
+
+    dialog = _open_save(window)
+    _pump(0.3)
+
+    from volna import size
+
+    adjustment = dialog._existing_scroller.get_vadjustment()
+    assert adjustment.get_page_size() <= size.px(144) + size.px(4)
+    assert adjustment.get_upper() > adjustment.get_page_size()
+    assert dialog.widget.get_height() <= size.px(600), (
+        f"dialog is {dialog.widget.get_height()} px tall"
+    )

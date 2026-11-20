@@ -30,6 +30,15 @@ from .controls import section  # noqa: E402
 PRESETS_TITLE = "Пресеты"
 UNMANAGED_LABEL = "Настроено вручную"
 
+# The menu is a popup surface: GTK positions it near the anchor but does not
+# scroll it, so a long list used to run off the screen and the tail was
+# unreachable (34 real presets gave an 805 px menu on a 900 px screen). The list
+# is capped and scrolls instead; the cap follows the monitor.
+_MENU_MAX_ROWS = 14
+_MENU_MIN_ROWS = 4
+_MENU_ROW_PX = 26  # the row height; the list has no extra spacing
+_MENU_CHROME_PX = 220  # panel anchor, margins, popup padding
+
 
 class PresetActions(Protocol):
     """What the section asks of the window; no GTK, no storage here."""
@@ -77,7 +86,13 @@ class PresetsSection:
         # selected row would paint a second, competing highlight over it.
         self._list.set_selection_mode(Gtk.SelectionMode.NONE)
         self._list.connect("row-activated", self._on_row_activated)
-        self._popover.set_child(self._list)
+        self._scroller = Gtk.ScrolledWindow()
+        self._scroller.add_css_class("volna-preset-menu-scroller")
+        self._scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self._scroller.set_propagate_natural_height(True)
+        self._scroller.set_max_content_height(px(_MENU_MAX_ROWS * _MENU_ROW_PX))
+        self._scroller.set_child(self._list)
+        self._popover.set_child(self._scroller)
         self._select.set_popover(self._popover)
 
         self._save = Gtk.Button()
@@ -103,7 +118,29 @@ class PresetsSection:
         return self._popover.get_visible()
 
     def open_menu(self) -> None:
+        # Resize before showing: changing the height of an open popup makes GTK
+        # re-present it, which reads as a jump.
+        self._scroller.set_max_content_height(self._menu_max_height())
         self._select.set_active(True)
+
+    def _menu_max_height(self) -> int:
+        """The tallest list that still leaves the anchor and margins on screen."""
+        available = px(600)
+        display = self._select.get_display()
+        if display is not None:
+            native = self._select.get_native()
+            surface = native.get_surface() if native is not None else None
+            monitor = (
+                display.get_monitor_at_surface(surface)
+                if surface is not None
+                else display.get_monitor(0)
+            )
+            if monitor is not None:
+                available = monitor.get_geometry().height
+
+        tallest = px(_MENU_MAX_ROWS * _MENU_ROW_PX)
+        shortest = px(_MENU_MIN_ROWS * _MENU_ROW_PX)
+        return max(shortest, min(tallest, available - px(_MENU_CHROME_PX)))
 
     def close_menu(self) -> None:
         self._select.set_active(False)

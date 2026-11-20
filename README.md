@@ -48,9 +48,25 @@ uv run volna --screenshot .tmp/volna.png
 uv run pytest       # тесты
 uv run ruff check   # линт
 uv run ruff format  # форматирование
+uv run mypy         # проверка типов (strict, см. [tool.mypy])
 ```
 
-То же через `invoke`: `uv run invoke testing`, `uv run invoke check`, `uv run invoke fmt`.
+То же через `invoke`: `uv run invoke testing`, `uv run invoke check`, `uv run invoke fmt`,
+`uv run invoke types`. Гейт целиком — `uv run invoke static` (линт, формат, типы) и
+`uv run invoke verify` (то же плюс тесты).
+
+### Git-хуки
+
+CI нет, поэтому гейт живёт в хуках, которые лежат в репозитории (`.githooks/`):
+до коммита — `invoke static`, до пуша — `invoke verify`. Включаются один раз в каждом
+клоне:
+
+```bash
+uv run invoke hooks
+```
+
+Отдельный коммит можно провести мимо хуков через `git commit --no-verify`; отключить
+обратно — `git config --unset core.hooksPath`.
 
 ## Структура репозитория
 

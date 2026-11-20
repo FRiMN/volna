@@ -306,8 +306,13 @@ class DirModel:
         for entry in self._entries:
             if not self._visible(entry):
                 continue
-            bucket = group_of(entry.mtime, now=now)
-            day = day_start(entry.mtime) if bucket is GroupBucket.THIS_WEEK else None
+            mtime = entry.mtime
+            bucket = group_of(mtime, now=now)
+            day = (
+                day_start(mtime)
+                if bucket is GroupBucket.THIS_WEEK and mtime is not None
+                else None
+            )
             buckets[(bucket, day)].append(entry)
 
         return [

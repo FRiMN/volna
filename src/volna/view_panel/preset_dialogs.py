@@ -51,7 +51,12 @@ def _card(parent: Gtk.Window) -> tuple[Gtk.Window, Gtk.Box]:
 def _escape_cancels(widget: Gtk.Widget, on_cancel: Callable[[], None]) -> None:
     keys = Gtk.EventControllerKey()
 
-    def pressed(_controller, keyval, _keycode, _state) -> bool:
+    def pressed(
+        _controller: Gtk.EventControllerKey,
+        keyval: int,
+        _keycode: int,
+        _state: Gdk.ModifierType,
+    ) -> bool:
         if keyval == Gdk.KEY_Escape:
             on_cancel()
             return True

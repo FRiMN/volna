@@ -57,10 +57,11 @@ def sort_entries(
         present, value = _present_value(entry, key)
         if reverse:
             value = -value
-        if folders_first:
-            return (_folder_rank(entry), 0 if present else 1, value)
+        # One shape for both modes: with ``folders_first`` off every entry gets
+        # the same rank, so the key decides and missing values still go last.
+        folder_rank = _folder_rank(entry) if folders_first else 0
 
-        return (0 if present else 1, value)
+        return (folder_rank, 0 if present else 1, value)
 
     entries.sort(key=numeric_key)
 

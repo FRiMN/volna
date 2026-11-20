@@ -1,0 +1,6 @@
+#!/bin/sh
+# Full gate before a push: the static gate and the whole test suite.
+# Enable once per clone with `uv run invoke hooks`.
+set -e
+
+exec uv run --frozen invoke verify

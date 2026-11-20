@@ -141,7 +141,7 @@ class TileBand(Gtk.Widget):
         # finalized with a leftover child makes GTK warn and leaks the tile.
         self.release()
 
-    def do_measure(self, orientation: int, for_size: int):
+    def do_measure(self, orientation: int, for_size: int) -> tuple[int, int, int, int]:
         count = len(self._tiles)
         if orientation == Gtk.Orientation.HORIZONTAL:
             natural = count * self._tile_width + max(0, count - 1) * _GAP

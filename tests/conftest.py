@@ -18,8 +18,21 @@ from array import array
 from collections import Counter
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
+
+
+def _unavailable(reason: str) -> NoReturn:
+    """Skip without a usable display locally; fail in CI, where a skip is a lie.
+
+    The widget tests are the only coverage of the GTK layer: a skipped run
+    there looks green while checking nothing.
+    """
+    if os.environ.get("CI"):
+        pytest.fail(f"{reason}: CI must run the widget tests")
+
+    pytest.skip(reason)
 
 
 @pytest.fixture(scope="session")
@@ -40,12 +53,12 @@ def gtk_display() -> Iterator[None]:
             gi.require_version("Gtk", "4.0")
             from gi.repository import GLib, Gtk
         except (ImportError, ValueError) as exc:
-            pytest.skip(f"GTK4 is not available: {exc}")
+            _unavailable(f"GTK4 is not available: {exc}")
 
         try:
             Gtk.init()
         except GLib.Error as exc:
-            pytest.skip(f"cannot initialize GTK4: {exc}")
+            _unavailable(f"cannot initialize GTK4: {exc}")
 
         yield
     finally:
@@ -67,11 +80,11 @@ def _free_display() -> int | None:
 
 def _start_xvfb() -> tuple[subprocess.Popen, str]:
     if shutil.which("Xvfb") is None:
-        pytest.skip("Xvfb is not installed")
+        _unavailable("Xvfb is not installed")
 
     number = _free_display()
     if number is None:
-        pytest.skip("no free X display")
+        _unavailable("no free X display")
 
     process = subprocess.Popen(
         ["Xvfb", f":{number}", "-screen", "0", "1280x1024x24", "-nolisten", "tcp"],
@@ -89,7 +102,7 @@ def _start_xvfb() -> tuple[subprocess.Popen, str]:
 
     process.terminate()
     process.wait(5)
-    pytest.skip("Xvfb did not start")
+    _unavailable("Xvfb did not start")
 
 
 class _XImage(ctypes.Structure):
@@ -118,7 +131,7 @@ class _XImage(ctypes.Structure):
 def _x11_library() -> ctypes.CDLL:
     path = ctypes.util.find_library("X11")
     if path is None:
-        pytest.skip("libX11 is not installed")
+        _unavailable("libX11 is not installed")
 
     x11 = ctypes.CDLL(path)
     x11.XOpenDisplay.restype = ctypes.c_void_p
@@ -158,13 +171,13 @@ def _read_colours(
 
     display = x11.XOpenDisplay(None)
     if not display:
-        pytest.skip("cannot open the X display")
+        _unavailable("cannot open the X display")
 
     try:
         xid = GdkX11.X11Surface.get_xid(surface)
         image = x11.XGetImage(display, xid, x, y, width, height, 0xFFFFFFFF, 2)
         if not image:
-            pytest.skip("XGetImage failed")
+            _unavailable("XGetImage failed")
 
         header = image.contents
         raw = ctypes.string_at(header.data, header.bytes_per_line * header.height)
@@ -176,7 +189,7 @@ def _read_colours(
         green_shift = shift(header.green_mask)
         blue_shift = shift(header.blue_mask)
         if header.bits_per_pixel != 32:
-            pytest.skip(
+            _unavailable(
                 f"unsupported pixel format: {header.bits_per_pixel} bits per pixel"
             )
 

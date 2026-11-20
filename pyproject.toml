@@ -27,6 +27,7 @@ dev = [
     "ruff~=0.17.4",
     "pytest~=9.2.0",
     "invoke~=3.0.3",
+    "mypy~=2.4",
 ]
 
 [build-system]
@@ -63,3 +64,34 @@ ignore = [
     "E741", # Ambiguous variable name
     "E501", # Line too long
 ]
+
+[tool.mypy]
+# The floor of requires-python: the code must type-check on the oldest
+# interpreter we claim to support, not only on the one we run.
+python_version = "3.11"
+files = ["src/volna"]
+strict = true
+warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+# gi ships no type information for the installed PyGObject (3.48), and the
+# published stubs target a newer GTK than we run, so importing them would
+# check the code against an API it never sees. GTK is Any here.
+module = ["gi", "gi.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Rules that need typed GTK: every Gtk.* symbol is Any, so subclassing Any
+# and returning Any from a GTK getter say nothing about this code. Turning
+# them off here keeps the GTK layer checked for everything that does not
+# depend on the toolkit's types; revisit when PyGObject stubs match runtime.
+module = [
+    "volna.main",
+    "volna.window",
+    "volna.tab",
+    "volna.glyph",
+    "volna.views.*",
+    "volna.view_panel.*",
+]
+disallow_subclassing_any = false
+warn_return_any = false

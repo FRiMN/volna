@@ -42,6 +42,11 @@ body:
       label: Где
       description: Компонент, файлы, существующие решения, на которые опираемся
   - type: textarea
+    id: model
+    attributes:
+      label: Модель и провайдер
+      description: Если issue составлен агентом — `модель / провайдер` (например, `deepseek-flash / deepseek-account`); человек может оставить пустым
+  - type: textarea
     id: details
     attributes:
       label: Детали (по желанию)

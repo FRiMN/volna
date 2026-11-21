@@ -49,6 +49,11 @@ body:
       label: Где
       description: Компонент и file:line, если известны. Для внешнего бага можно оставить пустым — заполним на триаже
   - type: textarea
+    id: model
+    attributes:
+      label: Модель и провайдер
+      description: Если issue составлен агентом — `модель / провайдер` (например, `deepseek-flash / deepseek-account`); человек может оставить пустым
+  - type: textarea
     id: details
     attributes:
       label: Детали (по желанию)

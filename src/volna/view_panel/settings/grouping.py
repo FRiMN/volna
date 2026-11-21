@@ -37,15 +37,15 @@ class GroupingSetting(SettingFeature):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
 
         group: Gtk.CheckButton | None = None
-        for strategy in GROUPING_STRATEGIES:
+        for grouping, strategy in GROUPING_STRATEGIES:
             button = radio_row(strategy.label)
             if group is None:
                 group = button
             else:
                 button.set_group(group)
-            button.connect("toggled", self._on_toggled, strategy.kind)
+            button.connect("toggled", self._on_toggled, grouping)
             box.append(button)
-            self._buttons[strategy.kind] = button
+            self._buttons[grouping] = button
 
         return box
 

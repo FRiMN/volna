@@ -69,12 +69,11 @@ _TODAY = local_midnight(_NOW)
 
 
 def test_the_registry_covers_every_grouping_and_is_the_panel_order() -> None:
-    strategies = GROUPING_STRATEGIES
-    kinds = [strategy.kind for strategy in strategies]
+    kinds = [kind for kind, _strategy in GROUPING_STRATEGIES]
 
     assert kinds == [Grouping.DATE, Grouping.SIZE, Grouping.NONE]
     assert set(kinds) == set(Grouping)
-    assert [strategy.label for strategy in strategies] == [
+    assert [strategy.label for _kind, strategy in GROUPING_STRATEGIES] == [
         "По дате изменения",
         "По размеру",
         "Без группировки",

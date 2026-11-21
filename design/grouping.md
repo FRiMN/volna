@@ -357,10 +357,14 @@ panel radio → update(grouping=...) → DirectoryTab.update_view_settings
 ### D16. Реестр стратегий — единственное место добавления критерия
 
 ```python
-GROUPING_STRATEGIES = (DateGrouping(), SizeGrouping(), FlatGrouping())
+GROUPING_STRATEGIES = (
+    (Grouping.DATE, DateGrouping()),
+    (Grouping.SIZE, SizeGrouping()),
+    (Grouping.NONE, FlatGrouping()),
+)
 ```
 
-`GROUPING_ORDER` не нужен: панель идёт по `GROUPING_STRATEGIES`, берёт подпись у стратегии (`strategy.label`), а порядок радио — это порядок реестра. Тест `test_the_registry_covers_every_grouping_and_is_the_panel_order` требует, чтобы каждая ветка `Grouping` имела ровно одну стратегию. Новый критерий = класс + строка реестра; `tab`, `model` и виды не меняются.
+Реестр — единственное место связи «сохраняемое значение ↔ стратегия» и порядка радио; у самих стратегий `kind` нет. `GROUPING_ORDER` не нужен: панель идёт по парам `GROUPING_STRATEGIES` и берёт подпись у стратегии (`strategy.label`). Тест `test_the_registry_covers_every_grouping_and_is_the_panel_order` требует, чтобы каждая ветка `Grouping` имела ровно одну стратегию. Новый критерий = класс + строка реестра; `tab`, `model` и виды не меняются.
 
 ### D17. `Group` носит ключ и подпись; плоский случай — тоже стратегия
 
@@ -422,6 +426,7 @@ class Group:
 - Стратегия владеет своими данными и отображением entry → bucket: `DateGrouping` — календарь и дни недели, `SizeGrouping` — вложенные `Band`/`BANDS`, `FlatGrouping` — один бакет.
 - `bucket_resolver(now)` строит функцию entry → bucket на один проход; для дат `today` вычисляется один раз на проход, а не на каждую запись.
 - Подписи — на стратегиях (`strategy.label`); `Grouping.label` и `GROUPING_ORDER` удалены, панель идёт по `GROUPING_STRATEGIES`.
+- `GroupingStrategy.kind` тоже убран: связь «значение ↔ стратегия» — это пары реестра, а не атрибут, продублированный в каждом классе.
 
 Модульных `group_of`, `day_start`, `_date_key`, `_date_header`, `_size_key`, `_SIZE_GROUPS` и `GroupBucket` больше нет: всё это методы и данные трёх классов.
 

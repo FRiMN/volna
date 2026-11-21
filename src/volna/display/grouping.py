@@ -78,7 +78,6 @@ class GroupingStrategy(abc.ABC):
     the model's order inside each (design/grouping.md D3).
     """
 
-    kind: ClassVar[Grouping]
     label: ClassVar[str]
 
     @abc.abstractmethod
@@ -112,7 +111,6 @@ class DateGrouping(GroupingStrategy):
     ``folders_first`` apply inside every group without a second sort (D3).
     """
 
-    kind = Grouping.DATE
     label = "По дате изменения"
 
     _DAY = 86_400.0
@@ -174,7 +172,6 @@ class SizeGrouping(GroupingStrategy):
     «Без размера» at the bottom.
     """
 
-    kind = Grouping.SIZE
     label = "По размеру"
 
     @dataclass(frozen=True, slots=True)
@@ -231,7 +228,6 @@ class SizeGrouping(GroupingStrategy):
 class FlatGrouping(GroupingStrategy):
     """No grouping: the whole listing is one caption-less block."""
 
-    kind = Grouping.NONE
     label = "Без группировки"
 
     _ONE = Bucket(None, None, ())
@@ -243,17 +239,17 @@ class FlatGrouping(GroupingStrategy):
         return self._ONE
 
 
-# The order is the panel's radio order and the coverage of ``Grouping``; a new
-# strategy is one row here and one class above.
-GROUPING_STRATEGIES: tuple[GroupingStrategy, ...] = (
-    DateGrouping(),
-    SizeGrouping(),
-    FlatGrouping(),
+# Explicit (kind, strategy) pairs: the registry is the single place that
+# associates a stored value with a policy and fixes the panel order. A new
+# criterion is one row here and one class above; the strategy itself carries
+# only its label and buckets, not a copy of its registry key.
+GROUPING_STRATEGIES: tuple[tuple[Grouping, GroupingStrategy], ...] = (
+    (Grouping.DATE, DateGrouping()),
+    (Grouping.SIZE, SizeGrouping()),
+    (Grouping.NONE, FlatGrouping()),
 )
 
-_STRATEGIES_BY_KIND: dict[Grouping, GroupingStrategy] = {
-    strategy.kind: strategy for strategy in GROUPING_STRATEGIES
-}
+_STRATEGIES_BY_KIND: dict[Grouping, GroupingStrategy] = dict(GROUPING_STRATEGIES)
 
 
 def strategy_for(kind: Grouping) -> GroupingStrategy:

@@ -201,26 +201,10 @@ class _Harness:
         _pump(0.05)
 
 
-@pytest.fixture(scope="session")
-def project_theme(gtk_display) -> Iterator[None]:
-    """Load the project theme: the popup geometry depends on its CSS.
-
-    GTK builds the popup surface around the drop shadow of ``theme.css``, so
-    the geometry assertions are only meaningful with the real stylesheet.
-    """
-    Gdk = _gdk()
-    Gtk = _gtk()
-
-    provider = Gtk.CssProvider()
-    provider.load_from_string(_theme_css_path().read_text(encoding="utf-8"))
-    display = Gdk.Display.get_default()
-    if display is None:
-        pytest.skip("no display")
-
-    Gtk.StyleContext.add_provider_for_display(
-        display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-    )
-    yield
+# ``project_theme`` (the popup geometry depends on ``theme.css``: GTK builds the
+# popup surface around its drop shadow) is the shared fixture from conftest.py.
+# It puts the provider on the display for one test and takes it off afterwards:
+# a session-scoped copy here leaked the stylesheet into every later test.
 
 
 @pytest.fixture

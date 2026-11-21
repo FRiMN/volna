@@ -171,31 +171,10 @@ def _opened_view(*, width: int = 900, height: int = 900) -> Iterator[_Harness]:
         harness.close()
 
 
-@contextmanager
-def _project_theme() -> Iterator[None]:
-    """Load ``theme.css`` for one test and take it off the display afterwards.
-
-    The grouped band is width-driven only because the theme relaxes the tile's
-    ``min-width`` inside ``.volna-icons-band`` (design/grouping.md D6/D9); this
-    test file is the place that guards that contract.
-    """
-    from pathlib import Path
-
-    from gi.repository import Gdk, Gtk
-
-    css = (Path(__file__).resolve().parents[1] / "src/volna/theme.css").read_text(
-        encoding="utf-8"
-    )
-    provider = Gtk.CssProvider()
-    provider.load_from_string(css)
-    display = Gdk.Display.get_default()
-    Gtk.StyleContext.add_provider_for_display(
-        display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-    )
-    try:
-        yield
-    finally:
-        Gtk.StyleContext.remove_provider_for_display(display, provider)
+# ``project_theme`` is the shared fixture from conftest.py: the grouped band is
+# width-driven only because the theme relaxes the tile's ``min-width`` inside
+# ``.volna-icons-band`` (design/grouping.md D6/D9), and this file guards that
+# contract. The fixture takes the provider off the display afterwards.
 
 
 # -- grouped structure --------------------------------------------------------
@@ -273,12 +252,17 @@ def test_tiles_per_band_follow_the_band_width(gtk_display) -> None:
         assert all(1 <= len(band.items) <= count for band in bands)
 
 
-def test_a_short_band_keeps_the_design_tile_width(gtk_display) -> None:
+def test_a_short_band_keeps_the_design_tile_width(gtk_display, project_theme) -> None:
     """A band with fewer tiles than fits must not stretch them across the band.
 
     The mockup's grid columns are 150..178 px and the leftover width stays to
     the right; stretching two tiles over a 1400 px band would not read as the
     design's icon grid (design/grouping.md D6).
+
+    The theme is loaded because the application always runs with it. The tile's
+    design width is its place in the band, not ``get_width()``: GTK reports the
+    *content* box there, which the tile's CSS padding makes narrower than the
+    box the band allocates (issue #11).
     """
     from volna.size import px
     from volna.views.base import Section
@@ -291,11 +275,19 @@ def test_a_short_band_keeps_the_design_tile_width(gtk_display) -> None:
             return len(tiles) == 2 and all(tile.get_width() > 0 for tile in tiles)
 
         assert _pump_until(laid_out)
-        tiles = _by_class(harness.view.widget, "volna-icons-tile")
-        widths = [tile.get_width() for tile in tiles]
+        first, second = _by_class(harness.view.widget, "volna-icons-tile")
+        band = first.get_parent()
+        assert second.get_parent() is band
 
-        assert all(px(150) - 1 <= width <= px(178) for width in widths), widths
-        assert sum(widths) + _GAP < harness.view._list.get_width(), (
+        first_ok, first_bounds = first.compute_bounds(band)
+        second_ok, second_bounds = second.compute_bounds(band)
+        assert first_ok and second_ok
+
+        # The tiles sit one design width plus the band's gap apart.
+        tile_width = round(second_bounds.get_x() - first_bounds.get_x()) - _GAP
+
+        assert px(150) - 1 <= tile_width <= px(178), tile_width
+        assert second_bounds.get_x() + tile_width < harness.view._list.get_width(), (
             "a two-tile band filled the whole width instead of keeping tile width"
         )
 
@@ -387,13 +379,17 @@ def test_flat_after_grouped_drops_the_captions(gtk_display) -> None:
         assert _texts(harness.view.widget, "volna-group-title") == []
 
 
-def test_narrow_band_clips_tiles_instead_of_squeezing_them(gtk_display) -> None:
+def test_narrow_band_clips_tiles_instead_of_squeezing_them(
+    gtk_display, project_theme
+) -> None:
     """A band narrower than its tiles must not allocate a tile below its padding.
 
     The ListView allocates the previous rows once more between a resize and the
     idle re-chunk. Squeezing the overflowing tiles to zero width made GTK
     allocate their padded children with negative sizes (``GtkImage ... with
     width -14``); the band now clips them at their design width instead.
+
+    The theme is loaded: the clipping is about the tiles' CSS padding.
     """
     import gi
 
@@ -415,18 +411,17 @@ def test_narrow_band_clips_tiles_instead_of_squeezing_them(gtk_display) -> None:
         None,
     )
     try:
-        with _project_theme():
-            band = TileBand(tile_width=_TILE_MIN)
-            for _ in range(2):
-                band.append(_make_tile())
+        band = TileBand(tile_width=_TILE_MIN)
+        for _ in range(2):
+            band.append(_make_tile())
 
-            window = Gtk.Window()
-            window.set_default_size(100, 200)
-            window.set_child(band)
-            window.present()
-            _pump(0.4)
-            window.destroy()
-            _pump(0.1)
+        window = Gtk.Window()
+        window.set_default_size(100, 200)
+        window.set_child(band)
+        window.present()
+        _pump(0.4)
+        window.destroy()
+        _pump(0.1)
     finally:
         GLib.log_remove_handler("Gtk", handler)
 
@@ -502,7 +497,9 @@ def test_reading_position_survives_a_rechunk(gtk_display) -> None:
         assert adjustment.get_value() > 0
 
 
-def test_theme_lets_the_window_shrink_and_rechunk_the_bands(gtk_display) -> None:
+def test_theme_lets_the_window_shrink_and_rechunk_the_bands(
+    gtk_display, project_theme
+) -> None:
     """The grouped band must not freeze the window's minimum width.
 
     A tile carries ``.volna-icons-tile`` with a design min-width; if it counted
@@ -514,7 +511,7 @@ def test_theme_lets_the_window_shrink_and_rechunk_the_bands(gtk_display) -> None
 
     items = _items(40)
 
-    with _project_theme(), _opened_view(width=1240, height=800) as harness:
+    with _opened_view(width=1240, height=800) as harness:
         harness.render((Section(items=items, header="Сегодня"),))
 
         wide_width = harness.view._list.get_width()

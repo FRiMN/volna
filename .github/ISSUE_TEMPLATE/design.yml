@@ -16,6 +16,13 @@ body:
     validations:
       required: true
   - type: textarea
+    id: impact
+    attributes:
+      label: Влияние
+      description: Что будет, если оставить как есть, и чем грозит неверное решение — цена переделки после релиза, расхождение с дизайн-документом, кому придётся переучиваться
+    validations:
+      required: true
+  - type: textarea
     id: desired
     attributes:
       label: Какое поведение хотим

@@ -22,6 +22,11 @@ from typing import ClassVar
 from ..core import Entry
 
 
+# The stored setting value, deliberately not a strategy object: this enum is
+# the stable JSON/preset token and the closed set `ViewSettings.from_mapping`
+# validates, while a strategy is behavior. Storing a strategy in ViewSettings
+# would make the settings snapshot depend on policy-object equality; the
+# registry below keeps the mapping explicit instead (same split as ViewMode).
 class Grouping(StrEnum):
     """How a listing is split (the stored value and the panel radio group)."""
 
@@ -73,6 +78,8 @@ class Group:
 class GroupingStrategy(abc.ABC):
     """One way to split a listing into groups.
 
+    A strategy is behavior, not the stored value: `Grouping` is the token in
+    settings and presets, and `GROUPING_STRATEGIES` maps the two explicitly.
     A subclass builds an entry → bucket resolver for the pass; the base runs
     the linear pass and returns the buckets in their declared order, preserving
     the model's order inside each (design/grouping.md D3).

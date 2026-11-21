@@ -19,6 +19,7 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -431,6 +432,140 @@ def test_narrow_band_clips_tiles_instead_of_squeezing_them(gtk_display) -> None:
         GLib.log_remove_handler("Gtk", handler)
 
     assert criticals == []
+
+
+# -- fast resize --------------------------------------------------------------
+
+
+# A fast drag resizes the window while the ListView still lays out the previous
+# rows; the idle re-chunk comes after. Squeezing the overflowing tiles into the
+# remaining width gave a tile less than its CSS padding, and GTK then measured
+# and allocated its padded children with negative sizes — the ``for_size >= -1``
+# criticals and ``attempt to allocate ... width -16`` warnings of issue #9.
+# Only stderr shows those, so the scenario runs in a child interpreter.
+_FAST_RESIZE_SCRIPT = """
+import sys
+import time
+from pathlib import Path
+
+import gi
+
+gi.require_version("Gdk", "4.0")
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gdk, GLib, Gtk
+
+Gtk.init()
+
+from volna.size import px
+from volna.views.base import Section
+from volna.views.icons import IconsView
+from volna.views.item import ListingItem
+
+theme = Path(sys.argv[1])
+
+
+def pump(seconds=0.2):
+    context = GLib.MainContext.default()
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        while context.pending():
+            context.iteration(False)
+        time.sleep(0.01)
+
+
+def walk(widget):
+    child = widget.get_first_child()
+    while child is not None:
+        yield child
+        yield from walk(child)
+        child = child.get_next_sibling()
+
+
+def by_class(root, name):
+    return [widget for widget in walk(root) if widget.has_css_class(name)]
+
+
+def items(prefix, count):
+    return tuple(
+        ListingItem(
+            f"{prefix}{index:03d}.txt",
+            f"/tmp/{prefix}{index:03d}.txt",
+            "1 КиБ",
+            "01.01.2026 00:00",
+            False,
+        )
+        for index in range(count)
+    )
+
+
+provider = Gtk.CssProvider()
+provider.load_from_string(theme.read_text(encoding="utf-8"))
+Gtk.StyleContext.add_provider_for_display(
+    Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+)
+
+sections = tuple(
+    Section(items=items(f"g{group}", 40), header=f"Группа {group}", key=f"g{group}")
+    for group in range(6)
+)
+window = Gtk.Window()
+window.set_default_size(1100, 900)
+view = IconsView(on_activate=lambda item: None)
+window.set_child(view.widget)
+window.present()
+pump(0.4)
+view.render(sections)
+pump(0.8)
+
+root = view.widget
+assert by_class(root, "volna-group-title"), "the listing is not grouped"
+assert [tile for tile in by_class(root, "volna-icons-tile") if tile.get_mapped()], (
+    "no tiles before the resize"
+)
+
+# The drag: alternate wide and narrow faster than the idle re-chunk.
+for index in range(20):
+    window.set_default_size(700 if index % 2 else 1200, 900)
+    pump(0.06)
+
+window.set_default_size(700, 900)
+pump(1.0)
+
+tiles = [tile for tile in by_class(root, "volna-icons-tile") if tile.get_mapped()]
+assert tiles, "no tiles after the resize"
+widths = [tile.get_width() for tile in tiles]
+assert all(width >= px(150) - 1 for width in widths), widths
+assert by_class(root, "volna-group-title"), "the captions disappeared"
+for tile in tiles:
+    names = by_class(tile, "volna-icons-name")
+    assert len(names) == 1 and names[0].get_text(), "a tile lost its name"
+
+window.destroy()
+pump(0.5)
+print("RESIZE DONE", flush=True)
+"""
+
+
+def test_fast_resize_prints_no_gtk_criticals(gtk_display) -> None:
+    """A fast drag must not make GTK measure or allocate a tile negatively.
+
+    The band keeps the design tile width and lets the scroller clip the stale
+    row until the idle re-chunk replaces it (issue #9). A regression here is
+    visible only in stderr, and the settled layout must keep every tile at its
+    design width with its caption and name intact.
+    """
+    theme = Path(__file__).resolve().parents[1] / "src/volna/theme.css"
+    result = subprocess.run(
+        [sys.executable, "-c", _FAST_RESIZE_SCRIPT, str(theme)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "RESIZE DONE" in result.stdout, result.stderr
+    assert "Gtk-CRITICAL" not in result.stderr, result.stderr
+    assert "Gtk-WARNING" not in result.stderr, result.stderr
 
 
 # -- activation and scroll ----------------------------------------------------

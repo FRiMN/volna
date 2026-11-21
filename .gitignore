@@ -24,3 +24,6 @@ design/work/
 Thumbs.db
 .idea/
 __pycache__/
+
+# gh / github scratch (AGENTS.md)
+.github/temp/

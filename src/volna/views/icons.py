@@ -164,9 +164,9 @@ class TileBand(Gtk.Widget):
 
             # A band that no longer fits (the ListView allocates the previous
             # rows once more between a resize and the idle re-chunk) is clipped
-            # by the scroller instead of squeezing the tiles to zero width: a
-            # tile narrower than its padding makes GTK allocate the padded
-            # children with negative sizes.
+            # by the scroller instead of squeezing the tiles below the design
+            # width: a tile narrower than its CSS padding makes GTK measure and
+            # allocate the padded children with negative sizes (#9).
             transform = Gsk.Transform.new().translate(Graphene.Point().init(x, 0))
             tile.allocate(self._tile_width, height, -1, transform)
             x += self._tile_width + _GAP

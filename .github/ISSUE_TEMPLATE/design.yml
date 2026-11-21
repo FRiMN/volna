@@ -1,0 +1,65 @@
+name: Дизайн
+description: Задача на вид и поведение интерфейса — сначала решение владельца, потом код
+title: "Дизайн: "
+labels: ["design"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Дизайн-issue не трогает код: он фиксирует проблему, варианты и вопросы, на которые нужен ответ владельца.
+        Полные правила: `AGENTS.md` → «Работа с issue».
+  - type: textarea
+    id: problem
+    attributes:
+      label: Проблема
+      description: Что сейчас не так и почему это важно — с примерами, а не в общем виде
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Влияние
+      description: Что будет, если оставить как есть, и чем грозит неверное решение — цена переделки после релиза, расхождение с дизайн-документом, кому придётся переучиваться
+    validations:
+      required: true
+  - type: textarea
+    id: desired
+    attributes:
+      label: Какое поведение хотим
+      description: Что должен видеть и уметь пользователь; принципы, а не готовое решение
+    validations:
+      required: true
+  - type: textarea
+    id: variants
+    attributes:
+      label: Варианты
+      description: Таблица «вариант / суть / плюсы / минусы». Если вариант один — так и напишите и объясните почему
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: decisions
+    attributes:
+      label: Что решать владельцу
+      description: Вопросы, без ответов на которые нельзя начинать реализацию
+    validations:
+      required: true
+  - type: textarea
+    id: docs
+    attributes:
+      label: Что меняется в дизайн-документах
+      description: Какие design/*.md, макет или спека обновляются; если ничего — напишите «ничего»
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Критерий приёмки (черновик)
+      description: Признаки, по которым принятое решение можно считать реализованным
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Детали (по желанию)
+      description: Референсы, замеры, снимки, карта будущей реализации по файлам

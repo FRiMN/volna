@@ -43,7 +43,7 @@ _WHEEL_STEP = px(100)
 class ColumnGroup(GObject.Object):
     """One column: an optional group caption plus the items filling it.
 
-    Grouped listings make one column per date group (design/grouping.md D7);
+    Grouped listings make one column per group (design/grouping.md D7);
     the flat listing keeps caption-less columns of ``ROWS_PER_COLUMN`` rows.
     """
 

@@ -1,4 +1,4 @@
-"""«Значки» — a virtualized grid of tiles, optionally split into date groups.
+"""«Значки» — a virtualized grid of tiles, optionally split into groups.
 
 The flat listing keeps the :class:`Gtk.GridView` path (design/view-modes.md
 D5). Date grouping switches to a vertical :class:`Gtk.ListView` whose model
@@ -267,7 +267,7 @@ class IconsView(ListingView):
     # -- grouped --------------------------------------------------------------
 
     def _render_grouped(self) -> None:
-        """Named sections: one caption row plus tile bands per date group."""
+        """Named sections: one caption row plus tile bands per group."""
         self._grouped = True
         # Without an allocated width the first band layout is still unknown:
         # keeping a reading position there would scroll the first caption away.

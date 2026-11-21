@@ -4,8 +4,8 @@ No GTK imports here, so the whole package is testable without a display.
 """
 
 from .entry import Entry, Kind
-from .model import Counters, DirModel, Event, Group, ScanState, counters_of
-from .order import BUCKET_ORDER, GroupBucket, SortKey, group_of, sort_entries
+from .model import Counters, DirModel, Event, ScanState, counters_of
+from .order import SortKey, sort_entries
 from .scanner import (
     Batch,
     DirScanner,
@@ -18,15 +18,12 @@ from .scanner import (
 from .statpool import StatPool, StatResult
 
 __all__ = [
-    "BUCKET_ORDER",
     "Batch",
     "Counters",
     "DirModel",
     "DirScanner",
     "Entry",
     "Event",
-    "Group",
-    "GroupBucket",
     "Kind",
     "Phase",
     "ScanError",
@@ -35,7 +32,6 @@ __all__ = [
     "StatPool",
     "StatResult",
     "counters_of",
-    "group_of",
     "iter_batches",
     "iter_dirents",
     "iter_stats",

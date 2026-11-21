@@ -11,7 +11,7 @@ import pytest
 
 from volna.core.entry import Entry, Kind
 from volna.core.model import Counters, DirModel, Event, ScanState
-from volna.core.order import GroupBucket, SortKey, day_start
+from volna.core.order import SortKey
 from volna.core.scanner import Batch, Phase
 
 
@@ -104,27 +104,6 @@ def test_counters_ignore_hidden_directories_and_files() -> None:
     model.finish_scan(generation)
 
     assert model.counters() == Counters(folders=1, files=1, total_size=12)
-
-
-def test_groups_skip_hidden_entries() -> None:
-    now = 1_700_000_000.0
-    today = day_start(now)
-    model = DirModel(show_hidden=False, now=lambda: now)
-    generation = start(model)
-    ingest(
-        model,
-        [
-            make("visible.txt", mtime=today + 10),
-            make(".today", mtime=today + 5),
-            make(".yesterday", mtime=today - 10),
-        ],
-    )
-    model.finish_scan(generation)
-
-    groups = model.groups()
-
-    assert [group.bucket for group in groups] == [GroupBucket.TODAY]
-    assert [entry.name for entry in groups[0].entries] == ["visible.txt"]
 
 
 # -- set_show_hidden ----------------------------------------------------

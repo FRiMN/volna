@@ -202,6 +202,7 @@ def test_mode_section_lists_every_available_mode(gtk_display) -> None:
         "Столбцы",
         "Подробности",
         "По дате изменения",
+        "По размеру",
         "Без группировки",
         "Дата изменения",
         "Размер",

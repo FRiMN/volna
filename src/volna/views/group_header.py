@@ -1,6 +1,6 @@
 """Group header widgets shared by the listing views (design/grouping.md D4).
 
-The header is one caption row above a date group: the group title on the left
+The header is one caption row above a group: the group title on the left
 and the group summary on the right. Metrics and colours live in ``theme.css``
 under the ``volna-group-*`` classes; each mode only places the pieces.
 
@@ -71,7 +71,7 @@ def header_box(text: str, summary: int | str) -> Gtk.Box:
 
 
 class GroupHeader(Gtk.Box):
-    """An interactive date-group caption (design/grouping.md D13/D14).
+    """An interactive group caption (design/grouping.md D13/D14).
 
     The chevron is a real ``Gtk.Button`` (focus and keyboard come from the
     toolkit), so a click on it toggles without the view's help. Clicks anywhere

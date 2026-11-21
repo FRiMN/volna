@@ -1,4 +1,4 @@
-"""DirModel — the single source of listing order, groups, counters and visibility.
+"""DirModel — the single source of listing order, counters and visibility.
 
 The model is thread-agnostic: every method must run on one thread (the GTK
 main loop in the app). The async wiring — a worker thread plus
@@ -6,27 +6,19 @@ main loop in the app). The async wiring — a worker thread plus
 
 Hidden entries are always enumerated and kept in memory; ``show_hidden`` is a
 read policy over that list, not a scanner option (see design/view-panel.md
-§2.5). ``entries()``/``groups()``/``counters()`` therefore describe only what the
-current policy lets the user see, and flipping it is an in-memory operation.
+§2.5). ``entries()``/``counters()`` therefore describe only what the current
+policy lets the user see, and flipping it is an in-memory operation.
 """
 
 from __future__ import annotations
 
-import time
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from enum import Enum
 
 from .entry import Entry, Kind
-from .order import (
-    BUCKET_ORDER,
-    GroupBucket,
-    SortKey,
-    day_start,
-    group_of,
-    sort_entries,
-)
+from .order import SortKey, sort_entries
 from .scanner import Batch, DirScanner, Phase
 from .statpool import StatPool
 
@@ -55,20 +47,6 @@ class Counters:
     total_size: int = 0
 
 
-@dataclass(slots=True, frozen=True)
-class Group:
-    """One date group: a coarse bucket, its entries and (for THIS_WEEK) its day.
-
-    ``THIS_WEEK`` is split into one group per local calendar day because the
-    design labels those groups with weekday names (design/grouping.md D2);
-    ``day`` is that day's local midnight, and ``None`` for the coarse buckets.
-    """
-
-    bucket: GroupBucket
-    entries: list[Entry]
-    day: float | None = None
-
-
 def counters_of(entries: Iterable[Entry]) -> Counters:
     """Fold the model's own counting rule over ``entries`` (see ``_count_*``)."""
     folders = files = total = 0
@@ -79,14 +57,6 @@ def counters_of(entries: Iterable[Entry]) -> Counters:
             files += 1
             total += entry.size or 0
     return Counters(folders, files, total)
-
-
-def _group_order(
-    item: tuple[tuple[GroupBucket, float | None], list[Entry]],
-) -> tuple[int, float]:
-    """Bucket order, then newest day first inside THIS_WEEK."""
-    (bucket, day), _entries = item
-    return BUCKET_ORDER.index(bucket), -(day or 0.0)
 
 
 class DirModel:
@@ -101,7 +71,6 @@ class DirModel:
         show_hidden: bool = True,
         threshold: int = STREAMING_THRESHOLD,
         stat_pool: StatPool | None = None,
-        now: Callable[[], float] = time.time,
     ) -> None:
         self.sort_key = sort_key
         self.reverse = reverse
@@ -109,7 +78,6 @@ class DirModel:
         self.show_hidden = show_hidden
         self.threshold = threshold
         self._stat_pool = stat_pool
-        self._now = now
         self._generation = 0
         self._state = ScanState.IDLE
         self._path = ""
@@ -292,33 +260,6 @@ class DirModel:
 
     def counters(self) -> Counters:
         return self._counters
-
-    def groups(self) -> list[Group]:
-        """Visible entries by date bucket, newest first; within a bucket — the sort order.
-
-        Sorting stays global (``_flush_order``): bucketing preserves the loaded
-        order, so the current sort key/``folders_first`` apply inside every
-        group without a second sort (design/grouping.md D3). ``THIS_WEEK`` is
-        split per local calendar day (D2).
-        """
-        now = self._now()
-        buckets: dict[tuple[GroupBucket, float | None], list[Entry]] = defaultdict(list)
-        for entry in self._entries:
-            if not self._visible(entry):
-                continue
-            mtime = entry.mtime
-            bucket = group_of(mtime, now=now)
-            day = (
-                day_start(mtime)
-                if bucket is GroupBucket.THIS_WEEK and mtime is not None
-                else None
-            )
-            buckets[(bucket, day)].append(entry)
-
-        return [
-            Group(bucket, entries, day)
-            for (bucket, day), entries in sorted(buckets.items(), key=_group_order)
-        ]
 
     @property
     def state(self) -> ScanState:

@@ -1,14 +1,15 @@
-"""System acceptance for date grouping (design/grouping.md).
+"""System acceptance for grouping: date and size (design/grouping.md).
 
 These tests drive the real ``MainWindow`` the way a user does: a temporary
-listing with known modification times, then the «Вид» popover, mode switches
-and restarts. Assertions are on user-visible captions, counts and rendered
-names, not on the views' internal row objects, because the contract in
-design/grouping.md §9 is about what the window shows.
+listing with known modification times or byte sizes, then the «Вид» popover,
+mode switches and restarts. Assertions are on user-visible captions, counts
+and rendered names, not on the views' internal row objects, because the
+contract in design/grouping.md §9 and V5 is about what the window shows.
 
-The scenario fixtures (``_make_dated_listing``) use local-calendar timestamps
-relative to the test run, so the expected captions are «Сегодня», «Вчера», the
-weekday names of the two following days and «Неделю назад».
+The date fixtures use local-calendar timestamps relative to the test run, so
+the expected captions are «Сегодня», «Вчера», the weekday names of the two
+following days and «Неделю назад». The size fixture writes files of known
+lengths into every band (sparse files for the large ones) and one folder.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from volna.core import ScanState  # noqa: E402
 from volna.display import (  # noqa: E402
     DEFAULT_CAPABILITIES,
     MODE_ORDER,
+    GroupAction,
     Grouping,
     JsonViewSettingsStore,
     MemoryViewSettingsStore,
@@ -556,6 +558,7 @@ def test_view_panel_offers_grouping_between_mode_and_sorting(
             "Столбцы",
             "Подробности",
             "По дате изменения",
+            "По размеру",
             "Без группировки",
             "Дата изменения",
             "Размер",
@@ -826,5 +829,208 @@ def test_group_counts_follow_the_hidden_files_setting(
         assert _pump_until(
             lambda: ".hidden.txt" not in _names(window, ViewMode.DETAILS)
         ), "the hidden file must disappear with its count"
+    finally:
+        _close(window)
+
+
+# -- 8. size grouping --------------------------------------------------------
+
+_KIB = 1024
+_MIB = 1024 * 1024
+_GIB = 1024 * 1024 * 1024
+
+# One entry per band, plus a folder (which never lands in a size band: its
+# st_size is the directory inode, not the contents) and an empty file. Sparse
+# files keep the large lengths from costing disk space.
+_SIZE_NAMES = [
+    "folder",
+    "empty.bin",
+    "one.bin",
+    "ten-k.bin",
+    "hundred-k.bin",
+    "one-m.bin",
+    "ten-m.bin",
+    "hundred-m.bin",
+    "one-g.bin",
+]
+
+_SIZE_CAPTIONS = [
+    ("Папки", "1 папок · 0 файлов (0 Б)"),
+    ("0 Б", "0 папок · 1 файлов (0 Б)"),
+    ("до 10 КиБ", "0 папок · 1 файлов (1 Б)"),
+    ("10–100 КиБ", "0 папок · 1 файлов (10,0 КиБ)"),
+    ("100 КиБ–1 МиБ", "0 папок · 1 файлов (100,0 КиБ)"),
+    ("1–10 МиБ", "0 папок · 1 файлов (1,0 МиБ)"),
+    ("10–100 МиБ", "0 папок · 1 файлов (10,0 МиБ)"),
+    ("100 МиБ–1 ГиБ", "0 папок · 1 файлов (100,0 МиБ)"),
+    ("больше 1 ГиБ", "0 папок · 1 файлов (1,0 ГиБ)"),
+]
+
+
+def _sparse(path: Path, size: int) -> None:
+    path.touch()
+    os.truncate(path, size)
+
+
+def _make_size_listing(root: Path) -> None:
+    (root / "folder").mkdir()
+    (root / "empty.bin").touch()
+    _sparse(root / "one.bin", 1)
+    _sparse(root / "ten-k.bin", 10 * _KIB)
+    _sparse(root / "hundred-k.bin", 100 * _KIB)
+    _sparse(root / "one-m.bin", _MIB)
+    _sparse(root / "ten-m.bin", 10 * _MIB)
+    _sparse(root / "hundred-m.bin", 100 * _MIB)
+    _sparse(root / "one-g.bin", _GIB)
+
+
+def _size_column_captions() -> list[tuple[str, str]]:
+    """«Столбцы» keep the compact item count instead of the full summary."""
+    return [(caption, "1") for caption, _summary in _SIZE_CAPTIONS]
+
+
+def _today_column_caption() -> list[tuple[str, str]]:
+    """The same listing under date grouping: one compact «Сегодня» column."""
+    return [("Сегодня", "9")]
+
+
+def test_size_groups_follow_the_bands_in_order(gtk_display, tmp_path: Path) -> None:
+    _make_size_listing(tmp_path)
+
+    window = _window(tmp_path)
+    try:
+        panel = _open_panel(window)
+        _ready(window)
+        _control(panel.popover, "По размеру").set_active(True)
+
+        _wait_for_mode_listing(window, ViewMode.DETAILS, _SIZE_CAPTIONS, _SIZE_NAMES)
+        headers, names = _collect_listing(window, ViewMode.DETAILS)
+        assert headers == _SIZE_CAPTIONS
+        assert names == _SIZE_NAMES
+        assert window._active_tab.view_settings.grouping is Grouping.SIZE
+    finally:
+        _close(window)
+
+
+def test_size_grouping_works_in_every_mode(gtk_display, tmp_path: Path) -> None:
+    _make_size_listing(tmp_path)
+
+    window = _window(tmp_path)
+    try:
+        panel = _open_panel(window)
+        _ready(window)
+        _control(panel.popover, "По размеру").set_active(True)
+
+        for mode in (ViewMode.DETAILS, ViewMode.ICONS, ViewMode.COLUMNS):
+            _control(panel.popover, mode.label).set_active(True)
+            expected = (
+                _size_column_captions() if mode is ViewMode.COLUMNS else _SIZE_CAPTIONS
+            )
+            _wait_for_mode_listing(window, mode, expected, _SIZE_NAMES)
+
+        _control(panel.popover, "По дате изменения").set_active(True)
+        _wait_for_mode_listing(
+            window, ViewMode.COLUMNS, _today_column_caption(), _SIZE_NAMES
+        )
+    finally:
+        _close(window)
+
+
+def test_switching_to_size_grouping_does_not_rescan(
+    gtk_display, tmp_path: Path
+) -> None:
+    _make_dated_listing(tmp_path)
+    expected = _dated_captions()
+
+    window = _window(tmp_path)
+    try:
+        panel = _open_panel(window)
+        _ready(window)
+        _wait_for_headers(window, expected)
+
+        model = window._active_tab.model
+        generation = model.generation
+        state_before = model.state
+        counters_before = model.counters()
+        entries_before = len(model.entries())
+
+        _control(panel.popover, "По размеру").set_active(True)
+        _wait_for_mode_listing(
+            window,
+            ViewMode.DETAILS,
+            [("до 10 КиБ", "0 папок · 8 файлов (8 Б)")],
+            _dated_names(),
+        )
+
+        assert model.generation == generation
+        assert model.state is state_before
+        assert model.counters() == counters_before
+        assert len(model.entries()) == entries_before
+
+        _control(panel.popover, "По дате изменения").set_active(True)
+        _wait_for_headers(window, expected)
+        assert model.generation == generation
+        assert model.state is state_before
+    finally:
+        _close(window)
+
+
+def test_size_grouping_survives_a_restart(gtk_display, tmp_path: Path) -> None:
+    listing = tmp_path / "listing"
+    listing.mkdir()
+    _make_size_listing(listing)
+    paths = SettingsPaths(
+        directory=tmp_path / "config", file=tmp_path / "config" / "settings.json"
+    )
+
+    first = _window(listing, store=JsonViewSettingsStore(paths))
+    try:
+        panel = _open_panel(first)
+        _ready(first)
+        _control(panel.popover, "По размеру").set_active(True)
+        _wait_for_mode_listing(first, ViewMode.DETAILS, _SIZE_CAPTIONS, _SIZE_NAMES)
+    finally:
+        _close(first)
+
+    assert JsonViewSettingsStore(paths).load().view.grouping is Grouping.SIZE
+
+    second = _window(listing, store=JsonViewSettingsStore(paths))
+    try:
+        panel = _open_panel(second)
+        _ready(second)
+        assert second._active_tab.view_settings.grouping is Grouping.SIZE
+        assert _control(panel.popover, "По размеру").get_active()
+        _wait_for_mode_listing(second, ViewMode.DETAILS, _SIZE_CAPTIONS, _SIZE_NAMES)
+    finally:
+        _close(second)
+
+
+def test_a_size_group_collapses_by_its_own_key(gtk_display, tmp_path: Path) -> None:
+    _make_size_listing(tmp_path)
+
+    window = _window(tmp_path)
+    try:
+        panel = _open_panel(window)
+        _ready(window)
+        _control(panel.popover, "По размеру").set_active(True)
+        _wait_for_mode_listing(window, ViewMode.DETAILS, _SIZE_CAPTIONS, _SIZE_NAMES)
+
+        tab = window._active_tab
+        assert tab._sections()[0].key == "size:folders"
+
+        tab._on_group_action("size:folders", GroupAction.TOGGLE)
+        assert _pump_until(lambda: "folder" not in _names(window, ViewMode.DETAILS)), (
+            "the collapsed folder group must hide its row"
+        )
+        assert tab._collapsed_groups == {"size:folders"}
+        assert _group_headers(window)[0] == _SIZE_CAPTIONS[0], (
+            "the caption stays visible while its content is hidden"
+        )
+
+        tab._on_group_action("size:folders", GroupAction.EXPAND_ALL)
+        assert _pump_until(lambda: "folder" in _names(window, ViewMode.DETAILS)), (
+            "expanding all must bring the folder back"
+        )
+        assert tab._collapsed_groups == set()
     finally:
         _close(window)

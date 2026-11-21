@@ -25,10 +25,10 @@ from .item import ListingItem  # noqa: E402
 
 @dataclass(frozen=True, slots=True)
 class Section:
-    """A part of the listing under an optional header (a date group).
+    """A part of the listing under an optional header (one group).
 
     The tab builds one unnamed section (``header=None``) for an ungrouped
-    listing and one named section per date group otherwise; the header's item
+    listing and one named section per group otherwise; the header's item
     summary is ``stats`` — folders, files and size, the same string the editor
     header shows (design/grouping.md D4). ``key`` identifies the group to the
     tab's collapse state and ``collapsed`` says whether the tab

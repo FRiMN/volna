@@ -21,20 +21,21 @@ import pytest
 
 pytest.importorskip("gi")
 
-from volna.core import (  # noqa: E402
-    Group,
-    GroupBucket,
-    ScanState,  # noqa: E402
-)
+from volna.core import Entry, Kind, ScanState  # noqa: E402
 from volna.display import (  # noqa: E402
     GroupAction,
     MemoryViewSettingsStore,
     ViewMode,
     ViewSettings,
-    group_key,
 )
+from volna.display.grouping import DateGrouping  # noqa: E402
 
 _DAY = 86_400.0
+
+
+def _local_midnight(timestamp: float) -> float:
+    local = time.localtime(timestamp)
+    return time.mktime((local.tm_year, local.tm_mon, local.tm_mday, 0, 0, 0, 0, 0, -1))
 
 
 # -- helpers (patterns from tests/test_view_modes.py) --------------------------
@@ -127,19 +128,31 @@ def _close(window: object) -> None:
     window.destroy()
 
 
-# -- group_key (D12) -----------------------------------------------------------
+# -- group keys (D12) ----------------------------------------------------------
 
 
-def test_group_key_is_semantic_and_session_stable() -> None:
-    local_day = time.mktime((2026, 11, 11, 0, 0, 0, 0, 0, -1))
+def test_date_group_keys_are_semantic_and_session_stable() -> None:
+    now = time.mktime((2026, 11, 14, 12, 0, 0, 0, 0, -1))
+    week_day = time.mktime((2026, 11, 11, 0, 0, 0, 0, 0, -1))
+    entries = [
+        Entry("today", "/d/today", Kind.FILE, mtime=now + 10),
+        Entry("yesterday", "/d/yesterday", Kind.FILE, mtime=_local_midnight(now) - 10),
+        Entry("week", "/d/week", Kind.FILE, mtime=week_day + 60),
+        Entry("older", "/d/older", Kind.FILE, mtime=_local_midnight(now) - 30 * _DAY),
+        Entry("unknown", "/d/unknown", Kind.FILE),
+    ]
 
-    assert group_key(Group(GroupBucket.TODAY, [])) == "today"
-    assert group_key(Group(GroupBucket.YESTERDAY, [])) == "yesterday"
-    assert group_key(Group(GroupBucket.OLDER, [])) == "older"
-    assert group_key(Group(GroupBucket.UNKNOWN, [])) == "unknown"
-    week = Group(GroupBucket.THIS_WEEK, [], day=local_day)
-    assert group_key(week) == "week:2026-11-11"
-    assert group_key(week) == group_key(Group(GroupBucket.THIS_WEEK, [], day=local_day))
+    first = DateGrouping().groups(entries, now=now)
+    second = DateGrouping().groups(entries, now=now)
+
+    assert [group.key for group in first] == [
+        "today",
+        "yesterday",
+        "week:2026-11-11",
+        "older",
+        "unknown",
+    ]
+    assert [group.key for group in first] == [group.key for group in second]
 
 
 # -- header widget (D14) --------------------------------------------------------

@@ -23,7 +23,7 @@ _GROUP_CELL = "volna-dt-group"
 
 
 class GroupRow(GObject.Object):
-    """A date group caption in the row store (design/grouping.md D5).
+    """A group caption in the row store (design/grouping.md D5).
 
     Group rows share the heterogeneous model with :class:`ListingItem` rows:
     one ColumnView keeps its sticky column header and shared column widths.

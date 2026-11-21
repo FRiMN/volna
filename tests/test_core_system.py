@@ -1,11 +1,8 @@
 """System test: build a real tree and scan it through the public core API."""
 
-import os
 import time
 
-import pytest
-
-from volna.core import Counters, DirModel, GroupBucket, ScanState, SortKey
+from volna.core import Counters, DirModel, ScanState, SortKey
 
 
 def test_system_listing_matches_filesystem(tmp_path) -> None:
@@ -29,30 +26,6 @@ def test_system_listing_matches_filesystem(tmp_path) -> None:
     assert model.state is ScanState.READY
 
 
-def test_system_groups_by_date(tmp_path) -> None:
-    (tmp_path / "today.txt").write_text("")
-    (tmp_path / "yesterday.txt").write_text("")
-    (tmp_path / "old.txt").write_text("")
-
-    now = time.time()
-    os.utime(tmp_path / "today.txt", (now, now))
-    os.utime(tmp_path / "yesterday.txt", (now - 86_400, now - 86_400))
-    os.utime(tmp_path / "old.txt", (now - 30 * 86_400, now - 30 * 86_400))
-
-    model = DirModel(sort_key=SortKey.MTIME, reverse=True)
-    model.scan(str(tmp_path))
-
-    groups = {
-        group.bucket: [entry.name for entry in group.entries]
-        for group in model.groups()
-    }
-
-    assert groups[GroupBucket.TODAY] == ["today.txt"]
-    assert groups[GroupBucket.YESTERDAY] == ["yesterday.txt"]
-    assert groups[GroupBucket.OLDER] == ["old.txt"]
-
-
-@pytest.mark.slow
 def test_system_large_directory_scan_is_complete(tmp_path) -> None:
     count = 1500
     for index in range(count):

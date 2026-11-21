@@ -14,7 +14,8 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, fields, replace
 
 from ..core import SortKey
-from .settings import Grouping, ViewCapabilities, ViewMode, ViewSettings
+from .grouping import Grouping
+from .settings import ViewCapabilities, ViewMode, ViewSettings
 
 MAX_NAME_LENGTH = 64
 DEFAULT_PRESET_ID = "default"

@@ -11,7 +11,6 @@ from volna.core import SortKey
 from volna.display import (
     DEFAULT_CAPABILITIES,
     DEFAULT_VIEW_SETTINGS,
-    GROUPING_ORDER,
     Grouping,
     ViewCapabilities,
     ViewMode,
@@ -158,7 +157,7 @@ def test_from_mapping_rejects_non_numeric_zoom(raw: object) -> None:
     [
         ("view_mode", "gallery", ViewMode.DETAILS),
         ("view_mode", 7, ViewMode.DETAILS),
-        ("grouping", "size", Grouping.DATE),
+        ("grouping", "month", Grouping.DATE),
         ("grouping", None, Grouping.DATE),
         ("sort_key", "owner", SortKey.MTIME),
         ("sort_key", [], SortKey.MTIME),
@@ -247,16 +246,15 @@ def test_default_capabilities_enable_grouping() -> None:
     assert DEFAULT_CAPABILITIES.grouping is True
 
 
-def test_grouping_labels_and_order_follow_the_mockup() -> None:
-    assert [grouping.label for grouping in GROUPING_ORDER] == [
-        "По дате изменения",
-        "Без группировки",
-    ]
-    assert GROUPING_ORDER == (Grouping.DATE, Grouping.NONE)
+def test_from_mapping_reads_the_size_grouping() -> None:
+    assert ViewSettings.from_mapping({"grouping": "size"}).grouping is Grouping.SIZE
 
 
-def test_normalized_forces_ungrouped_when_grouping_is_unavailable() -> None:
-    assert ViewSettings(grouping=Grouping.DATE).normalized(
+@pytest.mark.parametrize("grouping", [Grouping.DATE, Grouping.SIZE])
+def test_normalized_forces_ungrouped_when_grouping_is_unavailable(
+    grouping: Grouping,
+) -> None:
+    assert ViewSettings(grouping=grouping).normalized(
         UNGROUPED_CAPABILITIES
     ).grouping is (Grouping.NONE)
 

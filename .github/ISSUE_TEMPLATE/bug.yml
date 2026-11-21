@@ -1,0 +1,55 @@
+name: Баг
+description: Поведение отличается от ожидаемого — сломано, падает или рисуется не так
+title: "Баг: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Обязательные поля — минимум, без которого issue нельзя взять в работу.
+        Полные правила: `AGENTS.md` → «Работа с issue».
+  - type: textarea
+    id: symptom
+    attributes:
+      label: Симптом
+      description: Что наблюдается и что ожидалось вместо этого
+      placeholder: |
+        Ожидаемое: ...
+        Фактическое: ...
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Влияние
+      description: Кого ломает, насколько блокирует работу, что будет, если не чинить
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Воспроизведение
+      description: Шаги и окружение — GTK, X11 или Wayland, тема, размер окна
+      placeholder: |
+        1. uv run volna
+        2. ...
+        Окружение: GTK 4.14.5, Wayland, окно 1440×900
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Критерий приёмки
+      description: Проверяемые утверждения — по ним issue и закрывается
+    validations:
+      required: true
+  - type: textarea
+    id: where
+    attributes:
+      label: Где
+      description: Компонент и file:line, если известны. Для внешнего бага можно оставить пустым — заполним на триаже
+  - type: textarea
+    id: details
+    attributes:
+      label: Детали (по желанию)
+      description: Причина или гипотеза, почему тесты не поймали, логи и снимки, варианты правки

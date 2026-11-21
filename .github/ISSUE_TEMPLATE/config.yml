@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Правила и обязательные секции
+    url: https://github.com/FRiMN/volna/blob/main/AGENTS.md
+    about: Раздел «Работа с issue» — что обязательно, а что пишется по желанию.

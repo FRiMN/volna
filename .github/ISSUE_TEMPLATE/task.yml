@@ -1,0 +1,48 @@
+name: Задача
+description: Функция или изменение, решение по которым уже принято и нужна реализация
+title: "Задача: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Задача отличается от дизайна тем, что решение уже принято: нужны границы и признаки готовности.
+        Полные правила: `AGENTS.md` → «Работа с issue».
+  - type: textarea
+    id: why
+    attributes:
+      label: Зачем
+      description: Пользовательский сценарий — какую задачу решает и что изменится для пользователя
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Влияние
+      description: Что будет, если не делать; какие риски несёт ошибка или задержка
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Что входит и что не входит
+      description: Границы задачи — что осознанно оставляем за её пределами
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Критерий приёмки
+      description: Проверяемые утверждения и какие тесты докажут результат
+    validations:
+      required: true
+  - type: textarea
+    id: where
+    attributes:
+      label: Где
+      description: Компонент, файлы, существующие решения, на которые опираемся
+  - type: textarea
+    id: details
+    attributes:
+      label: Детали (по желанию)
+      description: Открытые вопросы, ссылки на дизайн-документы, отвергнутые варианты

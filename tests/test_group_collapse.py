@@ -28,9 +28,14 @@ from volna.display import (  # noqa: E402
     ViewMode,
     ViewSettings,
 )
-from volna.display.grouping import DateGrouping, day_start  # noqa: E402
+from volna.display.grouping import DateGrouping  # noqa: E402
 
 _DAY = 86_400.0
+
+
+def _local_midnight(timestamp: float) -> float:
+    local = time.localtime(timestamp)
+    return time.mktime((local.tm_year, local.tm_mon, local.tm_mday, 0, 0, 0, 0, 0, -1))
 
 
 # -- helpers (patterns from tests/test_view_modes.py) --------------------------
@@ -123,7 +128,7 @@ def _close(window: object) -> None:
     window.destroy()
 
 
-# -- group_key (D12) -----------------------------------------------------------
+# -- group keys (D12) ----------------------------------------------------------
 
 
 def test_date_group_keys_are_semantic_and_session_stable() -> None:
@@ -131,9 +136,9 @@ def test_date_group_keys_are_semantic_and_session_stable() -> None:
     week_day = time.mktime((2026, 11, 11, 0, 0, 0, 0, 0, -1))
     entries = [
         Entry("today", "/d/today", Kind.FILE, mtime=now + 10),
-        Entry("yesterday", "/d/yesterday", Kind.FILE, mtime=day_start(now) - 10),
+        Entry("yesterday", "/d/yesterday", Kind.FILE, mtime=_local_midnight(now) - 10),
         Entry("week", "/d/week", Kind.FILE, mtime=week_day + 60),
-        Entry("older", "/d/older", Kind.FILE, mtime=day_start(now) - 30 * _DAY),
+        Entry("older", "/d/older", Kind.FILE, mtime=_local_midnight(now) - 30 * _DAY),
         Entry("unknown", "/d/unknown", Kind.FILE),
     ]
 

@@ -1,7 +1,7 @@
 """«Группировка» section: choose the listing grouping strategy or none.
 
-Labels and order come from ``display`` (``grouping.label`` / ``GROUPING_ORDER``)
-— this module never hardcodes them, the same as the view-mode feature.
+Labels and order come from the strategy registry in ``display``; this module
+never hardcodes them, the same as the view-mode feature.
 """
 
 from __future__ import annotations
@@ -12,7 +12,12 @@ gi.require_version("Gtk", "4.0")
 
 from gi.repository import Gtk  # noqa: E402
 
-from ...display import GROUPING_ORDER, Grouping, ViewCapabilities, ViewSettings  # noqa: E402
+from ...display import (  # noqa: E402
+    GROUPING_STRATEGIES,
+    Grouping,
+    ViewCapabilities,
+    ViewSettings,
+)
 from ..controls import radio_row  # noqa: E402
 from .base import ChangeCallback, SettingFeature, SettingsSection  # noqa: E402
 
@@ -32,15 +37,15 @@ class GroupingSetting(SettingFeature):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
 
         group: Gtk.CheckButton | None = None
-        for grouping in GROUPING_ORDER:
-            button = radio_row(grouping.label)
+        for strategy in GROUPING_STRATEGIES:
+            button = radio_row(strategy.label)
             if group is None:
                 group = button
             else:
                 button.set_group(group)
-            button.connect("toggled", self._on_toggled, grouping)
+            button.connect("toggled", self._on_toggled, strategy.kind)
             box.append(button)
-            self._buttons[grouping] = button
+            self._buttons[strategy.kind] = button
 
         return box
 

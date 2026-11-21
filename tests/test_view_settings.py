@@ -11,7 +11,6 @@ from volna.core import SortKey
 from volna.display import (
     DEFAULT_CAPABILITIES,
     DEFAULT_VIEW_SETTINGS,
-    GROUPING_ORDER,
     Grouping,
     ViewCapabilities,
     ViewMode,
@@ -245,15 +244,6 @@ def test_normalized_maps_mode_to_what_the_build_can_render(
 
 def test_default_capabilities_enable_grouping() -> None:
     assert DEFAULT_CAPABILITIES.grouping is True
-
-
-def test_grouping_labels_and_order_are_data() -> None:
-    assert [grouping.label for grouping in GROUPING_ORDER] == [
-        "По дате изменения",
-        "По размеру",
-        "Без группировки",
-    ]
-    assert GROUPING_ORDER == (Grouping.DATE, Grouping.SIZE, Grouping.NONE)
 
 
 def test_from_mapping_reads_the_size_grouping() -> None:

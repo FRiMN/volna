@@ -519,7 +519,7 @@ def _save_view_settings(self) -> None: ...                  # store.save(active.
 
 ### 10.2 Группировка — реализовано (2026-11-17; стратегии и размер — 2026-11-20)
 
-Проект и реализация — в [grouping.md](grouping.md). С V5 группировка — политика `display`: `GroupingStrategy` (`DateGrouping`, `SizeGrouping`, `FlatGrouping`), реестр `GROUPING_STRATEGIES`, `Group` с ключом и подписью; `DirModel` отдаёт только `entries()`/`counters()`. Вкладка строит секции через `strategy_for(...)`, каждый режим рисует заголовок со счётчиком; в панели — «По дате изменения / По размеру / Без группировки», `capabilities.grouping = True`. Сворачивание — grouping.md §12.
+Проект и реализация — в [grouping.md](grouping.md). С V5 группировка — политика `display`: `GroupingStrategy` (`DateGrouping`, `SizeGrouping`, `FlatGrouping`), реестр `GROUPING_STRATEGIES`, `Group` = записи + `Bucket`; `DirModel` отдаёт только `entries()`/`counters()`. Вкладка строит секции через `strategy_for(...)`, каждый режим рисует заголовок со счётчиком; в панели — «По дате изменения / По размеру / Без группировки», `capabilities.grouping = True`. Сворачивание — grouping.md §12.
 
 ### 10.3 Режимы «Значки»/«Столбцы» и масштаб
 

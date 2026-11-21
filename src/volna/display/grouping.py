@@ -2,45 +2,32 @@
 
 Grouping is a display policy over the loaded model (design/grouping.md V5):
 the model keeps entries and their sort order, a strategy decides where the
-captions go and what they say. One strategy = one class, one registry row and
-one radio in the View panel, so a new criterion never becomes a new ``if`` in
-the tab or the views.
+captions go and what they say. Each strategy is a self-contained class with its
+own bucket table, caption and ordering; the shared parent only runs the single
+pass and preserves the model's order inside every bucket.
 
-Buckets are data tables at the top of each strategy (calendar rules, size
-bands): changing them is a data edit, not a new branch.
+Buckets are data on the class that owns them: changing calendar rules or size
+bands is a data edit inside one strategy, not a new branch elsewhere.
 """
 
 from __future__ import annotations
 
 import abc
 import time
-from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from enum import Enum, StrEnum
+from enum import StrEnum
 from typing import ClassVar
 
 from ..core import Entry
 
 
 class Grouping(StrEnum):
-    """How a listing is split (the View panel radio group)."""
+    """How a listing is split (the stored value and the panel radio group)."""
 
     DATE = "date"
     SIZE = "size"
     NONE = "none"
-
-    @property
-    def label(self) -> str:
-        """Display name for controls."""
-        return _GROUPING_LABELS[self]
-
-
-_GROUPING_LABELS: dict[Grouping, str] = {
-    Grouping.DATE: "По дате изменения",
-    Grouping.SIZE: "По размеру",
-    Grouping.NONE: "Без группировки",
-}
 
 
 class GroupAction(StrEnum):
@@ -53,202 +40,133 @@ class GroupAction(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class Group:
-    """One non-empty block of a grouped listing.
+class Bucket:
+    """One group's identity, caption and position, as a strategy decides it.
 
-    ``key`` is the group's stable identity inside its strategy (the tab keys
-    collapse state by it) and ``header`` is the caption. Both stay ``None`` for
-    the single block of an ungrouped listing.
+    ``key`` is stable for the session (the tab keys collapse state by it);
+    ``header`` is the caption; ``order`` is where the bucket goes in the
+    listing. ``None`` in both identity fields is the single block of an
+    ungrouped listing.
     """
 
-    entries: list[Entry]
-    key: str | None = None
-    header: str | None = None
-
-
-class GroupingStrategy(abc.ABC):
-    """One way to split a listing into groups."""
-
-    kind: ClassVar[Grouping]
-
-    @abc.abstractmethod
-    def groups(self, entries: Sequence[Entry], *, now: float) -> list[Group]:
-        """Split already ordered, visible ``entries`` into non-empty groups."""
-
-
-# -- date grouping -----------------------------------------------------------
-
-
-class GroupBucket(Enum):
-    """Coarse date bucket; ``THIS_WEEK`` is split per day by the strategy."""
-
-    TODAY = "today"
-    YESTERDAY = "yesterday"
-    THIS_WEEK = "this_week"
-    OLDER = "older"
-    UNKNOWN = "unknown"
-
-
-BUCKET_ORDER = (
-    GroupBucket.TODAY,
-    GroupBucket.YESTERDAY,
-    GroupBucket.THIS_WEEK,
-    GroupBucket.OLDER,
-    GroupBucket.UNKNOWN,
-)
-
-_DAY = 86_400.0
-
-# Calendar weekday names; index matches ``time.localtime(...).tm_wday``.
-_WEEKDAYS: tuple[str, ...] = (
-    "Понедельник",
-    "Вторник",
-    "Среда",
-    "Четверг",
-    "Пятница",
-    "Суббота",
-    "Воскресенье",
-)
-
-# One caption per coarse bucket. ``THIS_WEEK`` normally renders as a weekday
-# name; the fallback only guards a malformed group (a week group without a day)
-# so the UI never shows an empty caption.
-_BUCKET_HEADERS: dict[GroupBucket, str] = {
-    GroupBucket.TODAY: "Сегодня",
-    GroupBucket.YESTERDAY: "Вчера",
-    GroupBucket.THIS_WEEK: "На этой неделе",
-    GroupBucket.OLDER: "Неделю назад",
-    GroupBucket.UNKNOWN: "Без даты",
-}
-
-
-def group_of(mtime: float | None, *, now: float) -> GroupBucket:
-    """Bucket a modification time relative to ``now`` using local calendar days."""
-    if mtime is None:
-        return GroupBucket.UNKNOWN
-
-    today = day_start(now)
-    if mtime >= today:
-        return GroupBucket.TODAY
-    if mtime >= today - _DAY:
-        return GroupBucket.YESTERDAY
-    if mtime >= today - 7 * _DAY:
-        return GroupBucket.THIS_WEEK
-    return GroupBucket.OLDER
-
-
-def day_start(timestamp: float) -> float:
-    """Local midnight for the day containing ``timestamp``."""
-    local = time.localtime(timestamp)
-    return time.mktime((local.tm_year, local.tm_mon, local.tm_mday, 0, 0, 0, 0, 0, -1))
-
-
-class DateGrouping(GroupingStrategy):
-    """Groups by modification time: today, yesterday, one group per day of the
-    last seven days, the older rest, and entries without a date last.
-
-    Sorting stays global (the model sorts once): bucketing preserves the loaded
-    order, so the current sort key and ``folders_first`` apply inside every
-    group without a second sort (design/grouping.md D3).
-    """
-
-    kind = Grouping.DATE
-
-    def groups(self, entries: Sequence[Entry], *, now: float) -> list[Group]:
-        buckets: dict[tuple[GroupBucket, float | None], list[Entry]] = defaultdict(list)
-        for entry in entries:
-            mtime = entry.mtime
-            bucket = group_of(mtime, now=now)
-            day = (
-                day_start(mtime)
-                if bucket is GroupBucket.THIS_WEEK and mtime is not None
-                else None
-            )
-            buckets[(bucket, day)].append(entry)
-
-        return [
-            Group(
-                items,
-                key=_date_key(bucket, day),
-                header=_date_header(bucket, day),
-            )
-            for (bucket, day), items in sorted(buckets.items(), key=_date_order)
-        ]
-
-
-def _date_order(
-    item: tuple[tuple[GroupBucket, float | None], list[Entry]],
-) -> tuple[int, float]:
-    """Bucket order, then newest day first inside ``THIS_WEEK``."""
-    (bucket, day), _entries = item
-    return BUCKET_ORDER.index(bucket), -(day or 0.0)
-
-
-def _date_key(bucket: GroupBucket, day: float | None) -> str:
-    """Stable identity of a date group (design/grouping.md D12).
-
-    Weekday groups key by their local date, so a collapsed «Среда» stays
-    collapsed while the session runs; the coarse buckets key by themselves.
-    """
-    if bucket is GroupBucket.THIS_WEEK and day is not None:
-        return f"week:{time.strftime('%Y-%m-%d', time.localtime(day))}"
-
-    return bucket.value
-
-
-def _date_header(bucket: GroupBucket, day: float | None) -> str:
-    if bucket is GroupBucket.THIS_WEEK and day is not None:
-        return _WEEKDAYS[time.localtime(day).tm_wday]
-
-    return _BUCKET_HEADERS[bucket]
-
-
-# -- size grouping -----------------------------------------------------------
+    key: str | None
+    header: str | None
+    order: tuple[float, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class SizeBand:
-    """A half-open byte range ``[lower, upper)`` and its caption.
+class Group:
+    """One non-empty block of a grouped listing: a bucket and its entries."""
 
-    ``upper=None`` is the open-ended last band. The table below is contiguous
-    and ordered from small to large; tests pin that property.
+    entries: list[Entry]
+    bucket: Bucket
+
+    @property
+    def key(self) -> str | None:
+        return self.bucket.key
+
+    @property
+    def header(self) -> str | None:
+        return self.bucket.header
+
+
+class GroupingStrategy(abc.ABC):
+    """One way to split a listing into groups.
+
+    A subclass builds an entry → bucket resolver for the pass; the base runs
+    the linear pass and returns the buckets in their declared order, preserving
+    the model's order inside each (design/grouping.md D3).
     """
 
-    key: str
-    header: str
-    lower: int
-    upper: int | None
+    kind: ClassVar[Grouping]
+    label: ClassVar[str]
+
+    @abc.abstractmethod
+    def bucket_resolver(self, *, now: float) -> Callable[[Entry], Bucket]:
+        """Build the entry → bucket mapping for one grouping pass."""
+
+    def groups(self, entries: Sequence[Entry], *, now: float) -> list[Group]:
+        bucket_for = self.bucket_resolver(now=now)
+        found: dict[str | None, tuple[Bucket, list[Entry]]] = {}
+        for entry in entries:
+            bucket = bucket_for(entry)
+            pair = found.get(bucket.key)
+            if pair is None:
+                found[bucket.key] = (bucket, [entry])
+                continue
+            pair[1].append(entry)
+
+        return [
+            Group(items, bucket)
+            for bucket, items in sorted(found.values(), key=lambda pair: pair[0].order)
+        ]
 
 
-# Geometric, tenfold bands: each range is the previous one ×10, from an empty
-# file up to anything above a gibibyte. Bytes are the scanner's ``st_size``,
-# the same number the Size column shows.
-SIZE_BANDS: tuple[SizeBand, ...] = (
-    SizeBand("empty", "0 Б", 0, 1),
-    SizeBand("tiny", "до 10 КиБ", 1, 10 * 1024),
-    SizeBand("small", "10–100 КиБ", 10 * 1024, 100 * 1024),
-    SizeBand("medium", "100 КиБ–1 МиБ", 100 * 1024, 1024 * 1024),
-    SizeBand("large", "1–10 МиБ", 1024 * 1024, 10 * 1024 * 1024),
-    SizeBand("huge", "10–100 МиБ", 10 * 1024 * 1024, 100 * 1024 * 1024),
-    SizeBand("giant", "100 МиБ–1 ГиБ", 100 * 1024 * 1024, 1024 * 1024 * 1024),
-    SizeBand("colossal", "больше 1 ГиБ", 1024 * 1024 * 1024, None),
-)
+class DateGrouping(GroupingStrategy):
+    """Modification time: today, yesterday, a day per group inside the last
+    seven days, the older rest, and entries without a date last.
 
-_FOLDERS_KEY = "folders"
-_NO_SIZE_KEY = "unknown"
+    The week is split per local calendar day because the design labels those
+    groups with weekday names (design/grouping.md D2). Sorting stays global:
+    bucketing preserves the loaded order, so the current sort key and
+    ``folders_first`` apply inside every group without a second sort (D3).
+    """
 
-# Group order: folders first (their size is the directory inode's, not the
-# contents'), then the size bands from small to large, and files whose size the
-# scan could not read last.
-_SIZE_GROUPS: tuple[tuple[str, str], ...] = (
-    (_FOLDERS_KEY, "Папки"),
-    *((band.key, band.header) for band in SIZE_BANDS),
-    (_NO_SIZE_KEY, "Без размера"),
-)
+    kind = Grouping.DATE
+    label = "По дате изменения"
+
+    _DAY = 86_400.0
+    _TODAY = Bucket("today", "Сегодня", (0.0,))
+    _YESTERDAY = Bucket("yesterday", "Вчера", (1.0,))
+    _OLDER = Bucket("older", "Неделю назад", (3.0,))
+    _UNKNOWN = Bucket("unknown", "Без даты", (4.0,))
+
+    # Calendar weekday names; index matches ``time.localtime(...).tm_wday``.
+    _WEEKDAYS: ClassVar[tuple[str, ...]] = (
+        "Понедельник",
+        "Вторник",
+        "Среда",
+        "Четверг",
+        "Пятница",
+        "Суббота",
+        "Воскресенье",
+    )
+
+    def bucket_resolver(self, *, now: float) -> Callable[[Entry], Bucket]:
+        today = self._local_midnight(now)
+
+        def bucket_for(entry: Entry) -> Bucket:
+            mtime = entry.mtime
+            if mtime is None:
+                return self._UNKNOWN
+
+            if mtime >= today:
+                return self._TODAY
+            if mtime >= today - self._DAY:
+                return self._YESTERDAY
+            if mtime < today - 7 * self._DAY:
+                return self._OLDER
+
+            day = self._local_midnight(mtime)
+            local = time.localtime(day)
+            return Bucket(
+                key=f"week:{time.strftime('%Y-%m-%d', local)}",
+                header=self._WEEKDAYS[local.tm_wday],
+                order=(2.0, -day),
+            )
+
+        return bucket_for
+
+    @staticmethod
+    def _local_midnight(timestamp: float) -> float:
+        local = time.localtime(timestamp)
+        return time.mktime(
+            (local.tm_year, local.tm_mon, local.tm_mday, 0, 0, 0, 0, 0, -1)
+        )
 
 
 class SizeGrouping(GroupingStrategy):
-    """Groups files by their reported byte size; folders get their own group.
+    """Reported byte size; folders have their own leading group.
 
     A folder's ``st_size`` is the directory inode, not the size of its
     contents, so it would be misleading in a size band: folders are always one
@@ -257,49 +175,73 @@ class SizeGrouping(GroupingStrategy):
     """
 
     kind = Grouping.SIZE
+    label = "По размеру"
 
-    def groups(self, entries: Sequence[Entry], *, now: float) -> list[Group]:
-        del now
-        buckets: dict[str, list[Entry]] = defaultdict(list)
-        for entry in entries:
-            buckets[_size_key(entry)].append(entry)
+    @dataclass(frozen=True, slots=True)
+    class Band(Bucket):
+        """A half-open byte range ``[lower, upper)`` and its group position."""
 
-        return [
-            Group(items, key=f"size:{key}", header=header)
-            for key, header in _SIZE_GROUPS
-            if (items := buckets.get(key))
-        ]
+        lower: int
+        upper: int | None
 
+        def holds(self, size: int) -> bool:
+            return self.lower <= size and (self.upper is None or size < self.upper)
 
-def _size_key(entry: Entry) -> str:
-    if entry.is_dir:
-        return _FOLDERS_KEY
+    # Geometric, tenfold bands: each range is the previous one ×10, from an
+    # empty file up to anything above a gibibyte. Bytes are the scanner's
+    # ``st_size``, the same number the Size column shows.
+    BANDS: ClassVar[tuple[Band, ...]] = (
+        Band("size:empty", "0 Б", (1.0,), 0, 1),
+        Band("size:tiny", "до 10 КиБ", (2.0,), 1, 10 * 1024),
+        Band("size:small", "10–100 КиБ", (3.0,), 10 * 1024, 100 * 1024),
+        Band("size:medium", "100 КиБ–1 МиБ", (4.0,), 100 * 1024, 1024 * 1024),
+        Band("size:large", "1–10 МиБ", (5.0,), 1024 * 1024, 10 * 1024 * 1024),
+        Band("size:huge", "10–100 МиБ", (6.0,), 10 * 1024 * 1024, 100 * 1024 * 1024),
+        Band(
+            "size:giant",
+            "100 МиБ–1 ГиБ",
+            (7.0,),
+            100 * 1024 * 1024,
+            1024 * 1024 * 1024,
+        ),
+        Band("size:colossal", "больше 1 ГиБ", (8.0,), 1024 * 1024 * 1024, None),
+    )
 
-    size = entry.size
-    if size is None:
-        return _NO_SIZE_KEY
+    _FOLDERS = Bucket("size:folders", "Папки", (0.0,))
+    _NO_SIZE = Bucket("size:unknown", "Без размера", (float(len(BANDS) + 1),))
 
-    for band in SIZE_BANDS:
-        if band.lower <= size and (band.upper is None or size < band.upper):
-            return band.key
+    def bucket_resolver(self, *, now: float) -> Callable[[Entry], Bucket]:
+        return self._bucket_for
 
-    return _NO_SIZE_KEY  # unreachable: the last band is open-ended
+    def _bucket_for(self, entry: Entry) -> Bucket:
+        if entry.is_dir:
+            return self._FOLDERS
 
+        size = entry.size
+        if size is None:
+            return self._NO_SIZE
 
-# -- flat listing ------------------------------------------------------------
+        for band in self.BANDS:
+            if band.holds(size):
+                return band
+
+        return self._NO_SIZE  # unreachable: the last band is open-ended
 
 
 class FlatGrouping(GroupingStrategy):
     """No grouping: the whole listing is one caption-less block."""
 
     kind = Grouping.NONE
+    label = "Без группировки"
 
-    def groups(self, entries: Sequence[Entry], *, now: float) -> list[Group]:
-        del now
-        return [Group(list(entries))]
+    _ONE = Bucket(None, None, ())
 
+    def bucket_resolver(self, *, now: float) -> Callable[[Entry], Bucket]:
+        return self._bucket_for
 
-# -- registry ----------------------------------------------------------------
+    def _bucket_for(self, entry: Entry) -> Bucket:
+        return self._ONE
+
 
 # The order is the panel's radio order and the coverage of ``Grouping``; a new
 # strategy is one row here and one class above.
@@ -307,10 +249,6 @@ GROUPING_STRATEGIES: tuple[GroupingStrategy, ...] = (
     DateGrouping(),
     SizeGrouping(),
     FlatGrouping(),
-)
-
-GROUPING_ORDER: tuple[Grouping, ...] = tuple(
-    strategy.kind for strategy in GROUPING_STRATEGIES
 )
 
 _STRATEGIES_BY_KIND: dict[Grouping, GroupingStrategy] = {

@@ -2,7 +2,6 @@
 
 from ..core import SortKey
 from .grouping import (
-    GROUPING_ORDER,
     GROUPING_STRATEGIES,
     DateGrouping,
     FlatGrouping,
@@ -53,7 +52,6 @@ __all__ = [
     "DEFAULT_CAPABILITIES",
     "DEFAULT_PRESET_ID",
     "DEFAULT_VIEW_SETTINGS",
-    "GROUPING_ORDER",
     "GROUPING_STRATEGIES",
     "DateGrouping",
     "FlatGrouping",

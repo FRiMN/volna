@@ -28,7 +28,7 @@ dev = [
     "pytest~=9.2.0",
     "invoke~=3.0.3",
     "mypy~=2.4",
-    "pytest-xdist>=3.8.0",
+    "pytest-xdist~=3.8.0",
 ]
 
 [build-system]

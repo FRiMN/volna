@@ -61,6 +61,10 @@ from .views.format import format_counters  # noqa: E402
 
 _POINTER_CURSOR = Gdk.Cursor.new_from_name("pointer", None)
 
+# Header areas without a control: Gtk.WindowHandle may open the window menu
+# there (issue #20). Every other header widget is a control and must not.
+_TITLEBAR_FREE = "volna-titlebar-free"
+
 _LOG = logging.getLogger("volna.window")
 
 
@@ -111,6 +115,21 @@ def make_clickable(widget: Gtk.Widget, callback: Callable[[], None]) -> None:
     gesture.connect("released", lambda *_args: callback())
     widget.add_controller(gesture)
     widget.set_cursor(_POINTER_CURSOR)
+
+
+def titlebar_free_space(widget: Gtk.Widget) -> Gtk.Widget:
+    """Mark an empty part of the header that keeps the window menu (#20)."""
+    widget.add_css_class(_TITLEBAR_FREE)
+    return widget
+
+
+def _inside_entry(widget: Gtk.Widget) -> bool:
+    node: Gtk.Widget | None = widget
+    while node is not None:
+        if isinstance(node, Gtk.Entry):
+            return True
+        node = node.get_parent()
+    return False
 
 
 def vertical_separator() -> Gtk.Box:
@@ -225,10 +244,12 @@ class MainWindow(Gtk.ApplicationWindow):
     def _toolbar(self) -> Gtk.Box:
         bar = hbox(px(8))
         bar.add_css_class("volna-toolbar")
+        # Gaps between the controls are the header's free space (issue #20).
+        bar.add_css_class(_TITLEBAR_FREE)
         bar.set_size_request(-1, px(40))
 
         bar.append(self._main_menu_button())
-        bar.append(vertical_separator())
+        bar.append(titlebar_free_space(vertical_separator()))
 
         navigation = hbox(px(2))
         self._back_button = nav_button("back", "Назад", self._go_back)
@@ -238,17 +259,17 @@ class MainWindow(Gtk.ApplicationWindow):
         navigation.append(self._fwd_button)
         navigation.append(self._up_button)
         bar.append(navigation)
-        bar.append(vertical_separator())
+        bar.append(titlebar_free_space(vertical_separator()))
 
         bar.append(self._view_panel.trigger())
         bar.append(self._path_widget())
 
-        spacer = Gtk.Box()
+        spacer = titlebar_free_space(Gtk.Box())
         spacer.set_size_request(px(8), -1)
         bar.append(spacer)
 
         bar.append(icon_stub("gear", tooltip="Настройки"))
-        bar.append(vertical_separator())
+        bar.append(titlebar_free_space(vertical_separator()))
         bar.append(self._window_controls())
 
         return bar
@@ -945,12 +966,54 @@ class MainWindow(Gtk.ApplicationWindow):
             gesture.get_current_event_time(),
         )
 
+    def _install_titlebar_right_click(self, handle: Gtk.WindowHandle) -> None:
+        """Keep the window menu on free header space, not on its controls (#20).
+
+        ``Gtk.WindowHandle`` treats a right click anywhere below it as a
+        titlebar right click. The toolbar is both a titlebar and a control
+        strip, so claim button 3 over a control in the capture phase: the
+        handle's own bubble gesture then never opens the menu. Areas marked
+        ``volna-titlebar-free`` keep the standard behaviour.
+        """
+        gesture = Gtk.GestureClick()
+        gesture.set_button(3)
+        gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        gesture.connect("pressed", self._on_titlebar_right_click)
+        handle.add_controller(gesture)
+
+    def _on_titlebar_right_click(
+        self,
+        gesture: Gtk.GestureClick,
+        n_press: int,
+        x: float,
+        y: float,
+    ) -> None:
+        del n_press
+
+        handle = gesture.get_widget()
+        if handle is None:
+            return
+
+        target = handle.pick(int(x), int(y), Gtk.PickFlags.DEFAULT)
+        if target is None or target is handle:
+            return
+        if target.has_css_class(_TITLEBAR_FREE):
+            return
+
+        # An entry opens its own context menu and claims the press itself;
+        # claiming here would hide that menu instead of showing it.
+        if _inside_entry(target):
+            return
+
+        gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+
     # -- body ---------------------------------------------------------
 
     def _content(self) -> Gtk.Overlay:
         root = vbox(0)
         window_handle = Gtk.WindowHandle()
         window_handle.set_child(self._toolbar())
+        self._install_titlebar_right_click(window_handle)
         root.append(window_handle)
         root.append(self._hairline())
         root.append(self._app_body())

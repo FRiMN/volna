@@ -132,6 +132,15 @@ def _inside_entry(widget: Gtk.Widget) -> bool:
     return False
 
 
+def _inside(widget: Gtk.Widget, ancestor: Gtk.Widget) -> bool:
+    node: Gtk.Widget | None = widget
+    while node is not None:
+        if node is ancestor:
+            return True
+        node = node.get_parent()
+    return False
+
+
 def vertical_separator() -> Gtk.Box:
     separator = Gtk.Box()
     separator.add_css_class("volna-sep")
@@ -184,6 +193,156 @@ def nav_button(
     button.set_child(icon(name, px(16)))
     button.connect("clicked", lambda _button: callback())
     return button
+
+
+class _PathMenu(Gtk.Popover):
+    """The path field's popover shell: a bordered box of menu rows.
+
+    Shared by the left-click navigation dropdown and the right-click context
+    menu; each subclass fills the box with its own rows.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.add_css_class("volna-menu")
+        self.set_has_arrow(False)
+
+        self._items = vbox(px(2))
+        self._items.add_css_class("volna-menu-box")
+        self.set_child(self._items)
+
+    def _clear(self) -> None:
+        child = self._items.get_first_child()
+        while child is not None:
+            following = child.get_next_sibling()
+            self._items.remove(child)
+            child = following
+
+    def add(self, item: Gtk.Widget) -> None:
+        self._items.append(item)
+
+    @property
+    def items(self) -> Gtk.Box:
+        return self._items
+
+    def visible(self) -> bool:
+        return self.get_visible()
+
+
+class PathNavMenu(_PathMenu):
+    """The path field's left-click dropdown: a list of known locations.
+
+    Owns the chevron trigger; fills the popover on open and navigates the
+    active tab when a row is chosen.
+    """
+
+    def __init__(
+        self,
+        *,
+        known_paths: Callable[[], list[Path]],
+        current_path: Callable[[], Path | None],
+        on_select: Callable[[Path], None],
+    ) -> None:
+        super().__init__()
+        self._known_paths = known_paths
+        self._current_path = current_path
+        self._on_select = on_select
+
+        self._button = Gtk.MenuButton()
+        self._button.add_css_class("volna-path-menu")
+        self._button.set_valign(Gtk.Align.CENTER)
+        self._button.set_tooltip_text("Перейти к пути")
+        self._button.set_child(icon("down", px(16), dim=True))
+        self._button.set_popover(self)
+        self.connect("show", lambda *_args: self.fill())
+
+    @property
+    def button(self) -> Gtk.MenuButton:
+        return self._button
+
+    def fill(self) -> None:
+        self._clear()
+        current = self._current_path()
+        for path in self._known_paths():
+            self.add(self._row(path, path == current))
+
+    def _row(self, path: Path, is_current: bool) -> Gtk.Button:
+        button = Gtk.Button()
+        button.add_css_class("volna-menu-item")
+        button.add_css_class("volna-path-item")
+        button.set_tooltip_text(str(path))
+        if is_current:
+            button.add_css_class("is-current")
+
+        row = hbox(px(8))
+        check_slot = Gtk.Box()
+        check_slot.set_size_request(px(16), px(16))
+        if is_current:
+            check_slot.append(icon("check", px(16)))
+        row.append(check_slot)
+        path_label = label(str(path), "volna-menu-label", ellipsize=True)
+        path_label.set_hexpand(True)
+        path_label.set_max_width_chars(48)
+        row.append(path_label)
+        button.set_child(row)
+        button.connect(
+            "clicked", lambda _button, target=path: self._on_row_clicked(target)
+        )
+        return button
+
+    def _on_row_clicked(self, path: Path) -> None:
+        self.close()
+        self._on_select(path)
+
+    def open(self) -> None:
+        self._button.set_active(True)
+
+    def close(self) -> None:
+        if self._button.get_active():
+            self._button.set_active(False)
+
+
+class PathContextMenu(_PathMenu):
+    """The path field's right-click menu: copy the current path.
+
+    Anchored to the location widget; the single row copies the active tab's
+    path, not the ellipsized label.
+    """
+
+    def __init__(
+        self,
+        anchor: Gtk.Widget,
+        *,
+        on_copy: Callable[[], None],
+    ) -> None:
+        super().__init__()
+        self.set_parent(anchor)
+        self._on_copy = on_copy
+
+        self.add(self._row())
+
+    def _row(self) -> Gtk.Button:
+        button = Gtk.Button()
+        button.add_css_class("volna-menu-item")
+        button.set_tooltip_text("Скопировать текущий путь")
+
+        row = hbox(px(8))
+        row.append(label("Копировать путь", "volna-menu-label"))
+        button.set_child(row)
+        button.connect("clicked", lambda *_args: self._on_row_clicked())
+        return button
+
+    def _on_row_clicked(self) -> None:
+        self.popdown()
+        self._on_copy()
+
+    def popup_at(self, x: float, y: float) -> None:
+        # Point the menu at the press: a popover anchored to a widget floats
+        # near that widget, so aim it at the exact cursor rather than the anchor.
+        rect = Gdk.Rectangle()
+        rect.x, rect.y, rect.width, rect.height = int(x), int(y), 1, 1
+        self.set_pointing_to(rect)
+        self.popup()
 
 
 class MainWindow(Gtk.ApplicationWindow):
@@ -529,10 +688,22 @@ class MainWindow(Gtk.ApplicationWindow):
         self._path_label = label(str(Path.home()), "volna-path-label", ellipsize=True)
         self._path_label.set_hexpand(True)
         location.append(self._path_label)
-        self._path_menu_button = self._create_path_menu_button()
+        self._path_location = location
+        self._path_nav_menu = PathNavMenu(
+            known_paths=self._nav_known_paths,
+            current_path=self._nav_current_path,
+            on_select=self._on_path_menu_selected,
+        )
+        self._path_context_menu = PathContextMenu(
+            location, on_copy=self._copy_active_path
+        )
+        context_gesture = Gtk.GestureClick()
+        context_gesture.set_button(3)
+        context_gesture.connect("pressed", self._on_path_right_click)
+        location.add_controller(context_gesture)
         make_clickable(location, self._open_path_menu)
         display.append(location)
-        display.append(self._path_menu_button)
+        display.append(self._path_nav_menu.button)
 
         self._path_edit_button = icon_stub("pencil", tooltip="Изменить путь")
         make_clickable(self._path_edit_button, self._start_path_edit)
@@ -558,46 +729,44 @@ class MainWindow(Gtk.ApplicationWindow):
 
         return wrapper
 
-    def _create_path_menu_button(self) -> Gtk.MenuButton:
-        button = Gtk.MenuButton()
-        button.add_css_class("volna-path-menu")
-        button.set_valign(Gtk.Align.CENTER)
-        button.set_tooltip_text("Перейти к пути")
-        button.set_child(icon("down", px(16), dim=True))
-
-        popover = Gtk.Popover()
-        popover.add_css_class("volna-menu")
-        popover.set_has_arrow(False)
-        items = vbox(px(2))
-        items.add_css_class("volna-menu-box")
-        items.add_css_class("volna-path-menu-box")
-        popover.set_child(items)
-        popover.connect("show", self._fill_path_menu)
-        button.set_popover(popover)
-
-        self._path_popover = popover
-        self._path_menu_items = items
-        return button
-
     def _open_path_menu(self) -> None:
         self._set_path_invalid(False)
-        self._path_menu_button.set_active(True)
+        self._path_nav_menu.open()
 
     def _close_path_menu(self) -> None:
-        if self._path_menu_button.get_active():
-            self._path_menu_button.set_active(False)
+        self._path_nav_menu.close()
 
-    def _fill_path_menu(self, *_args: object) -> None:
-        child = self._path_menu_items.get_first_child()
-        while child is not None:
-            following = child.get_next_sibling()
-            self._path_menu_items.remove(child)
-            child = following
+    def _on_path_right_click(
+        self,
+        gesture: Gtk.GestureClick,
+        n_press: int,
+        x: float,
+        y: float,
+    ) -> None:
+        del n_press
+        if self._active_tab is None:
+            return
 
-        for path in self._known_paths():
-            self._path_menu_items.append(self._path_menu_item(path))
+        # Claim the press: Gtk.WindowHandle would otherwise turn it into the
+        # titlebar menu (#20) — the path field is a header control.
+        gesture.set_state(Gtk.EventSequenceState.CLAIMED)
 
-    def _known_paths(self) -> list[Path]:
+        self._path_context_menu.popup_at(x, y)
+
+    def _copy_active_path(self) -> None:
+        """Copy the active tab's path (issue #21), not the ellipsized label."""
+        tab = self._active_tab
+        if tab is None:
+            return
+
+        display = Gdk.Display.get_default()
+        if display is None:
+            return
+
+        display.get_clipboard().set(str(tab.path))
+        self._show_status_note("Путь скопирован")
+
+    def _nav_known_paths(self) -> list[Path]:
         home = Path.home()
         candidates: list[Path] = []
         if self._active_tab is not None:
@@ -613,34 +782,11 @@ class MainWindow(Gtk.ApplicationWindow):
             paths.append(path)
         return paths
 
-    def _path_menu_item(self, path: Path) -> Gtk.Button:
-        button = Gtk.Button()
-        button.add_css_class("volna-menu-item")
-        button.add_css_class("volna-path-item")
-        button.set_tooltip_text(str(path))
-
-        current = self._active_tab is not None and path == self._active_tab.path
-        if current:
-            button.add_css_class("is-current")
-
-        row = hbox(px(8))
-        check_slot = Gtk.Box()
-        check_slot.set_size_request(px(16), px(16))
-        if current:
-            check_slot.append(icon("check", px(16)))
-        row.append(check_slot)
-        path_label = label(str(path), "volna-menu-label", ellipsize=True)
-        path_label.set_hexpand(True)
-        path_label.set_max_width_chars(48)
-        row.append(path_label)
-        button.set_child(row)
-        button.connect(
-            "clicked", lambda _button, target=path: self._on_path_menu_selected(target)
-        )
-        return button
+    def _nav_current_path(self) -> Path | None:
+        tab = self._active_tab
+        return tab.path if tab is not None else None
 
     def _on_path_menu_selected(self, path: Path) -> None:
-        self._close_path_menu()
         self._navigate_active_tab(path)
 
     def _start_path_edit(self) -> None:
@@ -1003,6 +1149,11 @@ class MainWindow(Gtk.ApplicationWindow):
         # An entry opens its own context menu and claims the press itself;
         # claiming here would hide that menu instead of showing it.
         if _inside_entry(target):
+            return
+
+        # The path field shows its own context menu (issue #21) for the same
+        # reason: the location widget claims the press in its bubble handler.
+        if _inside(target, self._path_location):
             return
 
         gesture.set_state(Gtk.EventSequenceState.CLAIMED)

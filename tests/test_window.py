@@ -896,7 +896,7 @@ def _x11_libraries():
     return _X11_LIBRARIES
 
 
-def _root_point(window, widget) -> tuple[int, int]:
+def _root_point(window, widget, dx: float = 0.0, dy: float = 0.0) -> tuple[int, int]:
     """Center of ``widget`` in X11 root coordinates (for XTestFake*)."""
     import ctypes
 
@@ -926,7 +926,9 @@ def _root_point(window, widget) -> tuple[int, int]:
             ctypes.byref(child),
         )
         surface_x, surface_y = window.get_native().get_surface_transform()
-        center = Graphene.Point().init(widget.get_width() / 2, widget.get_height() / 2)
+        center = Graphene.Point().init(
+            widget.get_width() / 2 + dx, widget.get_height() / 2 + dy
+        )
         result = widget.compute_point(window, center)
         point = result[1] if isinstance(result, tuple) else result
 
@@ -938,7 +940,7 @@ def _root_point(window, widget) -> tuple[int, int]:
         x11.XCloseDisplay(display)
 
 
-def _fake_click(x: int, y: int, count: int = 1) -> None:
+def _fake_click(x: int, y: int, count: int = 1, button: int = 1) -> None:
     """Send real X11 button events (the pointer press path GTK handles)."""
     x11, xtst = _x11_libraries()
     display = x11.XOpenDisplay(None)
@@ -949,8 +951,8 @@ def _fake_click(x: int, y: int, count: int = 1) -> None:
         x11.XFlush(display)
         _pump_seconds(0.05)
         for _ in range(count):
-            xtst.XTestFakeButtonEvent(display, 1, True, 0)
-            xtst.XTestFakeButtonEvent(display, 1, False, 0)
+            xtst.XTestFakeButtonEvent(display, button, True, 0)
+            xtst.XTestFakeButtonEvent(display, button, False, 0)
             x11.XFlush(display)
             _pump_seconds(0.08)
     finally:
@@ -998,6 +1000,156 @@ def test_real_double_click_opens_a_directory(gtk_display, tmp_path: Path) -> Non
         _pump_seconds(0.8)
         assert window._active_tab.path == tmp_path / "child"
         assert _path_label(window) == str(tmp_path / "child")
+    finally:
+        _close(window)
+
+
+def _window_menu(window):
+    """The window menu Gtk.WindowHandle builds when no WM answers it."""
+    import gi
+
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import Gtk
+
+    for widget in _walk(window):
+        if not isinstance(widget, Gtk.PopoverMenu) or not widget.get_visible():
+            continue
+        # The fallback window menu is parented to the handle itself; an entry's
+        # context menu also lives under the handle, but deeper in the tree.
+        if isinstance(widget.get_parent(), Gtk.WindowHandle):
+            return widget
+    return None
+
+
+def _entry_menu(window):
+    """The text context menu of an entry, likewise a GtkPopoverMenu."""
+    import gi
+
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import Gtk
+
+    for widget in _walk(window):
+        if not isinstance(widget, Gtk.PopoverMenu) or not widget.get_visible():
+            continue
+        node = widget.get_parent()
+        while node is not None:
+            if isinstance(node, Gtk.Entry):
+                return widget
+            node = node.get_parent()
+    return None
+
+
+def _pointer_grabbed() -> bool:
+    import gi
+
+    gi.require_version("Gdk", "4.0")
+    from gi.repository import Gdk
+
+    display = Gdk.Display.get_default()
+    seat = display.get_default_seat()
+    return display.device_is_grabbed(seat.get_pointer())
+
+
+def _header_controls(window) -> dict[str, object]:
+    window_buttons = _by_class(window, "volna-win")
+    assert len(window_buttons) == 3
+    return {
+        "main menu": window._menu_button,
+        "back": window._back_button,
+        "forward": window._fwd_button,
+        "up": window._up_button,
+        "view": window._view_panel.trigger(),
+        "path": window._path_wrapper,
+        "path chevron": window._path_menu_button,
+        "path pencil": window._path_edit_button,
+        "minimize": window_buttons[0],
+        "maximize": window_buttons[1],
+        "close": window_buttons[2],
+    }
+
+
+def test_right_click_on_header_controls_keeps_the_window_menu_away(
+    gtk_display, tmp_path: Path
+) -> None:
+    """Issue #20: only free header space is a title bar, controls are not."""
+    window = _main_window(tmp_path)
+    try:
+        window.present()
+        _pump_seconds(0.3)
+
+        for name, control in _header_controls(window).items():
+            x, y = _root_point(window, control)
+            _fake_click(x, y, button=3)
+            _pump_seconds(0.2)
+
+            assert _window_menu(window) is None, name
+            assert not _pointer_grabbed(), name
+    finally:
+        _close(window)
+
+
+def test_right_click_on_the_view_trigger_does_not_eat_the_next_click(
+    gtk_display, tmp_path: Path
+) -> None:
+    window = _main_window(tmp_path)
+    try:
+        window.present()
+        _pump_seconds(0.3)
+        trigger = window._view_panel.trigger()
+
+        x, y = _root_point(window, trigger)
+        _fake_click(x, y, button=3)
+        assert _window_menu(window) is None
+        assert not _pointer_grabbed()
+
+        _fake_click(x, y)
+        _pump_seconds(0.3)
+        assert window._view_panel.popover.get_visible()
+    finally:
+        _close(window)
+
+
+def test_right_click_on_free_header_space_opens_the_window_menu(
+    gtk_display, tmp_path: Path
+) -> None:
+    window = _main_window(tmp_path)
+    try:
+        window.present()
+        _pump_seconds(0.3)
+        trigger = window._view_panel.trigger()
+
+        # The 8 px gap between the view trigger and the path field.
+        x, y = _root_point(window, trigger, dx=trigger.get_width() / 2 + 4)
+        _fake_click(x, y, button=3)
+        _pump_seconds(0.3)
+
+        menu = _window_menu(window)
+        assert menu is not None
+        assert _pointer_grabbed()
+
+        menu.popdown()
+        _pump_seconds(0.2)
+        assert not _pointer_grabbed()
+    finally:
+        _close(window)
+
+
+def test_right_click_on_the_path_entry_keeps_its_own_menu(
+    gtk_display, tmp_path: Path
+) -> None:
+    window = _main_window(tmp_path)
+    try:
+        window.present()
+        _pump_seconds(0.3)
+        window._start_path_edit()
+        _pump_seconds(0.3)
+
+        x, y = _root_point(window, window._path_entry)
+        _fake_click(x, y, button=3)
+        _pump_seconds(0.3)
+
+        assert _window_menu(window) is None
+        assert _entry_menu(window) is not None
     finally:
         _close(window)
 

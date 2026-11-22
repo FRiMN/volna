@@ -91,6 +91,10 @@ def _window(
 
 
 def _close(window: object) -> None:
+    # Dialogs are separate transient windows; destroy() does not take them
+    # down, and a mapped dialog steals real X clicks from the following tests.
+    for dialog in (window._save_dialog, window._rename_dialog, window._delete_dialog):
+        dialog.close()
     window._on_close_request()
     window.destroy()
     _pump(0.05)
@@ -151,7 +155,7 @@ def _open_menu(window: object) -> None:
     if not window._view_panel.popover.get_visible():
         _open_panel(window)
     section.open_menu()
-    _pump(0.15)
+    _pump(0.05)
     assert section.menu_open
 
 
@@ -167,7 +171,7 @@ def _row(window: object, name: str) -> object:
 def _apply(window: object, name: str) -> None:
     """Activate the menu row ``name`` the way a click does."""
     _section(window)._list.emit("row-activated", _row(window, name))
-    _pump(0.1)
+    _pump(0.03)
 
 
 def _settings(window: object) -> ViewSettings:
@@ -247,7 +251,7 @@ def test_the_field_is_the_menu_trigger(window_factory) -> None:
     _open_menu(window)
     assert section.menu_open
     section.close_menu()
-    _pump(0.15)
+    _pump(0.05)
     assert not section.menu_open
 
 
@@ -325,7 +329,7 @@ def test_returning_to_the_preset_snapshot_names_it_again(window_factory) -> None
 
 def _open_save(window: object) -> object:
     _by_class(_section(window).widget(), "volna-preset-save")[0].emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
     assert window._save_dialog.is_open
 
     return window._save_dialog
@@ -363,7 +367,7 @@ def test_saving_creates_a_custom_preset_and_selects_it(window_factory) -> None:
     dialog = _open_save(window)
     _entry(dialog).set_text("Мой вид")
     _dialog_button(dialog, "Сохранить").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     assert not dialog.is_open
     custom = window._presets.custom
@@ -378,7 +382,7 @@ def test_a_saved_preset_is_offered_in_the_list(window_factory) -> None:
     _open_panel(window)
     _entry(_open_save(window)).set_text("Мой вид")
     _dialog_button(window._save_dialog, "Сохранить").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     _open_panel(window)
     _open_menu(window)
@@ -413,7 +417,7 @@ def test_saving_with_a_builtin_name_overrides_it_in_the_list(window_factory) -> 
     _open_panel(window)
     _entry(_open_save(window)).set_text("Плотный список")
     _dialog_button(window._save_dialog, "Сохранить").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     _open_panel(window)
     _open_menu(window)
@@ -429,7 +433,7 @@ def test_cancelling_the_dialog_changes_nothing(window_factory) -> None:
     dialog = _open_save(window)
     _entry(dialog).set_text("Мой вид")
     _dialog_button(dialog, "Отмена").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     assert not dialog.is_open
     assert window._presets.custom == ()
@@ -444,7 +448,7 @@ def _saved_window(window_factory) -> object:
     _open_panel(window)
     _entry(_open_save(window)).set_text("Фото")
     _dialog_button(window._save_dialog, "Сохранить").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
     _open_panel(window)
     _open_menu(window)
     return window
@@ -453,7 +457,7 @@ def _saved_window(window_factory) -> object:
 def _open_rename(window: object, name: str) -> object:
     """Click the pencil of ``name`` and return the rename dialog."""
     _by_class(_row(window, name), "volna-preset-act")[0].emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
     assert window._rename_dialog.is_open
 
     return window._rename_dialog
@@ -500,7 +504,7 @@ def test_rename_updates_the_name_and_the_field(window_factory) -> None:
     dialog = _open_rename(window, "Фото")
     _entry(dialog).set_text("Снимки")
     _dialog_button(dialog, "Переименовать").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     assert not dialog.is_open
     assert [preset.name for preset in window._presets.custom] == ["Снимки"]
@@ -528,7 +532,7 @@ def test_rename_rejects_a_builtin_name_and_keeps_the_dialog_open(
     dialog = _open_rename(window, "Фото")
     _entry(dialog).set_text("Крупные значки")
     _dialog_button(dialog, "Переименовать").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     assert dialog.is_open
     assert [preset.name for preset in window._presets.custom] == ["Фото"]
@@ -543,14 +547,14 @@ def test_rename_rejects_another_custom_name(window_factory) -> None:
     _open_panel(window)
     _entry(_open_save(window)).set_text("Видео")
     _dialog_button(window._save_dialog, "Сохранить").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
     _open_panel(window)
     _open_menu(window)
 
     dialog = _open_rename(window, "Фото")
     _entry(dialog).set_text("видео")
     _dialog_button(dialog, "Переименовать").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     assert dialog.is_open
     assert [preset.name for preset in window._presets.custom] == ["Фото", "Видео"]
@@ -576,7 +580,7 @@ def test_cancelling_rename_keeps_the_old_name(window_factory) -> None:
     dialog = _open_rename(window, "Фото")
     _entry(dialog).set_text("Снимки")
     _dialog_button(dialog, "Отмена").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     assert not dialog.is_open
     assert [preset.name for preset in window._presets.custom] == ["Фото"]
@@ -589,12 +593,12 @@ def test_rename_can_be_undone_by_renaming_again(window_factory) -> None:
     dialog = _open_rename(window, "Фото")
     _entry(dialog).set_text("Опечатка")
     _dialog_button(dialog, "Переименовать").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     dialog = _open_rename(window, "Опечатка")
     _entry(dialog).set_text("Фото")
     _dialog_button(dialog, "Переименовать").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     assert [preset.name for preset in window._presets.custom] == ["Фото"]
 
@@ -607,7 +611,7 @@ def test_delete_asks_for_confirmation_with_the_name(window_factory) -> None:
 
     item = _by_class(_section(window).widget(), "volna-preset-item")[-1]
     _by_class(item, "volna-preset-act")[1].emit("clicked")  # the bin
-    _pump(0.1)
+    _pump(0.03)
 
     dialog = window._delete_dialog
     assert dialog.is_open
@@ -623,10 +627,10 @@ def test_confirming_delete_removes_the_preset(window_factory) -> None:
     window = _saved_window(window_factory)
     item = _by_class(_section(window).widget(), "volna-preset-item")[-1]
     _by_class(item, "volna-preset-act")[1].emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     _dialog_button(window._delete_dialog, "Удалить").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     assert window._presets.custom == ()
     assert not window._delete_dialog.is_open
@@ -640,9 +644,9 @@ def test_deleting_the_current_preset_falls_back_to_the_default(
 
     item = _by_class(_section(window).widget(), "volna-preset-item")[-1]
     _by_class(item, "volna-preset-act")[1].emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
     _dialog_button(window._delete_dialog, "Удалить").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     assert window._presets.selected_id == DEFAULT_PRESET_ID
     assert _label_text(window) == "По умолчанию"
@@ -653,10 +657,10 @@ def test_cancelling_delete_keeps_the_preset(window_factory) -> None:
     window = _saved_window(window_factory)
     item = _by_class(_section(window).widget(), "volna-preset-item")[-1]
     _by_class(item, "volna-preset-act")[1].emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     _dialog_button(window._delete_dialog, "Отмена").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     assert [preset.name for preset in window._presets.custom] == ["Фото"]
     assert _label_text(window) == "Фото"
@@ -667,16 +671,16 @@ def test_deleting_an_override_restores_the_builtin(window_factory) -> None:
     _open_panel(window)
     _entry(_open_save(window)).set_text("Плотный список")
     _dialog_button(window._save_dialog, "Сохранить").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
     _open_panel(window)
     _open_menu(window)
     assert window._presets.find("dense-list") is None
 
     item = _by_class(_section(window).widget(), "volna-preset-item")[1]
     _by_class(item, "volna-preset-act")[1].emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
     _dialog_button(window._delete_dialog, "Удалить").emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     assert window._presets.find("dense-list") is not None
     assert window._presets.find("dense-list").builtin
@@ -830,7 +834,7 @@ def test_enter_in_the_entry_saves_the_preset(window_factory) -> None:
     _entry(dialog).set_text("С клавиатуры")
 
     _entry(dialog).emit("activate")
-    _pump(0.1)
+    _pump(0.03)
 
     assert not dialog.is_open
     assert [preset.name for preset in window._presets.custom] == ["С клавиатуры"]
@@ -905,7 +909,7 @@ def test_escape_closes_the_delete_dialog_without_deleting(window_factory) -> Non
     window = _saved_window(window_factory)
     item = _by_class(_section(window).widget(), "volna-preset-item")[-1]
     _by_class(item, "volna-preset-act")[1].emit("clicked")
-    _pump(0.1)
+    _pump(0.03)
 
     window._delete_dialog.cancel()
     _pump(0.05)
@@ -931,7 +935,7 @@ def test_a_read_only_store_keeps_presets_in_memory_and_says_so(
         _open_panel(window)
         _entry(_open_save(window)).set_text("В памяти")
         _dialog_button(window._save_dialog, "Сохранить").emit("clicked")
-        _pump(0.1)
+        _pump(0.03)
 
         assert [preset.name for preset in window._presets.custom] == ["В памяти"]
         status = _by_class(window, "volna-status")[0].get_text()
@@ -963,7 +967,7 @@ def test_a_preset_applies_to_the_active_tab_only(window_factory) -> None:
     first = window._active_tab
 
     second = window._open_tab(first.path)
-    _pump(0.1)
+    _pump(0.03)
     window._view_panel.sync()
     _apply(window, "Крупные значки")
 
@@ -1070,7 +1074,7 @@ def test_a_custom_preset_with_a_builtin_snapshot_is_named_by_itself(
     window._presets.save("Моя копия", _settings(window))
     window._view_panel.sync()
     window.apply_preset(window._presets.custom[-1].id)
-    _pump(0.1)
+    _pump(0.03)
 
     assert _label_text(window) == "Моя копия"
 

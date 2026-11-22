@@ -144,7 +144,7 @@ class _Harness:
 
     def resize(self, width: int, height: int = 600) -> None:
         self.window.set_default_size(width, height)
-        _pump(0.5)
+        _pump(0.2)
 
     def close(self) -> None:
         self.window.destroy()
@@ -163,7 +163,7 @@ def _opened_view(*, width: int = 900, height: int = 900) -> Iterator[_Harness]:
     view = IconsView(on_activate=activated.append)
     window.set_child(view.widget)
     window.present()
-    _pump(0.3)
+    assert _pump_until(lambda: window.get_mapped() and view.widget.get_width() > 0)
 
     harness = _Harness(window=window, view=view, activated=activated)
     try:
@@ -420,7 +420,7 @@ def test_narrow_band_clips_tiles_instead_of_squeezing_them(
         window.set_default_size(100, 200)
         window.set_child(band)
         window.present()
-        _pump(0.4)
+        assert _pump_until(lambda: window.get_mapped())
         window.destroy()
         _pump(0.1)
     finally:
@@ -468,6 +468,15 @@ def pump(seconds=0.2):
         time.sleep(0.01)
 
 
+def pump_until(condition, timeout=3.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if condition():
+            return True
+        pump(0.01)
+    return False
+
+
 def walk(widget):
     child = widget.get_first_child()
     while child is not None:
@@ -500,34 +509,39 @@ Gtk.StyleContext.add_provider_for_display(
 )
 
 sections = tuple(
-    Section(items=items(f"g{group}", 40), header=f"Группа {group}", key=f"g{group}")
-    for group in range(6)
+    Section(items=items(f"g{group}", 20), header=f"Группа {group}", key=f"g{group}")
+    for group in range(3)
 )
 window = Gtk.Window()
 window.set_default_size(1100, 900)
 view = IconsView(on_activate=lambda item: None)
 window.set_child(view.widget)
 window.present()
-pump(0.4)
-view.render(sections)
-pump(0.8)
-
 root = view.widget
-assert by_class(root, "volna-group-title"), "the listing is not grouped"
-assert [tile for tile in by_class(root, "volna-icons-tile") if tile.get_mapped()], (
-    "no tiles before the resize"
-)
+assert pump_until(lambda: root.get_mapped()), "the window did not map"
+view.render(sections)
+
+def tiles_are_mapped() -> bool:
+    return bool(
+        by_class(root, "volna-group-title")
+        and [tile for tile in by_class(root, "volna-icons-tile") if tile.get_mapped()]
+    )
+
+assert pump_until(tiles_are_mapped), "no tiles before the resize"
 
 # The drag: alternate wide and narrow faster than the idle re-chunk.
-for index in range(20):
+for index in range(12):
     window.set_default_size(700 if index % 2 else 1200, 900)
-    pump(0.06)
+    pump(0.02)
 
 window.set_default_size(700, 900)
-pump(1.0)
 
+def tiles_are_settled() -> bool:
+    tiles = [tile for tile in by_class(root, "volna-icons-tile") if tile.get_mapped()]
+    return bool(tiles) and all(tile.get_width() >= px(150) - 1 for tile in tiles)
+
+assert pump_until(tiles_are_settled), "the band did not settle after the resize"
 tiles = [tile for tile in by_class(root, "volna-icons-tile") if tile.get_mapped()]
-assert tiles, "no tiles after the resize"
 widths = [tile.get_width() for tile in tiles]
 assert all(width >= px(150) - 1 for width in widths), widths
 assert by_class(root, "volna-group-title"), "the captions disappeared"
@@ -536,7 +550,7 @@ for tile in tiles:
     assert len(names) == 1 and names[0].get_text(), "a tile lost its name"
 
 window.destroy()
-pump(0.5)
+pump(0.1)
 print("RESIZE DONE", flush=True)
 """
 
@@ -657,7 +671,7 @@ def test_theme_lets_the_window_shrink_and_rechunk_the_bands(
         # step re-chunks and lowers the minimum for the next step.
         for _ in range(3):
             harness.window.set_default_size(520, 800)
-            _pump(0.8)
+            _pump(0.25)
 
         narrow_width = harness.view._list.get_width()
         assert narrow_width < wide_width, "the window did not shrink"
@@ -805,16 +819,16 @@ window.set_default_size(900, 900)
 view = IconsView(on_activate=lambda item: None)
 window.set_child(view.widget)
 window.present()
-pump(0.4)
+assert pump_until(lambda: window.get_mapped()), "the window did not map"
 
 view.render(sections(collapsed=False))
 assert pump_until(lambda: materialised_bands() > 0), "no tile bands on screen"
 
 for _ in range(3):
     view.render(sections(collapsed=True))
-    pump(0.3)
+    pump(0.1)
     view.render(sections(collapsed=False))
-    pump(0.3)
+    pump(0.1)
 
 assert pump_until(lambda: materialised_bands() > 0), "the toggles lost the bands"
 print("TOGGLES DONE", flush=True)

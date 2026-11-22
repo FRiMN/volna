@@ -28,6 +28,7 @@ dev = [
     "pytest~=9.2.0",
     "invoke~=3.0.3",
     "mypy~=2.4",
+    "pytest-xdist~=3.8.0",
 ]
 
 [build-system]
@@ -49,7 +50,7 @@ exclude = ["/design", "/reference", "/uv.lock"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not slow'"
+addopts = "-m 'not slow' -n 4 --dist loadscope"
 markers = [
     "slow: long-running and non-functional (timing/memory) tests",
 ]

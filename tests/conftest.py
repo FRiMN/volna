@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.util
+import fcntl
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from array import array
 from collections import Counter
@@ -37,7 +39,7 @@ def _unavailable(reason: str) -> NoReturn:
 
 @pytest.fixture(scope="session")
 def gtk_display() -> Iterator[None]:
-    process, display = _start_xvfb()
+    process, display, lock_fd = _start_xvfb()
     previous = {
         name: os.environ.get(name)
         for name in ("DISPLAY", "GDK_BACKEND", "GSK_RENDERER")
@@ -69,39 +71,68 @@ def gtk_display() -> Iterator[None]:
                 os.environ[name] = value
         process.terminate()
         process.wait(5)
+        os.close(lock_fd)
 
 
-def _free_display() -> int | None:
+def _reserve_display() -> tuple[int, int] | None:
+    """Pick a display number and hold its lock until the fixture is done.
+
+    pytest-xdist starts one session per worker at the same time; a plain
+    existence check lets two workers pick the same number before either Xvfb
+    creates its socket.
+    """
+    lock_dir = Path(tempfile.gettempdir())
     for number in range(100, 140):
-        if not Path(f"/tmp/.X11-unix/X{number}").exists():
-            return number
+        if Path(f"/tmp/.X11-unix/X{number}").exists():
+            continue
+
+        lock_fd = os.open(
+            lock_dir / f"volna-xvfb-{number}.lock", os.O_CREAT | os.O_RDWR, 0o600
+        )
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(lock_fd)
+            continue
+
+        if Path(f"/tmp/.X11-unix/X{number}").exists():
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            os.close(lock_fd)
+            continue
+
+        return number, lock_fd
+
     return None
 
 
-def _start_xvfb() -> tuple[subprocess.Popen, str]:
+def _start_xvfb() -> tuple[subprocess.Popen, str, int]:
     if shutil.which("Xvfb") is None:
         _unavailable("Xvfb is not installed")
 
-    number = _free_display()
-    if number is None:
-        _unavailable("no free X display")
+    for _attempt in range(5):
+        reserved = _reserve_display()
+        if reserved is None:
+            _unavailable("no free X display")
 
-    process = subprocess.Popen(
-        ["Xvfb", f":{number}", "-screen", "0", "1280x1024x24", "-nolisten", "tcp"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    socket = Path(f"/tmp/.X11-unix/X{number}")
-    deadline = time.monotonic() + 5.0
-    while time.monotonic() < deadline:
-        if socket.exists():
-            return process, f":{number}"
-        if process.poll() is not None:
-            break
-        time.sleep(0.05)
+        number, lock_fd = reserved
+        process = subprocess.Popen(
+            ["Xvfb", f":{number}", "-screen", "0", "1280x1024x24", "-nolisten", "tcp"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        socket = Path(f"/tmp/.X11-unix/X{number}")
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            if socket.exists():
+                return process, f":{number}", lock_fd
+            if process.poll() is not None:
+                break
+            time.sleep(0.05)
 
-    process.terminate()
-    process.wait(5)
+        process.terminate()
+        process.wait(5)
+        os.close(lock_fd)
+
     _unavailable("Xvfb did not start")
 
 

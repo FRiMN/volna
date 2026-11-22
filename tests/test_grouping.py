@@ -84,7 +84,7 @@ def _pump_until(condition, timeout: float = 5.0) -> bool:
     return False
 
 
-def _settle(seconds: float = 0.1) -> None:
+def _settle(seconds: float = 0.03) -> None:
     """Let GTK lay out the newly rendered/virtualized rows."""
     import gi
 
@@ -288,7 +288,7 @@ def _wait_for_mode_listing(
         collected_headers, collected_names = _collect_listing(window, mode)
         if collected_headers == headers and set(names) <= set(collected_names):
             return
-        _settle(0.05)
+        _settle(0.02)
 
     raise AssertionError(
         f"{mode} never showed {headers} / {names}: "

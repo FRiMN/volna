@@ -46,11 +46,17 @@ uv run volna --screenshot .tmp/volna.png
 ## Разработка
 
 ```bash
-uv run pytest       # тесты
+uv run pytest       # тесты: 4 worker-а pytest-xdist, module-scoped
+uv run pytest -n0   # последовательно: отладка или одиночный тест
 uv run ruff check   # линт
 uv run ruff format  # форматирование
 uv run mypy         # проверка типов (strict, см. [tool.mypy])
 ```
+
+`pytest` по умолчанию идёт в четырёх worker-ах (`-n 4 --dist loadscope`): каждый worker
+поднимает свой Xvfb, а `loadscope` держит модуль в одном worker-е — с дефолтным
+`--dist load` полный прогон зависает. `-n 8` быстрее не делает, `-n auto` на этой машине
+зависает; при нехватке CPU/памяти уменьшайте `-n`. `-n0` отключает xdist.
 
 То же через `invoke`: `uv run invoke testing`, `uv run invoke check`, `uv run invoke fmt`,
 `uv run invoke types`. Гейт целиком — `uv run invoke static` (линт, формат, типы) и

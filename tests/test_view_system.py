@@ -299,7 +299,9 @@ def test_hidden_toggle_only_affects_the_active_tab(gtk_display, tmp_path: Path) 
         assert not first_tab.view_settings.show_hidden
 
         window._activate(first_tab)
-        _pump_until(lambda: _listed_names(window) == ["alpha.txt", "beta.txt"])
+        assert _pump_until(
+            lambda: set(_listed_names(window)) == {"alpha.txt", "beta.txt"}
+        ), f"first tab did not return to its listing: {_listed_names(window)}"
         assert ".hidden.txt" not in _listed_names(window)
     finally:
         _close(window)

@@ -574,7 +574,7 @@ def test_escape_cancels_path_edit(gtk_display, tmp_path: Path) -> None:
 def test_path_menu_lists_known_locations(gtk_display, tmp_path: Path) -> None:
     window = _main_window(tmp_path)
     try:
-        window._fill_path_menu()
+        window._path_nav_menu.fill()
         items = _by_class(window, "volna-path-item")
         paths = [item.get_tooltip_text() for item in items]
 
@@ -592,7 +592,7 @@ def test_path_menu_lists_known_locations(gtk_display, tmp_path: Path) -> None:
 def test_path_menu_selection_navigates(gtk_display, tmp_path: Path) -> None:
     window = _main_window(tmp_path)
     try:
-        window._fill_path_menu()
+        window._path_nav_menu.fill()
         home_item = next(
             item
             for item in _by_class(window, "volna-path-item")
@@ -621,6 +621,174 @@ def test_path_edit_accepts_relative_path(gtk_display, tmp_path: Path) -> None:
 
         assert window._active_tab.path == nested
         assert _path_label(window) == str(nested)
+    finally:
+        _close(window)
+
+
+def _path_context_item(window: object):
+    """The «Копировать путь» row of the path field's context menu."""
+    for item in _by_class(window._path_context_menu, "volna-menu-item"):
+        labels = _by_class(item, "volna-menu-label")
+        if labels and labels[0].get_text() == "Копировать путь":
+            return item
+    raise AssertionError("«Копировать путь» is missing from the path context menu")
+
+
+def _open_path_context_menu(window: object) -> None:
+    """Right click the path label, the way a pointer does."""
+    x, y = _root_point(window, window._path_label)
+    _fake_click(x, y, button=3)
+    _pump_seconds(0.3)
+
+
+def _clipboard_text() -> str | None:
+    """Default clipboard text; the read is async, so the loop is pumped."""
+    import gi
+
+    gi.require_version("Gdk", "4.0")
+    from gi.repository import Gdk
+
+    display = Gdk.Display.get_default()
+    assert display is not None
+
+    result: dict[str, str | None] = {}
+
+    def on_read(source: object, res: object) -> None:
+        result["text"] = source.read_text_finish(res)
+
+    display.get_clipboard().read_text_async(None, on_read)
+    assert _pump_until(lambda: "text" in result)
+    return result["text"]
+
+
+def test_path_dropdown_stays_a_list_of_known_paths(gtk_display, tmp_path: Path) -> None:
+    window = _main_window(tmp_path)
+    try:
+        window._path_nav_menu.fill()
+
+        labels = [
+            item.get_text()
+            for item in _by_class(window._path_nav_menu.items, "volna-menu-label")
+        ]
+        assert "Копировать путь" not in labels
+        assert len(labels) == len(_by_class(window, "volna-path-item"))
+    finally:
+        _close(window)
+
+
+def test_right_click_on_the_path_opens_a_context_menu(
+    gtk_display, tmp_path: Path
+) -> None:
+    window = _main_window(tmp_path)
+    try:
+        window.present()
+        _pump_seconds(0.3)
+        assert not window._path_context_menu.visible()
+
+        _open_path_context_menu(window)
+
+        assert window._path_context_menu.visible()
+        assert _window_menu(window) is None
+    finally:
+        _close(window)
+
+
+def test_path_context_menu_copies_the_active_path(gtk_display, tmp_path: Path) -> None:
+    target = tmp_path / "first" / "nested"
+    target.mkdir(parents=True)
+
+    window = _main_window(target)
+    try:
+        window.present()
+        # The initial scan ends with its own status line; let it land first.
+        assert _pump_until(lambda: _status_text(window) == "Готово.")
+        assert window._path_stack.get_visible_child_name() == "display"
+
+        _open_path_context_menu(window)
+        _path_context_item(window).emit("clicked")
+        _pump_seconds(0.2)
+
+        assert _clipboard_text() == str(target)
+        assert not window._path_context_menu.visible()
+        assert window._path_stack.get_visible_child_name() == "display"
+        assert _status_text(window) == "Путь скопирован"
+
+        window._clear_status_note()
+        assert _status_text(window) != "Путь скопирован"
+    finally:
+        _close(window)
+
+
+def test_copy_path_of_the_root_is_a_single_slash(gtk_display) -> None:
+    window = _main_window(Path("/"))
+    try:
+        window.present()
+        _pump_seconds(0.3)
+        _open_path_context_menu(window)
+        _path_context_item(window).emit("clicked")
+
+        assert _clipboard_text() == "/"
+    finally:
+        _close(window)
+
+
+def test_copy_path_follows_the_active_tab(gtk_display, tmp_path: Path) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    third = tmp_path / "third"
+    for path in (first, second, third):
+        path.mkdir()
+
+    window = _main_window(first)
+    try:
+        window.present()
+        _pump_seconds(0.3)
+
+        window._open_tab(second)
+        _pump_seconds(0.2)
+        _open_path_context_menu(window)
+        _path_context_item(window).emit("clicked")
+        assert _clipboard_text() == str(second)
+
+        window._activate(window._tabs[0])
+        _pump_seconds(0.2)
+        _open_path_context_menu(window)
+        _path_context_item(window).emit("clicked")
+        assert _clipboard_text() == str(first)
+
+        window._navigate_active_tab(third)
+        _pump_seconds(0.2)
+        assert _clipboard_text() == str(first)
+    finally:
+        _close(window)
+
+
+def test_copy_path_keeps_the_tab_and_history(gtk_display, tmp_path: Path) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    for path in (first, second):
+        path.mkdir()
+
+    window = _main_window(first)
+    try:
+        window.present()
+        _pump_seconds(0.3)
+        window._navigate_active_tab(second)
+        _pump_seconds(0.2)
+
+        tab = window._active_tab
+        before = (tab.path, tab.can_go_back, tab.can_go_forward, len(window._tabs))
+
+        for _ in range(2):
+            _open_path_context_menu(window)
+            _path_context_item(window).emit("clicked")
+            _pump_seconds(0.2)
+
+        after = (tab.path, tab.can_go_back, tab.can_go_forward, len(window._tabs))
+        assert after == before
+        assert tab.path == second
+        assert _path_label(window) == str(second)
+        assert _clipboard_text() == str(second)
     finally:
         _close(window)
 
@@ -1060,7 +1228,7 @@ def _header_controls(window) -> dict[str, object]:
         "up": window._up_button,
         "view": window._view_panel.trigger(),
         "path": window._path_wrapper,
-        "path chevron": window._path_menu_button,
+        "path chevron": window._path_nav_menu.button,
         "path pencil": window._path_edit_button,
         "minimize": window_buttons[0],
         "maximize": window_buttons[1],
@@ -1083,6 +1251,12 @@ def test_right_click_on_header_controls_keeps_the_window_menu_away(
             _pump_seconds(0.2)
 
             assert _window_menu(window) is None, name
+            if name == "path":
+                # The path field opens its own context menu (#21); an open
+                # popover takes the pointer grab on purpose.
+                assert window._path_context_menu.visible()
+                window._path_context_menu.popdown()
+                _pump_seconds(0.1)
             assert not _pointer_grabbed(), name
     finally:
         _close(window)

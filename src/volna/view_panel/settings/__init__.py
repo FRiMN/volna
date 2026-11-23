@@ -9,6 +9,7 @@ from .base import SettingFeature
 from .density import DensitySetting
 from .folders_first import FoldersFirstSetting
 from .grouping import GroupingSetting
+from .show_full_names import ShowFullNamesSetting
 from .show_hidden import ShowHiddenSetting
 from .sort_direction import SortDirectionSetting
 from .sort_key import SortKeySetting
@@ -24,6 +25,7 @@ SETTING_FEATURES: tuple[type[SettingFeature], ...] = (
     SortDirectionSetting,
     FoldersFirstSetting,
     ShowHiddenSetting,
+    ShowFullNamesSetting,
     DensitySetting,
 )
 
@@ -33,6 +35,7 @@ __all__ = [
     "FoldersFirstSetting",
     "GroupingSetting",
     "SettingFeature",
+    "ShowFullNamesSetting",
     "ShowHiddenSetting",
     "SortDirectionSetting",
     "SortKeySetting",

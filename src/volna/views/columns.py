@@ -21,6 +21,7 @@ from ..size import px  # noqa: E402
 from .base import ListingView, Section  # noqa: E402
 from .group_header import header_box  # noqa: E402
 from .item import ListingItem  # noqa: E402
+from .name_label import NameLabel  # noqa: E402
 
 # Rows per column, fixed like the mockup (perColumn = 6); growing the band
 # does not re-chunk the listing — the seam for a height-driven count is here.
@@ -198,12 +199,21 @@ class ColumnsView(ListingView):
         text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
         text.set_hexpand(True)
 
-        name = Gtk.Label(label=entry.name, xalign=0)
-        name.set_ellipsize(Pango.EllipsizeMode.END)
+        name = NameLabel()
+        name.set_name(entry.name)
+        name.set_xalign(0)
+        name.set_hexpand(True)
         # GTK CSS has no max-width: this char budget is what keeps the column's
         # natural width inside the design range instead of following the name.
-        name.set_max_width_chars(_MAX_NAME_CHARS)
-        name.set_hexpand(True)
+        # «Показывать имена целиком» lifts the budget, so the column is as wide
+        # as its content (design/spec/07-decisions.md D29). A ``Gtk.ListView``
+        # sizes rows by their *minimum* width, and an ellipsizing label has a
+        # tiny minimum: request the measured full width explicitly.
+        if self._settings.show_full_names:
+            width = name.measure(Gtk.Orientation.HORIZONTAL, -1).natural
+            name.set_size_request(width, -1)
+        else:
+            name.set_max_width_chars(_MAX_NAME_CHARS)
         name.add_css_class("volna-col-name")
         text.append(name)
 

@@ -90,6 +90,9 @@ class ViewSettings:
     reverse: bool = True  # True = descending, matching the design default
     folders_first: bool = True
     show_hidden: bool = False
+    # «Показывать имена целиком» (design/spec/07-decisions.md D29). The flag
+    # only affects «Столбцы» and «Значки»; the details table always truncates.
+    show_full_names: bool = False
     compact: bool = False
     zoom: int = 50  # 0..100; 50 renders as "100 %"
 
@@ -117,6 +120,7 @@ class ViewSettings:
             "reverse": self.reverse,
             "folders_first": self.folders_first,
             "show_hidden": self.show_hidden,
+            "show_full_names": self.show_full_names,
             "compact": self.compact,
             "zoom": self.zoom,
         }
@@ -136,6 +140,7 @@ class ViewSettings:
             reverse=_bool(raw.get("reverse"), defaults.reverse),
             folders_first=_bool(raw.get("folders_first"), defaults.folders_first),
             show_hidden=_bool(raw.get("show_hidden"), defaults.show_hidden),
+            show_full_names=_bool(raw.get("show_full_names"), defaults.show_full_names),
             compact=_bool(raw.get("compact"), defaults.compact),
             zoom=_zoom(raw.get("zoom"), defaults.zoom),
         )

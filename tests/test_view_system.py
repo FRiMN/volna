@@ -7,6 +7,7 @@ the model's private structure.
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from collections.abc import Iterator, Sequence
@@ -17,6 +18,7 @@ import pytest
 pytest.importorskip("gi")
 
 from volna.display import (  # noqa: E402
+    SCHEMA_VERSION,
     Grouping,
     JsonViewSettingsStore,
     MemoryViewSettingsStore,
@@ -96,6 +98,16 @@ def _wait_for_names(window: object, *names: str) -> None:
     assert _pump_until(lambda: all(name in _listed_names(window) for name in names)), (
         f"rows {names} never appeared in {_listed_names(window)}"
     )
+
+
+def _wait_for_loaded(window: object) -> None:
+    """Wait for the active tab's listing, whatever mode it is rendered in."""
+    assert _pump_until(
+        lambda: (
+            window._active_tab is not None
+            and len(window._active_tab.model.entries()) >= 2
+        )
+    ), "the listing did not load"
 
 
 def _open_panel(window: object) -> object:
@@ -381,6 +393,80 @@ def test_corrupt_config_does_not_block_startup(gtk_display, tmp_path: Path) -> N
         _wait_for_names(window, "alpha.txt", "beta.txt")
         status = _by_class(window, "volna-status")[0]
         assert "повреждён" in status.get_text()
+    finally:
+        _close(window)
+
+
+def test_show_full_names_survives_a_restart(gtk_display, tmp_path: Path) -> None:
+    """The «Показывать имена целиком» switch is stored like every setting."""
+    listing = tmp_path / "listing"
+    listing.mkdir()
+    _make_listing(listing)
+    config = tmp_path / "config"
+    paths = SettingsPaths(directory=config, file=config / "settings.json")
+
+    first = _window(listing, store=JsonViewSettingsStore(paths))
+    try:
+        panel = _open_panel(first)
+        _wait_for_names(first, "alpha.txt", "beta.txt")
+        # The switch only applies outside the table, so leave «Подробности».
+        _control(panel.popover, "Столбцы").set_active(True)
+        assert _pump_until(
+            lambda: _control(panel.popover, "Показывать имена целиком").get_sensitive()
+        )
+        _control(panel.popover, "Показывать имена целиком").set_active(True)
+        assert _pump_until(lambda: first._active_tab.view_settings.show_full_names)
+        _close(first)
+    finally:
+        if first.get_realized():
+            first.destroy()
+
+    assert JsonViewSettingsStore(paths).load().view.show_full_names is True
+
+    second = _window(listing, store=JsonViewSettingsStore(paths))
+    try:
+        second.present()
+        _wait_for_loaded(second)
+        assert second._active_tab.view_settings.show_full_names is True
+        panel = _open_panel(second)
+        switch = _control(panel.popover, "Показывать имена целиком")
+        assert switch.get_active()
+        assert switch.get_sensitive()
+    finally:
+        _close(second)
+
+
+def test_an_old_config_without_show_full_names_reads_as_cut(
+    gtk_display, tmp_path: Path
+) -> None:
+    """A settings file from before the field exists is «резать», not corrupt."""
+    listing = tmp_path / "listing"
+    listing.mkdir()
+    _make_listing(listing)
+    config = tmp_path / "config"
+    config.mkdir()
+    (config / "settings.json").write_text(
+        json.dumps(
+            {
+                "schema_version": SCHEMA_VERSION,
+                "view": {"view_mode": "icons", "sort_key": "name"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    store = JsonViewSettingsStore(
+        SettingsPaths(directory=config, file=config / "settings.json")
+    )
+    document = store.load()
+    assert document.view is not None
+    assert document.view.show_full_names is False
+
+    window = _window(listing, store=store)
+    try:
+        window.present()
+        _wait_for_loaded(window)
+        assert window._active_tab.view_settings.show_full_names is False
+        assert document.issues == ()
     finally:
         _close(window)
 

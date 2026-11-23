@@ -48,6 +48,7 @@ def test_defaults() -> None:
     assert settings.reverse is True
     assert settings.folders_first is True
     assert settings.show_hidden is False
+    assert settings.show_full_names is False
     assert settings.compact is False
     assert settings.zoom == 50
 
@@ -71,6 +72,7 @@ def test_to_mapping_has_the_documented_keys() -> None:
         "reverse",
         "folders_first",
         "show_hidden",
+        "show_full_names",
         "compact",
         "zoom",
     }
@@ -89,6 +91,7 @@ def test_to_mapping_has_the_documented_keys() -> None:
             reverse=False,
             folders_first=False,
             show_hidden=True,
+            show_full_names=True,
             compact=True,
             zoom=85,
         ),
@@ -185,13 +188,29 @@ def test_enum_instances_are_accepted() -> None:
 
 def test_bool_fields_accept_json_booleans_and_int_flags() -> None:
     settings = ViewSettings.from_mapping(
-        {"reverse": False, "folders_first": 0, "show_hidden": True, "compact": 0}
+        {
+            "reverse": False,
+            "folders_first": 0,
+            "show_hidden": True,
+            "show_full_names": 1,
+            "compact": 0,
+        }
     )
 
     assert settings.reverse is False
     assert settings.folders_first is False
     assert settings.show_hidden is True
+    assert settings.show_full_names is True
     assert settings.compact is False
+
+
+def test_old_configuration_without_show_full_names_reads_as_cut() -> None:
+    # Stored before the field existed: the missing key is the «резать» default,
+    # not a corrupt document (design/spec/07-decisions.md D29).
+    old = ViewSettings().to_mapping()
+    del old["show_full_names"]
+
+    assert ViewSettings.from_mapping(old).show_full_names is False
 
 
 @pytest.mark.parametrize(
@@ -206,6 +225,9 @@ def test_bool_fields_accept_json_booleans_and_int_flags() -> None:
 )
 def test_bool_fields_fall_back_on_junk(raw: object, expected: bool) -> None:
     assert ViewSettings.from_mapping({"show_hidden": raw}).show_hidden is expected
+    assert (
+        ViewSettings.from_mapping({"show_full_names": raw}).show_full_names is expected
+    )
 
 
 @pytest.mark.parametrize(
@@ -280,6 +302,7 @@ def test_normalized_preserves_fields_it_does_not_own() -> None:
         reverse=False,
         folders_first=False,
         show_hidden=True,
+        show_full_names=True,
         compact=True,
         zoom=70,
     )
@@ -290,6 +313,7 @@ def test_normalized_preserves_fields_it_does_not_own() -> None:
     assert normalized.reverse is False
     assert normalized.folders_first is False
     assert normalized.show_hidden is True
+    assert normalized.show_full_names is True
     assert normalized.compact is True
     assert normalized.view_mode is ViewMode.COLUMNS
     assert normalized.grouping is Grouping.NONE

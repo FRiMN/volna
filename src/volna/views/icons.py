@@ -26,6 +26,7 @@ from ..size import px  # noqa: E402
 from .base import ListingView, Section  # noqa: E402
 from .group_header import GroupHeader  # noqa: E402
 from .item import ListingItem  # noqa: E402
+from .name_label import NameLabel  # noqa: E402
 
 # Tile icon from the mockup at the default zoom: ``--tile-icon`` = 60 base px,
 # scaled by the wide preset (px()).
@@ -41,6 +42,11 @@ _MAX_COLUMNS = 64
 # width that fits, clamped to the design range (grouping.md D6).
 _TILE_MIN = px(150)
 _TILE_MAX = px(178)
+# «Показывать имена целиком» (design/spec/07-decisions.md D29): the tile grows
+# in width first, to this ceiling, and only then in height (the name gets four
+# lines instead of two). The grid stays equal-width, so the packing step uses
+# the ceiling too: a full-names band holds fewer, wider tiles.
+_TILE_FULL_MAX = px(240)
 _GAP = px(6)
 
 
@@ -188,7 +194,7 @@ class IconsView(ListingView):
         self._grid_store = Gio.ListStore.new(ListingItem)
         grid_factory = Gtk.SignalListItemFactory()
         grid_factory.connect("setup", _setup_tile)
-        grid_factory.connect("bind", _bind_tile)
+        grid_factory.connect("bind", self._bind_flat_tile)
 
         self._grid = Gtk.GridView(
             model=Gtk.NoSelection(model=self._grid_store), factory=grid_factory
@@ -230,12 +236,21 @@ class IconsView(ListingView):
     def widget(self) -> Gtk.Widget:
         return self._scroller
 
+    @property
+    def _show_full_names(self) -> bool:
+        return self._settings.show_full_names
+
     def render(self, sections: Sequence[Section]) -> None:
         self._sections = tuple(sections)
         self._read_menu_state(sections)
 
-        if any(section.header is not None for section in sections):
-            self._render_grouped()
+        # «Показывать имена целиком» needs the width-driven bands: the flat
+        # ``GtkGridView`` stretches its tiles to whatever the band gives, and a
+        # 240 px ceiling cannot be expressed there (design/spec D29).
+        if self._show_full_names or any(
+            section.header is not None for section in sections
+        ):
+            self._render_bands()
             return
 
         self._render_flat()
@@ -264,10 +279,19 @@ class IconsView(ListingView):
         if item is not None:
             self._on_activate(item)
 
-    # -- grouped --------------------------------------------------------------
+    def _bind_flat_tile(
+        self, _factory: Gtk.SignalListItemFactory, item: Gtk.ListItem
+    ) -> None:
+        _fill_tile(item.get_child(), item.get_item(), full_names=self._show_full_names)
 
-    def _render_grouped(self) -> None:
-        """Named sections: one caption row plus tile bands per group."""
+    # -- bands ----------------------------------------------------------------
+
+    def _render_bands(self) -> None:
+        """Sections as width-driven rows: optional captions plus tile bands.
+
+        Used for grouped listings and, with full names on, for the flat one as
+        well: a caption row appears only when the section carries a header.
+        """
         self._grouped = True
         # Without an allocated width the first band layout is still unknown:
         # keeping a reading position there would scroll the first caption away.
@@ -279,8 +303,10 @@ class IconsView(ListingView):
         self._grid_store.splice(0, self._grid_store.get_n_items(), [])
 
         band_width = self._band_width()
-        self._columns = _columns_for(band_width)
-        self._tile_width = _tile_width_for(band_width, self._columns)
+        self._columns = _columns_for(band_width, full_names=self._show_full_names)
+        self._tile_width = _tile_width_for(
+            band_width, self._columns, full_names=self._show_full_names
+        )
         self._show_widget(self._list)
         self._rows.splice(0, self._rows.get_n_items(), self._build_rows())
 
@@ -299,18 +325,20 @@ class IconsView(ListingView):
             if not section.items:
                 continue
 
-            rows.append(
-                HeaderRow(
-                    section.key or "",
-                    section.header or "",
-                    section.stats,
-                    section.collapsed,
+            if section.header is not None:
+                rows.append(
+                    HeaderRow(
+                        section.key or "",
+                        section.header,
+                        section.stats,
+                        section.collapsed,
+                    )
                 )
-            )
-            if section.collapsed:
-                # A collapsed group is its caption row only (design/grouping.md
-                # D13); the count still says what is inside.
-                continue
+                if section.collapsed:
+                    # A collapsed group is its caption row only
+                    # (design/grouping.md D13); the count still says what is
+                    # inside.
+                    continue
 
             for start in range(0, len(section.items), self._columns):
                 band = section.items[start : start + self._columns]
@@ -364,7 +392,7 @@ class IconsView(ListingView):
 
     def _tile(self, entry: ListingItem) -> Gtk.Widget:
         tile = _make_tile()
-        _fill_tile(tile, entry)
+        _fill_tile(tile, entry, full_names=self._show_full_names)
 
         # A row holds several tiles, so the row-level ``activate`` cannot say
         # which one was opened: each tile gets its own double-click handler.
@@ -391,7 +419,7 @@ class IconsView(ListingView):
         if not self._grouped or width <= 0:
             return
 
-        if _columns_for(width) == self._columns:
+        if _columns_for(width, full_names=self._show_full_names) == self._columns:
             return
 
         self._schedule_rechunk()
@@ -408,7 +436,7 @@ class IconsView(ListingView):
         if not self._grouped:
             return False
 
-        columns = _columns_for(self._band_width())
+        columns = _columns_for(self._band_width(), full_names=self._show_full_names)
         if columns == self._columns:
             return False
 
@@ -422,7 +450,9 @@ class IconsView(ListingView):
 
         self._fresh_layout = False
         self._columns = columns
-        self._tile_width = _tile_width_for(self._band_width(), columns)
+        self._tile_width = _tile_width_for(
+            self._band_width(), columns, full_names=self._show_full_names
+        )
         self._rows.splice(0, self._rows.get_n_items(), self._build_rows())
 
         if anchor is not None:
@@ -542,21 +572,32 @@ class _IconsListView(Gtk.ListView):
         self._on_width(width)
 
 
-def _columns_for(width: int) -> int:
-    """Tiles that fit into a band of ``width`` pixels (D6)."""
+def _columns_for(width: int, *, full_names: bool = False) -> int:
+    """Tiles that fit into a band of ``width`` pixels (D6).
+
+    In «показывать имена целиком» mode the packing step is the 240 px ceiling,
+    so the tiles are laid out wider before the name is allowed more lines
+    (design/spec/07-decisions.md D29).
+    """
     if width <= 0:
         return 1
 
-    return max(1, (width + _GAP) // (_TILE_MIN + _GAP))
+    step = _TILE_FULL_MAX if full_names else _TILE_MIN
+    return max(1, (width + _GAP) // (step + _GAP))
 
 
-def _tile_width_for(width: int, columns: int) -> int:
-    """Tile width that fills the band within the design's 150..178 px range."""
+def _tile_width_for(width: int, columns: int, *, full_names: bool = False) -> int:
+    """Tile width that fills the band within the design's width range.
+
+    The range is 150..178 px normally and 150..240 px with full names: the tile
+    grows in width first, and only names that still do not fit get more lines.
+    """
     if width <= 0 or columns <= 0:
         return _TILE_MIN
 
+    max_width = _TILE_FULL_MAX if full_names else _TILE_MAX
     available = width - (columns - 1) * _GAP
-    return max(_TILE_MIN, min(_TILE_MAX, available // columns))
+    return max(_TILE_MIN, min(max_width, available // columns))
 
 
 def _setup_row(_factory: Gtk.SignalListItemFactory, item: Gtk.ListItem) -> None:
@@ -593,12 +634,14 @@ def _make_tile() -> Gtk.Box:
     picture.set_halign(Gtk.Align.CENTER)
     tile.append(picture)
 
-    name = Gtk.Label(xalign=0.5)
+    name = NameLabel()
     name.set_wrap(True)
     name.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+    # «Резать» mode: two lines with an ellipsis. ``_fill_tile`` raises the cap
+    # to four lines while «показывать имена целиком» is on (D29).
     name.set_lines(2)
-    name.set_ellipsize(Pango.EllipsizeMode.END)
     name.set_justify(Gtk.Justification.CENTER)
+    name.set_xalign(0.5)
     name.add_css_class("volna-icons-name")
     tile.append(name)
 
@@ -613,17 +656,13 @@ def _make_tile() -> Gtk.Box:
     return tile
 
 
-def _bind_tile(_factory: Gtk.SignalListItemFactory, item: Gtk.ListItem) -> None:
-    entry: ListingItem = item.get_item()
-    _fill_tile(item.get_child(), entry)
-
-
-def _fill_tile(tile: Gtk.Widget, entry: ListingItem) -> None:
+def _fill_tile(tile: Gtk.Widget, entry: ListingItem, *, full_names: bool) -> None:
     picture, name, size, date = _children(tile)
     picture.set_from_file(str(icon_path(entry.icon_name, _TILE_ICON)))
     # The tile shows no other type cue, so give the glyph a name for AT.
     picture.update_property([Gtk.AccessibleProperty.LABEL], [entry.icon_label])
-    name.set_text(entry.name)
+    name.set_lines(4 if full_names else 2)
+    name.set_name(entry.name)
     size.set_text(entry.size_text)
     date.set_text(entry.date_text)
 

@@ -50,21 +50,24 @@ def count_label(count: int) -> Gtk.Label:
     return label
 
 
-def header_box(text: str, summary: int | str) -> Gtk.Box:
+def header_box(text: str, summary: int | str, *, count_at_end: bool = True) -> Gtk.Box:
     """A full-width caption row: title left, summary right (28 px, `theme.css`).
 
     A number is the compact form for a narrow column caption («Столбцы»);
     a string is the full folders/files/size summary used by the wide captions.
+    ``count_at_end=False`` keeps the summary next to the title: a «Столбцы»
+    caption is as wide as its column, and a count thrown to the far edge reads
+    as a separate column (owner decision 2026-11-23).
     """
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
     box.add_css_class("volna-group-header")
 
     title = title_label(text)
-    title.set_hexpand(True)
+    title.set_hexpand(count_at_end)
     box.append(title)
 
     widget = stats_label(summary) if isinstance(summary, str) else count_label(summary)
-    widget.set_halign(Gtk.Align.END)
+    widget.set_halign(Gtk.Align.END if count_at_end else Gtk.Align.START)
     box.append(widget)
 
     return box

@@ -1054,8 +1054,15 @@ window.volna-preset-dialog-window {
 /* «Столбцы»: column caption over the column's items; the column divider line
    starts at the caption, so the caption sits on the canvas colour. */
 .volna-col-head {
+  min-height: 2em;
   padding: 0 0.5714em;
   background-color: #1e1f22;
+}
+
+/* A continued section paints the same band without its caption, so every
+   column's first row starts at the same height (design/grouping.md D7). */
+.volna-col-head-continued {
+  padding: 0;
 }
 
 /* «Подробности»: a full-width group strip across the table columns. Each

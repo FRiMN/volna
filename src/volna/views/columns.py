@@ -65,12 +65,16 @@ class ColumnGroup(GObject.Object):
         stats: str = "",
         *,
         count: int | None = None,
+        continued: bool = False,
     ) -> None:
         super().__init__()
         self.items = items
         self.header = header
         self.stats = stats
         self.count = count
+        # A continuation keeps the caption band but not its text, so the rows
+        # of every column in a section start at the same height.
+        self.continued = continued
 
 
 class ColumnsView(ListingView):
@@ -165,6 +169,7 @@ class ColumnsView(ListingView):
                         section.header if first else None,
                         section.stats if first else "",
                         count=len(section.items) if first else None,
+                        continued=not first and section.header is not None,
                     )
                 )
 
@@ -329,9 +334,13 @@ class ColumnsView(ListingView):
             # so it keeps the compact item count (design/grouping.md §12). A
             # split section keeps its total on the first caption.
             count = group.count if group.count is not None else len(group.items)
-            caption = header_box(group.header, count)
+            caption = header_box(group.header, count, count_at_end=False)
             caption.add_css_class("volna-col-head")
             column.append(caption)
+        elif group.continued:
+            # The band continues across the section, so a continuation column
+            # aligns its first row with the first column's.
+            column.append(_empty_caption())
 
         for entry in group.items:
             column.append(self._row(entry))
@@ -412,6 +421,18 @@ class ColumnsView(ListingView):
     ) -> None:
         if n_press == 2:
             self._on_activate(entry)
+
+
+def _empty_caption() -> Gtk.Box:
+    """A caption-height band with no text (a continued section, D7)."""
+    band = Gtk.Box()
+    # The same classes as a real caption, minus its text: the border and the
+    # min-height are what keep every column's first row on one line.
+    band.add_css_class("volna-group-header")
+    band.add_css_class("volna-col-head")
+    band.add_css_class("volna-col-head-continued")
+
+    return band
 
 
 def _split(items: Sequence[ListingItem], size: int) -> list[tuple[ListingItem, ...]]:

@@ -131,6 +131,12 @@ V1: `ViewCapabilities(modes={DETAILS}, grouping=False, density=True, zoom_modes=
 
 ---
 
+### 2.11 Решение 11. «Показывать имена целиком» — настройка, применимая не ко всем режимам
+
+Новая настройка `show_full_names` (чекбокс в «Параметры») отключает обрезку имён в «Столбцах» и «Значках»; «Подробности» — таблица, режет всегда по ширине колонки, поэтому настройка там не действует. Полная семантика (MIDDLE, tooltip по факту обрезки, потолки размеров плитки) — D29 ([07-decisions](spec/07-decisions.md)).
+
+Визуально: чекбокс **всегда виден** в «Параметрах», а в режиме «Подробности» неактивен (`set_sensitive(False)`) с тултипом «Не применяется к таблице». Это третий вид гейта рядом с `available(capabilities)` (скрыть секцию, если сборка не умеет) и `normalized()` (привести снапшот к возможностям): **режимозависимая применимость** показывается неактивным контролом, а не исчезновением — чтобы поповер не «прыгал» при переключении радио и настройка оставалась находимой.
+
 ## 3. Слои и зависимости
 
 ```
@@ -221,6 +227,7 @@ class ViewSettings:
     folders_first: bool = True             # по умолчанию сохраняет прежнее поведение
     show_hidden: bool = False
     compact: bool = False
+    show_full_names: bool = False          # «целиком»/«резать»; в «Подробностях» не действует
     zoom: int = 50                         # 0..100, 50 = 100 %
 
     def normalized(self, caps: ViewCapabilities) -> ViewSettings: ...
@@ -272,6 +279,7 @@ def create_store(paths: SettingsPaths | None) -> ViewSettingsStore: ...
     "folders_first": false,
     "show_hidden": true,
     "compact": false,
+    "show_full_names": false,
     "zoom": 50
   }
 }

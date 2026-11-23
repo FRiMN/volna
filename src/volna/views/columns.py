@@ -1,8 +1,9 @@
 """«Столбцы» — a horizontally scrolling list of columns (design/view-modes.md D5).
 
-The model of the outer list holds *columns* (chunks of the flat listing), so
-GTK virtualizes whole columns; a column's six rows are plain widgets inside it
-and never need their own virtualization.
+The model of the outer list holds *columns* (chunks of the listing), so GTK
+virtualizes whole columns; a column's rows are plain widgets inside it and never
+need their own virtualization. The number of rows is height-driven: whatever
+does not fit the visible band continues in the next column to the right.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 
-from gi.repository import Gio, GObject, Gtk, Pango  # noqa: E402
+from gi.repository import Gio, GLib, GObject, Gtk, Pango  # noqa: E402
 
 from ..display import GroupAction, ViewMode  # noqa: E402
 from ..glyph import icon_path  # noqa: E402
@@ -23,9 +24,14 @@ from .group_header import header_box  # noqa: E402
 from .item import ListingItem  # noqa: E402
 from .name_label import NameLabel  # noqa: E402
 
-# Rows per column, fixed like the mockup (perColumn = 6); growing the band
-# does not re-chunk the listing — the seam for a height-driven count is here.
+# Upper bound of rows per column from the mockup (perColumn = 6). The actual
+# count is height-driven: an element that would fall below the visible band
+# continues in the next column to the right instead of producing a vertical
+# scrollbar (owner decision 2026-11-23, design/grouping.md D7).
 ROWS_PER_COLUMN = 6
+
+# Gap between two rows inside a column (the column box's spacing).
+_ROW_GAP = px(2)
 
 # Name budget for the column's natural width: ~28 chars at the wide preset
 # keep the column within the design's 190..300 base px (GTK CSS has no
@@ -44,8 +50,10 @@ _WHEEL_STEP = px(100)
 class ColumnGroup(GObject.Object):
     """One column: an optional group caption plus the items filling it.
 
-    Grouped listings make one column per group (design/grouping.md D7);
-    the flat listing keeps caption-less columns of ``ROWS_PER_COLUMN`` rows.
+    A section longer than the visible band is split into continuation columns
+    (``header=None`` after the first one), so every element is reachable by
+    panning right rather than by scrolling the band down. ``count`` keeps the
+    section's total in the first caption when the section is split.
     """
 
     __gtype_name__ = "VolnaColumnGroup"
@@ -55,11 +63,14 @@ class ColumnGroup(GObject.Object):
         items: tuple[ListingItem, ...],
         header: str | None = None,
         stats: str = "",
+        *,
+        count: int | None = None,
     ) -> None:
         super().__init__()
         self.items = items
         self.header = header
         self.stats = stats
+        self.count = count
 
 
 class ColumnsView(ListingView):
@@ -78,15 +89,24 @@ class ColumnsView(ListingView):
         # feature (design/grouping.md §12, owner decision 2026-11-17).
         super().__init__(on_activate=on_activate, on_group_action=on_group_action)
         self.store = Gio.ListStore.new(ColumnGroup)
+        self._sections: tuple[Section, ...] = ()
+        self._rows_per_column = ROWS_PER_COLUMN
+        self._capacity_scheduled = False
+        self._capacity_attempts = 0
 
         factory = Gtk.SignalListItemFactory()
         factory.connect("setup", _setup_column)
         factory.connect("bind", self._bind_column)
 
-        self._list = Gtk.ListView(
-            model=Gtk.NoSelection(model=self.store), factory=factory
+        self._list = _ColumnsListView(
+            on_height=self._on_height_changed,
+            model=Gtk.NoSelection(model=self.store),
+            factory=factory,
         )
         self._list.set_orientation(Gtk.Orientation.HORIZONTAL)
+        # A tab can become visible at a size it never laid out while hidden;
+        # re-measure when it appears so the height-driven chunking is current.
+        self._list.connect("map", self._on_map)
 
         self._scroller = Gtk.ScrolledWindow(vexpand=True)
         # Horizontal scrolling is the mode's own; vertical stays automatic
@@ -112,21 +132,152 @@ class ColumnsView(ListingView):
         return self._scroller
 
     def render(self, sections: Sequence[Section]) -> None:
-        """Grouped sections become one column each; a flat one is chunked."""
-        if any(section.header is not None for section in sections):
-            groups = [
-                ColumnGroup(tuple(section.items), section.header, section.stats)
-                for section in sections
-                if section.items
-            ]
-        else:
-            items = [item for section in sections for item in section.items]
-            groups = [
-                ColumnGroup(tuple(items[start : start + ROWS_PER_COLUMN]))
-                for start in range(0, len(items), ROWS_PER_COLUMN)
-            ]
+        """Split sections into columns that fit the visible band height."""
+        self._sections = tuple(sections)
+        self._rows_per_column = self._capacity()
+        self._capacity_attempts = 0
+        self._populate()
+        # Rows may have been re-measured (density, full names): check again
+        # once the next frame has laid them out.
+        self._schedule_capacity_check()
 
+    def _populate(self) -> None:
+        groups = self._chunks()
         self.store.splice(0, self.store.get_n_items(), groups)
+
+    def _chunks(self) -> list[ColumnGroup]:
+        """Columns in reading order: top-to-bottom, then right.
+
+        Grouped sections become one column per chunk, caption on the first;
+        the flat listing keeps caption-less chunks.
+        """
+        groups: list[ColumnGroup] = []
+        for section in self._sections:
+            if not section.items:
+                continue
+
+            chunks = _split(section.items, self._rows_per_column)
+            for index, chunk in enumerate(chunks):
+                first = index == 0
+                groups.append(
+                    ColumnGroup(
+                        chunk,
+                        section.header if first else None,
+                        section.stats if first else "",
+                        count=len(section.items) if first else None,
+                    )
+                )
+
+        return groups
+
+    def _capacity(self) -> int:
+        """Rows that fit the band, capped by the mockup's six.
+
+        One row is measured after layout: multi-line names change its height,
+        and the row is the unit that must not fall below the visible band.
+        """
+        row_height = self._measured_height("volna-col-item")
+        if row_height <= 0:
+            return ROWS_PER_COLUMN
+
+        # The vertical adjustment's page size is the band actually visible to
+        # the user (it already excludes a horizontal scrollbar); the widget
+        # height is the fallback before the first allocation.
+        adjustment = self._scroller.get_vadjustment()
+        height = int(adjustment.get_page_size()) if adjustment is not None else 0
+        if height <= 0:
+            height = self._scroller.get_height()
+        if height <= 0:
+            return ROWS_PER_COLUMN
+
+        grouped = any(section.header is not None for section in self._sections)
+        header_height = (
+            self._measured_height("volna-col-head") + _ROW_GAP if grouped else 0
+        )
+        available = height - header_height
+        if available <= 0:
+            return 1
+
+        capacity = available // (row_height + _ROW_GAP)
+        return max(1, min(ROWS_PER_COLUMN, capacity))
+
+    def _measured_height(self, css_class: str) -> int:
+        """The minimum height the ``ListView`` reserves for a row of a class.
+
+        The allocated height is not reliable here: a recycled row can still
+        report the size of its previous column. ``measure`` asks for the
+        minimum the layout will actually need, wrapped at the column's width.
+        """
+        found = _find_by_class(self._list, css_class)
+        if found is None:
+            return 0
+
+        # Wrap at the column's width: the row's own width can be a stale pool
+        # allocation.
+        width = found.get_parent().get_width() or found.get_width()
+        if width <= 0:
+            width = self._scroller.get_width()
+
+        return found.measure(Gtk.Orientation.VERTICAL, width).minimum
+
+    def _on_height_changed(self, _height: int) -> None:
+        self._capacity_attempts = 0
+        self._schedule_capacity_check()
+
+    def _on_map(self, *_args: object) -> None:
+        self._capacity_attempts = 0
+        self._schedule_capacity_check()
+
+    def _schedule_capacity_check(self) -> None:
+        if self._capacity_scheduled:
+            return
+
+        self._capacity_scheduled = True
+        # A zero delay still runs before GTK's next layout in some cases; the
+        # short timeout runs after the frame that allocates the row widgets.
+        GLib.timeout_add(32, self._refresh_capacity)
+
+    def _refresh_capacity(self) -> bool:
+        self._capacity_scheduled = False
+        if not self._list.get_mapped():
+            # A detached or not-yet-shown tab measures nothing; the height
+            # callback schedules another check once it is on screen.
+            return False
+
+        capacity = self._capacity()
+        if capacity == self._rows_per_column:
+            return False
+
+        # A measurement can oscillate around the scrollbar edge; a handful of
+        # corrections is enough, and an endless loop would re-chunk every frame.
+        self._capacity_attempts += 1
+        if self._capacity_attempts > 4:
+            return False
+
+        self._rows_per_column = capacity
+        self._populate()
+        # A ListView caches its item height from the old chunking and does not
+        # always forget it on a store splice; resetting the model drops the
+        # pooled items so the new content height reaches the scroller.
+        self._reset_model()
+        # The rebuilt rows may measure differently (a caption appears, CSS
+        # settles): converge on the capacity that actually fits the band.
+        self._schedule_capacity_check()
+        return False
+
+    def _reset_model(self) -> None:
+        """Drop the ListView's pooled items after a re-chunk (height cache)."""
+        adjustment = self._scroller.get_hadjustment()
+        offset = adjustment.get_value() if adjustment is not None else 0.0
+        self._list.set_model(None)
+        self._list.set_model(Gtk.NoSelection(model=self.store))
+        if adjustment is not None:
+            GLib.idle_add(self._restore_offset, adjustment, offset)
+
+    @staticmethod
+    def _restore_offset(adjustment: Gtk.Adjustment, offset: float) -> bool:
+        adjustment.set_value(offset)
+        return False
 
     def reset_scroll(self) -> None:
         adjustment = self._scroller.get_hadjustment()
@@ -175,8 +326,10 @@ class ColumnsView(ListingView):
         group = item.get_item()
         if group.header is not None:
             # A column caption is narrow: the group summary does not fit there,
-            # so it keeps the compact item count (design/grouping.md §12).
-            caption = header_box(group.header, len(group.items))
+            # so it keeps the compact item count (design/grouping.md §12). A
+            # split section keeps its total on the first caption.
+            count = group.count if group.count is not None else len(group.items)
+            caption = header_box(group.header, count)
             caption.add_css_class("volna-col-head")
             column.append(caption)
 
@@ -203,18 +356,23 @@ class ColumnsView(ListingView):
         name.set_name(entry.name)
         name.set_xalign(0)
         name.set_hexpand(True)
-        # GTK CSS has no max-width: this char budget is what keeps the column's
-        # natural width inside the design range instead of following the name.
-        # «Показывать имена целиком» lifts the budget, so the column is as wide
-        # as its content (design/spec/07-decisions.md D29). A ``Gtk.ListView``
-        # sizes rows by their *minimum* width, and an ellipsizing label has a
-        # tiny minimum: request the measured full width explicitly.
-        if self._settings.show_full_names:
-            width = name.measure(Gtk.Orientation.HORIZONTAL, -1).natural
-            name.set_size_request(width, -1)
-        else:
-            name.set_max_width_chars(_MAX_NAME_CHARS)
+        # GTK CSS has no max-width: the char budget is what keeps the column's
+        # width inside the design range instead of following the name. The
+        # width is *requested* too: an ellipsizing label's minimum width is
+        # tiny, and a ListView sizes a column by its minimum, so max-width alone
+        # would leave the name with only the CSS minimum. With the request the
+        # column gets the budget and the name wraps inside it: two lines in
+        # «резать» mode, four in «показывать имена целиком»; anything longer is
+        # ellipsized in the middle (design/spec/07-decisions.md D29).
+        name.set_width_chars(_MAX_NAME_CHARS)
+        name.set_max_width_chars(_MAX_NAME_CHARS)
+        name.set_wrap(True)
+        name.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        name.set_justify(Gtk.Justification.LEFT)
+        name.set_lines(4 if self._settings.show_full_names else 2)
         name.add_css_class("volna-col-name")
+        if self._settings.show_full_names:
+            name.add_css_class("volna-col-name-full")
         text.append(name)
 
         # hexpand lets the label take the width the column has left (the icon
@@ -254,6 +412,50 @@ class ColumnsView(ListingView):
     ) -> None:
         if n_press == 2:
             self._on_activate(entry)
+
+
+def _split(items: Sequence[ListingItem], size: int) -> list[tuple[ListingItem, ...]]:
+    return [tuple(items[start : start + size]) for start in range(0, len(items), size)]
+
+
+def _find_by_class(root: Gtk.Widget, css_class: str) -> Gtk.Widget | None:
+    """The first *visible* widget of a class.
+
+    A ``ListView`` pools its row widgets: an unmapped leftover keeps the size it
+    had for another column, so measuring it would understate the row height.
+    """
+    child = root.get_first_child()
+    while child is not None:
+        if child.get_mapped() and child.has_css_class(css_class):
+            return child
+
+        found = _find_by_class(child, css_class)
+        if found is not None:
+            return found
+
+        child = child.get_next_sibling()
+
+    return None
+
+
+class _ColumnsListView(Gtk.ListView):
+    """A ``ListView`` that reports its allocated height: rows re-chunk on resize.
+
+    GTK 4 has no ``size-allocate`` signal, so the height is read in the vfunc.
+    """
+
+    def __init__(self, *, on_height: Callable[[int], None], **kwargs: object) -> None:
+        super().__init__(**kwargs)
+        self._on_height = on_height
+        self._height = 0
+
+    def do_size_allocate(self, width: int, height: int, baseline: int) -> None:
+        Gtk.ListView.do_size_allocate(self, width, height, baseline)
+        if height == self._height:
+            return
+
+        self._height = height
+        self._on_height(height)
 
 
 def _setup_column(_factory: Gtk.SignalListItemFactory, item: Gtk.ListItem) -> None:

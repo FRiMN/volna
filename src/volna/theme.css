@@ -437,6 +437,14 @@ popover.volna-menu > contents {
 .volna-col-name {
   color: #dfe1e5;
   font-size: 1em;
+  /* two-line reservation: the row height feeds the height-driven chunking
+     (views/columns.py), so all rows in a column must measure the same */
+  min-height: 2.5143em;
+}
+
+.volna-col-name.volna-col-name-full {
+  /* «Показывать имена целиком»: four lines before the middle ellipsis */
+  min-height: 5.0286em;
 }
 
 .volna-col-meta {
@@ -996,6 +1004,11 @@ window.volna-preset-dialog-window {
 
 .volna-density-compact .volna-col-name {
   font-size: 0.8571em;
+  min-height: 2.2857em;
+}
+
+.volna-density-compact .volna-col-name.volna-col-name-full {
+  min-height: 4.5714em;
 }
 
 .volna-density-compact .volna-col-meta {

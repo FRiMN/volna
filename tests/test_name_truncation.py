@@ -240,10 +240,14 @@ def test_columns_cut_mode_keeps_the_28_char_budget(gtk_display) -> None:
         label = labels[0]
         assert label.get_ellipsize() is Pango.EllipsizeMode.MIDDLE
         assert label.get_max_width_chars() == 28
+        assert label.get_lines() == 2
+        assert label.get_wrap()
         assert label.get_text() == LONG_NAME
 
 
-def test_columns_full_mode_lifts_the_budget(gtk_display) -> None:
+def test_columns_full_mode_keeps_the_width_but_allows_four_lines(
+    gtk_display,
+) -> None:
     from gi.repository import Pango
 
     from volna.views.base import Section
@@ -254,7 +258,8 @@ def test_columns_full_mode_lifts_the_budget(gtk_display) -> None:
     with _presented(view):
         label = _labels(view.widget, "volna-col-name")[0]
         assert label.get_ellipsize() is Pango.EllipsizeMode.MIDDLE
-        assert label.get_max_width_chars() == -1
+        assert label.get_max_width_chars() == 28
+        assert label.get_lines() == 4
         assert label.get_text() == LONG_NAME
 
 
@@ -274,22 +279,63 @@ def test_columns_cut_mode_width_stays_in_the_design_range(
             assert px(190) <= column.get_width() <= px(300), column.get_width()
 
 
-def test_columns_full_mode_grows_to_the_content(gtk_display, project_theme) -> None:
+def test_columns_full_mode_keeps_the_column_in_the_design_range(
+    gtk_display, project_theme
+) -> None:
     from volna.views.base import Section
 
-    cut = _columns_view(ViewSettings(view_mode=ViewMode.COLUMNS))
     full = _columns_view(ViewSettings(view_mode=ViewMode.COLUMNS, show_full_names=True))
-    items = (_item(LONG_NAME), _item("b.txt"))
-    cut.render((Section(items=items),))
-    full.render((Section(items=items),))
-
-    with _presented(cut, width=900):
-        cut_width = _by_class(cut.widget, "volna-col")[0].get_width()
+    full.render((Section(items=(_item(LONG_NAME), _item("b.txt"))),))
 
     with _presented(full, width=900):
-        full_width = _by_class(full.widget, "volna-col")[0].get_width()
+        columns = _by_class(full.widget, "volna-col")
+        assert columns
+        for column in columns:
+            assert px(190) <= column.get_width() <= px(300), column.get_width()
 
-    assert full_width > cut_width, (full_width, cut_width)
+
+def test_columns_cut_mode_shows_two_lines_before_clipping(gtk_display) -> None:
+    from volna.views.base import Section
+
+    # About two lines at the 28-char budget: «резать» shows it whole.
+    two_lines = "Договор_2026_финальная_версия_3_подписанный.pdf"
+    view = _columns_view(ViewSettings(view_mode=ViewMode.COLUMNS))
+    view.render((Section(items=(_item(two_lines),)),))
+
+    with _presented(view):
+        label = _labels(view.widget, "volna-col-name")[0]
+        layout = label.get_layout()
+        assert layout is not None
+        assert 1 < layout.get_line_count() <= 2, layout.get_line_count()
+        assert not layout.is_ellipsized()
+        assert label.get_tooltip_text() is None
+
+
+def test_columns_cut_mode_clips_the_third_line_and_shows_the_tooltip(
+    gtk_display,
+) -> None:
+    from volna.views.base import Section
+
+    # More than the two lines «резать» allows; «целиком» shows four.
+    three_lines = "Договор_" + "финальная_версия_" * 4 + "3.pdf"
+    cut = _columns_view(ViewSettings(view_mode=ViewMode.COLUMNS))
+    full = _columns_view(ViewSettings(view_mode=ViewMode.COLUMNS, show_full_names=True))
+    cut.render((Section(items=(_item(three_lines),)),))
+    full.render((Section(items=(_item(three_lines),)),))
+
+    with _presented(cut):
+        label = _labels(cut.widget, "volna-col-name")[0]
+        layout = label.get_layout()
+        assert layout is not None
+        assert layout.is_ellipsized()
+        assert label.get_tooltip_text() == three_lines
+
+    with _presented(full):
+        label = _labels(full.widget, "volna-col-name")[0]
+        layout = label.get_layout()
+        assert layout is not None
+        assert not layout.is_ellipsized()
+        assert label.get_tooltip_text() is None
 
 
 # -- «Значки» -----------------------------------------------------------------

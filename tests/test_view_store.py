@@ -92,6 +92,7 @@ def test_round_trip_keeps_the_full_snapshot(tmp_path: Path) -> None:
         reverse=False,
         folders_first=False,
         show_hidden=True,
+        show_full_names=True,
         compact=True,
         zoom=85,
     )
@@ -109,6 +110,25 @@ def test_round_trip_keeps_the_full_snapshot(tmp_path: Path) -> None:
         "schema_version": SCHEMA_VERSION,
         "view": settings.to_mapping(),
     }
+
+
+def test_a_file_without_show_full_names_reads_as_cut(tmp_path: Path) -> None:
+    """An old settings file is not a migration: the missing field is «резать»."""
+    paths = _paths(tmp_path)
+    _write_document(
+        paths,
+        {
+            "schema_version": SCHEMA_VERSION,
+            "view": {"view_mode": "columns", "sort_key": "name"},
+        },
+    )
+
+    view = JsonViewSettingsStore(paths).load().view
+
+    assert view is not None
+    assert view.show_full_names is False
+    assert view.view_mode is ViewMode.COLUMNS
+    assert view.sort_key is SortKey.NAME
 
 
 def test_save_creates_the_settings_directory(tmp_path: Path) -> None:

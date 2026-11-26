@@ -315,7 +315,12 @@ def test_popover_has_only_live_sections(panel) -> None:
     ]
     assert [
         widget.get_label() for widget in _by_class(harness.window, "volna-check")
-    ] == ["Папки перед файлами", "Показывать скрытые файлы", "Плотная раскладка"]
+    ] == [
+        "Папки перед файлами",
+        "Показывать скрытые файлы",
+        "Показывать имена целиком",
+        "Плотная раскладка",
+    ]
     assert [
         widget.get_label() for widget in _by_class(harness.window, "volna-seg-btn")
     ] == [
@@ -349,7 +354,7 @@ def test_density_checkbox_requires_the_capability(panel) -> None:
 
     assert [
         widget.get_label() for widget in _by_class(harness.window, "volna-check")
-    ] == ["Папки перед файлами", "Показывать скрытые файлы"]
+    ] == ["Папки перед файлами", "Показывать скрытые файлы", "Показывать имена целиком"]
 
 
 # -- feature decomposition ---------------------------------------------------
@@ -367,6 +372,7 @@ def test_setting_features_are_separate_classes_and_modules() -> None:
         SettingsSection.grouping,
         SettingsSection.sorting,
         SettingsSection.sorting,
+        SettingsSection.params,
         SettingsSection.params,
         SettingsSection.params,
         SettingsSection.params,
@@ -526,6 +532,64 @@ def test_checkbox_changes_call_update(panel) -> None:
     assert harness.calls == [{"show_hidden": True}, {"compact": True}]
     assert harness.settings.show_hidden is True
     assert harness.settings.compact is True
+
+
+def test_show_full_names_is_disabled_in_the_details_table(panel) -> None:
+    harness = panel()
+
+    button = harness.widget_by_label("volna-check", "Показывать имена целиком")
+    assert not button.get_sensitive()
+    assert button.get_tooltip_text() == "Не применяется к таблице"
+
+
+def test_show_full_names_is_enabled_outside_the_details_table(panel) -> None:
+    from volna.display import ViewMode
+
+    for mode in (ViewMode.COLUMNS, ViewMode.ICONS):
+        harness = panel(settings=_settings(view_mode=mode))
+        button = harness.widget_by_label("volna-check", "Показывать имена целиком")
+
+        assert button.get_sensitive(), mode
+        assert button.get_tooltip_text() is None, mode
+
+
+def test_show_full_names_follows_the_view_mode(panel) -> None:
+    harness = panel()
+    button = harness.widget_by_label("volna-check", "Показывать имена целиком")
+    assert not button.get_sensitive()
+
+    harness.widget_by_label("volna-radio", "Столбцы").set_active(True)
+    _pump(0.1)
+    assert button.get_sensitive()
+    assert button.get_tooltip_text() is None
+
+    harness.widget_by_label("volna-radio", "Подробности").set_active(True)
+    _pump(0.1)
+    assert not button.get_sensitive()
+
+
+def test_show_full_names_change_calls_update(panel) -> None:
+    from volna.display import ViewMode
+
+    harness = panel(settings=_settings(view_mode=ViewMode.ICONS))
+
+    harness.widget_by_label("volna-check", "Показывать имена целиком").set_active(True)
+    _pump(0.1)
+
+    assert harness.calls == [{"show_full_names": True}]
+    assert harness.settings.show_full_names is True
+
+
+def test_show_full_names_sync_reflects_the_snapshot(panel) -> None:
+    from volna.display import ViewMode
+
+    harness = panel(settings=_settings(view_mode=ViewMode.ICONS))
+    harness.settings = _settings(view_mode=ViewMode.ICONS, show_full_names=True)
+    harness.sync()
+
+    button = harness.widget_by_label("volna-check", "Показывать имена целиком")
+    assert button.get_active()
+    assert harness.calls == []
 
 
 def test_update_that_syncs_does_not_recurse(panel) -> None:

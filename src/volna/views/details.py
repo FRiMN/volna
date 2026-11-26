@@ -16,6 +16,7 @@ from ..size import px  # noqa: E402
 from .base import ListingView, Section  # noqa: E402
 from .group_header import GroupHeader  # noqa: E402
 from .item import ListingItem  # noqa: E402
+from .name_label import NameLabel  # noqa: E402
 
 # One cell of a group strip; every column cell carries it so the 28 px row
 # reads as a single full-width band (theme.css, design/grouping.md D9).
@@ -80,8 +81,8 @@ class _NameCell(Gtk.Box):
         self.picture.set_valign(Gtk.Align.CENTER)
         self.picture.add_css_class("volna-dt-icon")
 
-        self.text = Gtk.Label(xalign=0)
-        self.text.set_ellipsize(Pango.EllipsizeMode.END)
+        self.text = NameLabel()
+        self.text.set_xalign(0)
         self.text.set_hexpand(True)
         self.text.set_valign(Gtk.Align.CENTER)
         self.text.add_css_class("volna-dt-name")
@@ -149,7 +150,7 @@ class _NameCell(Gtk.Box):
         self.picture.set_from_file(str(icon_path(row.icon_name, px(16))))
         # The icon is the only type cue in the table, so give it a name for AT.
         self.picture.update_property([Gtk.AccessibleProperty.LABEL], [row.icon_label])
-        self.text.set_text(row.name)
+        self.text.set_name(row.name)
         # Recycle safety: the caption widget is rebuilt per group row, so there
         # is no stale caption to clear.
         self._entry.set_visible(True)

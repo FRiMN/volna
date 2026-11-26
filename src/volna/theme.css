@@ -437,6 +437,14 @@ popover.volna-menu > contents {
 .volna-col-name {
   color: #dfe1e5;
   font-size: 1em;
+  /* two-line reservation: the row height feeds the height-driven chunking
+     (views/columns.py), so all rows in a column must measure the same */
+  min-height: 2.5143em;
+}
+
+.volna-col-name.volna-col-name-full {
+  /* «Показывать имена целиком»: four lines before the middle ellipsis */
+  min-height: 5.0286em;
 }
 
 .volna-col-meta {
@@ -996,6 +1004,11 @@ window.volna-preset-dialog-window {
 
 .volna-density-compact .volna-col-name {
   font-size: 0.8571em;
+  min-height: 2.2857em;
+}
+
+.volna-density-compact .volna-col-name.volna-col-name-full {
+  min-height: 4.5714em;
 }
 
 .volna-density-compact .volna-col-meta {
@@ -1041,8 +1054,15 @@ window.volna-preset-dialog-window {
 /* «Столбцы»: column caption over the column's items; the column divider line
    starts at the caption, so the caption sits on the canvas colour. */
 .volna-col-head {
+  min-height: 2em;
   padding: 0 0.5714em;
   background-color: #1e1f22;
+}
+
+/* A continued section paints the same band without its caption, so every
+   column's first row starts at the same height (design/grouping.md D7). */
+.volna-col-head-continued {
+  padding: 0;
 }
 
 /* «Подробности»: a full-width group strip across the table columns. Each
